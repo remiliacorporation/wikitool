@@ -37,3 +37,6 @@ Thumbs.db
 # Logs
 *.log
 .claude/settings.local.json
+
+# contextmink project-local release binaries
+/tools/contextmink/bin/

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Contextmink"
+  short_description: "Bound broad agent reads without losing evidence"
+  default_prompt: "Use $contextmink to inspect this repository with bounded, evidence-aware retrieval."

@@ -63,61 +63,18 @@ scoped here.
 
 ## Bounded Output
 
-Contextmink is a separately versioned, project-generic tool. A release bundle
-includes its hash-verified upstream pack under `contextmink/`; run
-`contextmink/contextmink(.exe) setup-project <project-root> --skill-target both
---json` and follow its receipt-backed setup guidance. In this source checkout,
-`bash scripts/fetch_contextmink.sh --platform <platform>` stages the pinned
-upstream release under `dist/contextmink-dist/`; it does not install or rebuild
-Contextmink. Use the installed Contextmink when a file/text/JSON/SQLite/command
-read may produce more output than the transcript should carry.
+Before broad or potentially high-output file, text, structured-data, or command-output reads, load `.agents/skills/contextmink/SKILL.md`. Skip known-small direct reads and project-native compact or domain-query commands.
 
-- Choose invocation by the active shell and target: use `scripts/contextmink ...`
-  from Bash-hosted sessions such as macOS, Linux, Git Bash, WSL, or Claude Code;
-  use `tools/contextmink/bin/contextmink(.exe) ...` directly from Windows
-  PowerShell for contextmink commands; use
-  `tools/contextmink/bin/contextmink-bridge.exe --script scripts/contextmink ...`
-  when a PowerShell-hosted Windows session needs the Bash launcher or another
-  Bash-first repository script.
+Use `scripts/contextmink` from Bash or the native
+`tools/contextmink/bin/contextmink.exe` from Windows PowerShell. Read
+`tools/contextmink/agent_integration.md` for the current receipt and command
+contract, and `tools/contextmink/README.md` for this checkout's exact source pin
+and fresh-clone installation.
 
-- Start with `dirs` to orient in an unfamiliar tree, then `files` or `grep`
-  for candidate discovery. Prefer `files --ext json` / `--extension jsonl`
-  across Windows-to-Bash boundaries because wildcard globs can expand before
-  contextmink receives them.
-
-- Read source files through `outline` then `slice`, not dump windows. A named
-  file is still reconnaissance while the answer's location inside it is
-  unknown: `outline <file>` maps declaration lines with line numbers
-  (`--contains TEXT` filters rows; `--lang`, `--prefix <text>`, or
-  `--pattern <regex>` cover unrecognized extensions), then
-  `slice --range START:END` prints the region. `slice` replaces `sed -n` /
-  `cat` / `head` file windows. Keep its default caps (120-line window,
-  220-line ceiling); narrow an oversized read with `outline` or
-  `grep --context` instead of raising `--max-lines`.
-- Use `grep --pattern-file <file>` for shell-fragile regex; use `grep-terms`
-  for literal tokens or phrases (`--or` / `--any`, `--term-file`, `--limit`,
-  `--max-matches`). Narrow either with `--glob` / `--ext`, add `-i` for
-  case-insensitive matching, and `--context N` when the surrounding lines
-  would otherwise need a follow-up `slice`.
-- Use `slice --tail N` for the end of logs, `json-find`, `json-select` (with
-  `--where FIELD=VALUE` / `--where-contains FIELD=TEXT` row filters),
-  `sqlite-schema`, and `sqlite --sql-file` for bounded reads instead of
-  opening whole large files, reports, or databases.
-- Prefer a domain command's native compact/projection/limit flags first. Use
-  `capture -- <command> ...` or `run` only when output size is uncertain and no
-  native bound exists; read the child `exit_code`/`success` fields in the
-  receipt. Truncated captures keep both the head and the tail of the output.
-- Treat a `CONTEXTMINK_RECEIPT` with `"truncated": true` or `"complete": false`
-  as capped output and narrow the query. When `cap_reason` is `"scan"` or
-  lower-bound fields are true, totals and no-match results cover only the
-  scanned subset. A no-match grep with `no_match_scope: "scanned_subset"` or a
-  `json-select` with `all_null_fields` entries needs a narrower or corrected
-  query, not a conclusion.
-- Direct commands are fine when output is already known to be small or
-  structurally bounded: `git status --short`, `git diff --stat`, a focused
-  test command, a domain tool that emits compact records, or one exact file
-  region already known to fit a slice window (about 120 lines). Above that,
-  the read is reconnaissance — go through `outline`/`grep`/`slice`.
+Wikitool release bundles independently carry the published, hash-verified
+upstream pack pinned by `config/contextmink.*`. The maintainer
+`scripts/fetch_contextmink.sh --platform <platform>` stages that pack under
+`dist/contextmink-dist/`; it does not select this checkout's developer runtime.
 
 Papertiger is a separately versioned optional planning companion. A release
 bundle includes its complete hash-verified upstream pack under `papertiger/`,
