@@ -1,7 +1,7 @@
 # Contextmink integration
 
 This repository uses the verified Contextmink source snapshot
-`935dd1d43778f910c444d556438f3c9907c17b77` from
+`cebecfa65b5e34312f7d2d81b9b46750c0890992` from
 https://github.com/remiliacorporation/contextmink.
 The binary reports `0.10.0`; this snapshot includes unreleased changes beyond
 that published version. Select the source commit, not the version label alone.

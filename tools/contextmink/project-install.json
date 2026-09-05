@@ -9,11 +9,11 @@
     },
     {
       "path": "tools/contextmink/agent_integration.md",
-      "sha256": "4e44a4be1b66bc9b8d639d27ad09a221bcff82cfa170dd19daaed1445bc987e8"
+      "sha256": "57b54dec64759a755a19999a5726f98ee43f9f52a8b2daa4cf820e986e5aa8b7"
     },
     {
       "path": ".agents/skills/contextmink/SKILL.md",
-      "sha256": "d614ab0de50678924bc3f3ead6a5acf61c17c4989d09ac67973c2b5b4ec160ac"
+      "sha256": "8c945dd7c07503d66106cfb482dd8dfe34207a1f7cb4e8a576c7b5b90d2ab8f2"
     },
     {
       "path": ".agents/skills/contextmink/agents/openai.yaml",
@@ -21,7 +21,7 @@
     },
     {
       "path": ".claude/skills/contextmink/SKILL.md",
-      "sha256": "d614ab0de50678924bc3f3ead6a5acf61c17c4989d09ac67973c2b5b4ec160ac"
+      "sha256": "8c945dd7c07503d66106cfb482dd8dfe34207a1f7cb4e8a576c7b5b90d2ab8f2"
     }
   ],
   "managed_gitignore_block": true,

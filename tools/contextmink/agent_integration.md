@@ -21,7 +21,10 @@ more output than the transcript should carry.
   `& tools\contextmink\bin\contextmink-bridge.exe --script scripts/contextmink ...`
   when a PowerShell-hosted Windows session needs the Bash launcher.
 - When the target file is unknown, start with `dirs` to orient in the tree,
-  then use `files` or `grep` for candidate discovery. Narrow file discovery
+  then use `files` or `grep` for candidate discovery. This orientation is optional
+  when a subtree is already known: `dirs --depth` limits displayed levels, not
+  enumeration cost. Avoid inventorying an entire artifact store for one file.
+  Narrow file discovery
   with repeated `--path-contains` values and `--ext` before raising display
   limits. Prefer
   `files --ext json` (or `--ext jsonl`)
@@ -40,6 +43,8 @@ more output than the transcript should carry.
   Built-in outline matching is a disclosed navigation heuristic over
   comment/string-masked text; use explicit prefix or regex matching when the
   desired anchor is not a declaration shape.
+  A capped line window exposes `remaining_range`; use that range to retrieve
+  omitted lines without raising the ceiling. Character clipping is separate.
 - Use `grep --pattern-file <file>` for shell-fragile regex; use `grep-terms`
   for literal tokens or phrases (AND by default; pass `--any` for OR). Load
   phrases with `--term-file` and cap with `--limit` /
@@ -48,6 +53,9 @@ more output than the transcript should carry.
   either with `--glob` / `--ext`, add `-i` for
   case-insensitive matching, and `--context N` when the surrounding lines
   would otherwise need a follow-up `slice`.
+  `--limit` counts files, `--lines-per-file` bounds matches within each file,
+  and `--max-sample-lines` bounds all displayed matches and context. When output
+  is capped, `output_cap_arguments` identifies the exhausted display controls.
 - Use `slice --tail N` for the end of logs, `json-find`, `json-select` (with
   `--where FIELD=VALUE` / `--where-contains FIELD=TEXT` row filters;
   `--keys` first when the row shape is unknown), `sqlite-schema`, and
