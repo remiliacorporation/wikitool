@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Args, Subcommand};
 
-mod agent_pack;
+mod skills;
 mod bundle;
 mod release_payload;
 
@@ -19,7 +19,7 @@ enum ReleaseSubcommand {
         name = "build-agent-pack",
         about = "Build the deterministic Wikitool agent pack"
     )]
-    BuildAgentPack(ReleaseBuildAgentPackArgs),
+    BuildSkills(ReleaseBuildSkillsArgs),
     #[command(about = "Stage one local binary and its release payload")]
     Package(ReleasePackageArgs),
     #[command(name = "build-matrix")]
@@ -28,7 +28,7 @@ enum ReleaseSubcommand {
 }
 
 #[derive(Debug, Args)]
-struct ReleaseBuildAgentPackArgs {
+struct ReleaseBuildSkillsArgs {
     #[arg(
         long,
         value_name = "PATH",
@@ -149,8 +149,8 @@ struct ReleaseBuildMatrixArgs {
 
 pub(crate) fn run_release(args: ReleaseArgs) -> Result<()> {
     match args.command {
-        ReleaseSubcommand::BuildAgentPack(options) => {
-            agent_pack::run_release_build_agent_pack(options)
+        ReleaseSubcommand::BuildSkills(options) => {
+            skills::run_release_build_skills(options)
         }
         ReleaseSubcommand::Package(options) => bundle::run_release_package(options),
         ReleaseSubcommand::BuildMatrix(options) => bundle::run_release_build_matrix(options),

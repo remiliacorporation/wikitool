@@ -7,7 +7,7 @@ pub(crate) use wikitool_core::schema::LOCAL_DB_POLICY_MESSAGE;
 
 mod adapter_cli;
 mod agent_cli;
-mod agent_pack;
+mod skills;
 mod article_cli;
 mod briefs;
 mod catalog_cli;
@@ -133,7 +133,7 @@ enum Commands {
     #[command(about = "Inspect optional release companions without changing their lifecycle state")]
     Companions(companions_cli::CompanionsArgs),
     #[command(about = "Inspect and install the Wikitool agent pack")]
-    Agent(agent_cli::AgentArgs),
+    Agent(agent_cli::SkillsArgs),
     #[cfg(feature = "maintainer")]
     #[command(about = "Build agent packs and release bundles", hide = true)]
     Release(release::ReleaseArgs),
@@ -183,7 +183,7 @@ fn main() -> Result<()> {
         Some(Commands::Article(args)) => article_cli::run_article(&runtime, args),
         Some(Commands::Lsp(args)) => lsp_cli::run_lsp(&runtime, args),
         Some(Commands::Companions(args)) => companions_cli::run_companions(args),
-        Some(Commands::Agent(args)) => agent_cli::run_agent(&runtime, args),
+        Some(Commands::Agent(args)) => agent_cli::run_skills(&runtime, args),
         #[cfg(feature = "maintainer")]
         Some(Commands::Release(args)) => release::run_release(args),
         #[cfg(feature = "maintainer")]

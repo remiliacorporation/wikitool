@@ -5,37 +5,37 @@ use clap::{Args, Subcommand, ValueEnum};
 use serde::Serialize;
 
 use crate::RuntimeOptions;
-use crate::agent_pack::{
-    AGENT_INSTALL_RECEIPT, AgentInstallAction, apply_agent_install, apply_agent_uninstall,
-    load_agent_pack, plan_agent_install, plan_agent_uninstall, resolve_project_root,
-    verify_agent_install,
+use crate::skills::{
+    SKILLS_INSTALL_RECEIPT, SkillInstallAction, apply_skills_install, apply_skills_uninstall,
+    load_skills, plan_skills_install, plan_skills_uninstall, resolve_project_root,
+    verify_skills_install,
 };
 use crate::cli_support::{OutputFormat, normalize_path};
 
 #[derive(Debug, Args)]
-pub(crate) struct AgentArgs {
+pub(crate) struct SkillsArgs {
     #[command(subcommand)]
-    command: AgentSubcommand,
+    command: SkillsSubcommand,
 }
 
 #[derive(Debug, Subcommand)]
-enum AgentSubcommand {
-    #[command(about = "Validate and describe a Wikitool agent pack")]
-    Inspect(AgentInspectArgs),
+enum SkillsSubcommand {
+    #[command(about = "Validate and describe a Wikitool Wikitool skills")]
+    Inspect(SkillsInspectArgs),
     #[command(
         name = "setup-project",
         about = "Install Wikitool skills into an agent project"
     )]
-    SetupProject(AgentSetupArgs),
+    SetupProject(SkillsSetupArgs),
     #[command(
         name = "uninstall-project",
         about = "Remove an unchanged receipt-owned Wikitool skill installation"
     )]
-    UninstallProject(AgentUninstallArgs),
+    UninstallProject(SkillsUninstallArgs),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-enum AgentTarget {
+enum SkillTarget {
     Auto,
     Agents,
     Claude,
@@ -43,13 +43,13 @@ enum AgentTarget {
 }
 
 #[derive(Debug, Args)]
-struct AgentInspectArgs {
+struct SkillsInspectArgs {
     #[arg(
         long,
         value_name = "PATH",
-        help = "Agent pack root (default: agent/ beside the executable)"
+        help = "Wikitool skills root (default: agent/ beside the executable)"
     )]
-    pack_root: Option<PathBuf>,
+    skills_root: Option<PathBuf>,
     #[arg(
         value_name = "PROJECT",
         help = "Also inspect this project's install receipt"
@@ -60,17 +60,17 @@ struct AgentInspectArgs {
 }
 
 #[derive(Debug, Args)]
-struct AgentSetupArgs {
+struct SkillsSetupArgs {
     #[arg(value_name = "PROJECT")]
     project_root: Option<PathBuf>,
     #[arg(
         long,
         value_name = "PATH",
-        help = "Agent pack root (default: agent/ beside the executable)"
+        help = "Wikitool skills root (default: agent/ beside the executable)"
     )]
-    pack_root: Option<PathBuf>,
-    #[arg(long, value_enum, default_value_t = AgentTarget::Auto)]
-    target: AgentTarget,
+    skills_root: Option<PathBuf>,
+    #[arg(long, value_enum, default_value_t = SkillTarget::Auto)]
+    target: SkillTarget,
     #[arg(
         long,
         help = "Validate and print the exact plan without changing files"
@@ -81,7 +81,7 @@ struct AgentSetupArgs {
 }
 
 #[derive(Debug, Args)]
-struct AgentUninstallArgs {
+struct SkillsUninstallArgs {
     #[arg(value_name = "PROJECT")]
     project_root: Option<PathBuf>,
     #[arg(
@@ -94,27 +94,27 @@ struct AgentUninstallArgs {
 }
 
 #[derive(Debug, Serialize)]
-struct AgentInspectOutput {
+struct SkillsInspectOutput {
     schema: &'static str,
     status: &'static str,
-    pack_root: String,
+    skills_root: String,
     wikitool_version: String,
     manifest_sha256: String,
     skills: Vec<String>,
     file_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
-    project: Option<AgentProjectStatus>,
+    project: Option<SkillsProjectStatus>,
 }
 
 #[derive(Debug, Serialize)]
-struct AgentProjectStatus {
+struct SkillsProjectStatus {
     project_root: String,
     receipt_path: String,
     installed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     wikitool_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pack_manifest_sha256: Option<String>,
+    skills_manifest_sha256: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pack_aligned: Option<bool>,
     skill_targets: Vec<String>,
@@ -122,102 +122,102 @@ struct AgentProjectStatus {
 }
 
 #[derive(Debug, Serialize)]
-struct AgentMutationOutput {
+struct SkillsMutationOutput {
     schema: &'static str,
     operation: &'static str,
     status: &'static str,
     project_root: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pack_root: Option<String>,
+    skills_root: Option<String>,
     skill_targets: Vec<String>,
-    actions: Vec<AgentInstallAction>,
+    actions: Vec<SkillInstallAction>,
 }
 
-pub(crate) fn run_agent(runtime: &RuntimeOptions, args: AgentArgs) -> Result<()> {
+pub(crate) fn run_skills(runtime: &RuntimeOptions, args: SkillsArgs) -> Result<()> {
     match args.command {
-        AgentSubcommand::Inspect(options) => run_inspect(runtime, options),
-        AgentSubcommand::SetupProject(options) => run_setup(runtime, options),
-        AgentSubcommand::UninstallProject(options) => run_uninstall(runtime, options),
+        SkillsSubcommand::Inspect(options) => run_inspect(runtime, options),
+        SkillsSubcommand::SetupProject(options) => run_setup(runtime, options),
+        SkillsSubcommand::UninstallProject(options) => run_uninstall(runtime, options),
     }
 }
 
-fn run_inspect(runtime: &RuntimeOptions, args: AgentInspectArgs) -> Result<()> {
-    let pack = load_agent_pack(&resolve_pack_root(args.pack_root)?)?;
+fn run_inspect(runtime: &RuntimeOptions, args: SkillsInspectArgs) -> Result<()> {
+    let skills = load_skills(&resolve_skills_root(args.skills_root)?)?;
     let project = args
         .project_root
         .or_else(|| runtime.project_root().map(Path::to_path_buf))
-        .map(|path| inspect_project(&path, &pack.manifest_sha256))
+        .map(|path| inspect_project(&path, &skills.manifest_sha256))
         .transpose()?;
-    let output = AgentInspectOutput {
+    let output = SkillsInspectOutput {
         schema: "wikitool.agent-inspect.v1",
         status: "valid",
-        pack_root: normalize_path(&pack.root),
-        wikitool_version: pack.manifest.wikitool_version.clone(),
-        manifest_sha256: pack.manifest_sha256,
-        skills: pack
+        skills_root: normalize_path(&skills.root),
+        wikitool_version: skills.manifest.wikitool_version.clone(),
+        manifest_sha256: skills.manifest_sha256,
+        skills: skills
             .manifest
             .skills
             .iter()
             .map(|skill| skill.id.clone())
             .collect(),
-        file_count: pack.manifest.files.len(),
+        file_count: skills.manifest.files.len(),
         project,
     };
     print_inspect(&output, args.format)
 }
 
-fn run_setup(runtime: &RuntimeOptions, args: AgentSetupArgs) -> Result<()> {
+fn run_setup(runtime: &RuntimeOptions, args: SkillsSetupArgs) -> Result<()> {
     let requested = resolve_requested_project(args.project_root, runtime);
     let project_root = resolve_project_root(&requested)?;
-    let pack = load_agent_pack(&resolve_pack_root(args.pack_root)?)?;
+    let skills = load_skills(&resolve_skills_root(args.skills_root)?)?;
     let targets = resolve_targets(args.target, &project_root);
-    let plan = plan_agent_install(&project_root, &pack, &targets)?;
-    let output = AgentMutationOutput {
+    let plan = plan_skills_install(&project_root, &skills, &targets)?;
+    let output = SkillsMutationOutput {
         schema: "wikitool.agent-mutation.v1",
         operation: "setup-project",
         status: if args.dry_run { "planned" } else { "applied" },
         project_root: normalize_path(&project_root),
-        pack_root: Some(normalize_path(&pack.root)),
+        skills_root: Some(normalize_path(&skills.root)),
         skill_targets: targets.iter().map(|target| (*target).to_string()).collect(),
         actions: plan.actions.clone(),
     };
     if !args.dry_run {
-        apply_agent_install(&project_root, plan)?;
+        apply_skills_install(&project_root, plan)?;
     }
     print_mutation(&output, args.format)
 }
 
-fn run_uninstall(runtime: &RuntimeOptions, args: AgentUninstallArgs) -> Result<()> {
+fn run_uninstall(runtime: &RuntimeOptions, args: SkillsUninstallArgs) -> Result<()> {
     let requested = resolve_requested_project(args.project_root, runtime);
     let project_root = resolve_project_root(&requested)?;
-    let Some((receipt, actions)) = plan_agent_uninstall(&project_root)? else {
-        let output = AgentMutationOutput {
+    let Some((receipt, actions)) = plan_skills_uninstall(&project_root)? else {
+        let output = SkillsMutationOutput {
             schema: "wikitool.agent-mutation.v1",
             operation: "uninstall-project",
             status: "not_installed",
             project_root: normalize_path(&project_root),
-            pack_root: None,
+            skills_root: None,
             skill_targets: Vec::new(),
             actions: Vec::new(),
         };
         return print_mutation(&output, args.format);
     };
-    let output = AgentMutationOutput {
+    let output = SkillsMutationOutput {
         schema: "wikitool.agent-mutation.v1",
         operation: "uninstall-project",
         status: if args.dry_run { "planned" } else { "applied" },
         project_root: normalize_path(&project_root),
-        pack_root: None,
+        skills_root: None,
         skill_targets: receipt.skill_targets.clone(),
         actions,
     };
     if !args.dry_run {
-        apply_agent_uninstall(&project_root, &receipt)?;
+        apply_skills_uninstall(&project_root, &receipt)?;
     }
     print_mutation(&output, args.format)
 }
 
-fn resolve_pack_root(explicit: Option<PathBuf>) -> Result<PathBuf> {
+fn resolve_skills_root(explicit: Option<PathBuf>) -> Result<PathBuf> {
     if let Some(path) = explicit {
         return Ok(path);
     }
@@ -235,12 +235,12 @@ fn resolve_requested_project(explicit: Option<PathBuf>, runtime: &RuntimeOptions
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-fn resolve_targets(target: AgentTarget, project_root: &Path) -> Vec<&'static str> {
+fn resolve_targets(target: SkillTarget, project_root: &Path) -> Vec<&'static str> {
     match target {
-        AgentTarget::Agents => vec!["agents"],
-        AgentTarget::Claude => vec!["claude"],
-        AgentTarget::Both => vec!["agents", "claude"],
-        AgentTarget::Auto => {
+        SkillTarget::Agents => vec!["agents"],
+        SkillTarget::Claude => vec!["claude"],
+        SkillTarget::Both => vec!["agents", "claude"],
+        SkillTarget::Auto => {
             let agents =
                 project_root.join("AGENTS.md").exists() || project_root.join(".agents").exists();
             let claude =
@@ -254,20 +254,20 @@ fn resolve_targets(target: AgentTarget, project_root: &Path) -> Vec<&'static str
     }
 }
 
-fn inspect_project(path: &Path, current_manifest_sha256: &str) -> Result<AgentProjectStatus> {
+fn inspect_project(path: &Path, current_manifest_sha256: &str) -> Result<SkillsProjectStatus> {
     let root = resolve_project_root(path)?;
-    let receipt = verify_agent_install(&root)?;
-    Ok(AgentProjectStatus {
+    let receipt = verify_skills_install(&root)?;
+    Ok(SkillsProjectStatus {
         project_root: normalize_path(&root),
-        receipt_path: normalize_path(root.join(AGENT_INSTALL_RECEIPT)),
+        receipt_path: normalize_path(root.join(SKILLS_INSTALL_RECEIPT)),
         installed: receipt.is_some(),
         wikitool_version: receipt.as_ref().map(|value| value.wikitool_version.clone()),
-        pack_manifest_sha256: receipt
+        skills_manifest_sha256: receipt
             .as_ref()
-            .map(|value| value.pack_manifest_sha256.clone()),
+            .map(|value| value.skills_manifest_sha256.clone()),
         pack_aligned: receipt
             .as_ref()
-            .map(|value| value.pack_manifest_sha256 == current_manifest_sha256),
+            .map(|value| value.skills_manifest_sha256 == current_manifest_sha256),
         skill_targets: receipt
             .as_ref()
             .map(|value| value.skill_targets.clone())
@@ -279,12 +279,12 @@ fn inspect_project(path: &Path, current_manifest_sha256: &str) -> Result<AgentPr
     })
 }
 
-fn print_inspect(output: &AgentInspectOutput, format: OutputFormat) -> Result<()> {
+fn print_inspect(output: &SkillsInspectOutput, format: OutputFormat) -> Result<()> {
     if format.is_json() {
         println!("{}", serde_json::to_string_pretty(output)?);
     } else {
-        println!("agent pack: {}", output.status);
-        println!("pack_root: {}", output.pack_root);
+        println!("Wikitool skills: {}", output.status);
+        println!("skills_root: {}", output.skills_root);
         println!("wikitool_version: {}", output.wikitool_version);
         println!("skills: {}", output.skills.join(", "));
         println!("files: {}", output.file_count);
@@ -298,7 +298,7 @@ fn print_inspect(output: &AgentInspectOutput, format: OutputFormat) -> Result<()
     Ok(())
 }
 
-fn print_mutation(output: &AgentMutationOutput, format: OutputFormat) -> Result<()> {
+fn print_mutation(output: &SkillsMutationOutput, format: OutputFormat) -> Result<()> {
     if format.is_json() {
         println!("{}", serde_json::to_string_pretty(output)?);
     } else {
@@ -322,7 +322,7 @@ mod tests {
     fn auto_defaults_to_agents_for_an_unmarked_project() {
         let root = tempfile::tempdir().expect("tempdir");
         assert_eq!(
-            resolve_targets(AgentTarget::Auto, root.path()),
+            resolve_targets(SkillTarget::Auto, root.path()),
             vec!["agents"]
         );
     }
@@ -333,7 +333,7 @@ mod tests {
         std::fs::write(root.path().join("AGENTS.md"), "# Agents\n").expect("agents marker");
         std::fs::write(root.path().join("CLAUDE.md"), "# Claude\n").expect("claude marker");
         assert_eq!(
-            resolve_targets(AgentTarget::Auto, root.path()),
+            resolve_targets(SkillTarget::Auto, root.path()),
             vec!["agents", "claude"]
         );
     }
