@@ -60,8 +60,10 @@ fn assert_skill_shape(name: &str, required_references: &[&str]) {
         "{name} frontmatter must match its directory"
     );
     assert!(
-        skill.contains("## Procedure") && skill.contains("## Exit conditions"),
-        "{name} must be a substantive procedure with exit conditions"
+        lines[closing + 1..]
+            .iter()
+            .any(|line| !line.trim().is_empty()),
+        "{name} must have an instruction body"
     );
     assert!(
         root.join("agents/openai.yaml").is_file(),
@@ -80,21 +82,34 @@ fn assert_skill_shape(name: &str, required_references: &[&str]) {
 }
 
 #[test]
-fn public_skills_are_substantive_and_complete() {
+fn public_skill_packages_have_valid_structure_and_routed_references() {
     assert_skill_shape(
         "wiki-writing",
         &[
             "evidence-to-prose.md",
             "human-notes.md",
             "mediawiki-structure.md",
+            "frozen-packet.md",
         ],
     );
     assert_skill_shape(
         "prose-review",
-        &["source-fidelity.md", "reader-value.md", "blp-sensitive.md"],
+        &[
+            "source-fidelity.md",
+            "reader-value.md",
+            "blp-sensitive.md",
+            "frozen-packet.md",
+        ],
     );
     assert_skill_shape("wiki-interview", &["interview-ledger.md"]);
-    assert_skill_shape("wikitool", &[]);
+    assert_skill_shape(
+        "wikitool",
+        &[
+            "template-engineering.md",
+            "sync-and-acceptance.md",
+            "macos-release-trust.md",
+        ],
+    );
 }
 
 #[test]

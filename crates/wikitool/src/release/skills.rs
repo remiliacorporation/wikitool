@@ -47,7 +47,12 @@ pub(super) fn build_skills(repo_root: &Path, output_dir: &Path) -> Result<Skills
 
     validate_release_output(repo_root, output_dir, "skills output")?;
     reset_directory(output_dir)?;
-    copy_regular_tree(&source_root, output_dir)?;
+    // Project-installed developer skills have separate release owners.
+    for id in PUBLIC_SKILL_IDS {
+        let source = source_root.join(id);
+        require_directory(&source, "public skill directory")?;
+        copy_regular_tree(&source, &output_dir.join(id))?;
+    }
 
     let mut skills = Vec::with_capacity(PUBLIC_SKILL_IDS.len());
     for id in PUBLIC_SKILL_IDS {
@@ -213,6 +218,8 @@ mod tests {
         let second_result = build_skills(&repo_root, second.path()).expect("second build");
         assert_eq!(first_result.manifest_sha256, second_result.manifest_sha256);
         assert_eq!(first_result.file_count, second_result.file_count);
+        assert!(!first.path().join("contextmink").exists());
+        assert!(!first.path().join("papertiger").exists());
     }
 
     #[test]

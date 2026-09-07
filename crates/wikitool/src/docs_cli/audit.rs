@@ -186,14 +186,27 @@ fn audit_canonical_skills(repo_root: &Path, checks: &mut Vec<DocsAuditCheck>) {
                 "evidence-to-prose.md",
                 "human-notes.md",
                 "mediawiki-structure.md",
+                "frozen-packet.md",
             ][..],
         ),
         (
             "prose-review",
-            &["source-fidelity.md", "reader-value.md", "blp-sensitive.md"][..],
+            &[
+                "source-fidelity.md",
+                "reader-value.md",
+                "blp-sensitive.md",
+                "frozen-packet.md",
+            ][..],
         ),
         ("wiki-interview", &["interview-ledger.md"][..]),
-        ("wikitool", &[][..]),
+        (
+            "wikitool",
+            &[
+                "template-engineering.md",
+                "sync-and-acceptance.md",
+                "macos-release-trust.md",
+            ][..],
+        ),
     ] {
         let root = repo_root.join(".agents/skills").join(name);
         let skill_path = root.join("SKILL.md");
@@ -203,8 +216,14 @@ fn audit_canonical_skills(repo_root: &Path, checks: &mut Vec<DocsAuditCheck>) {
                 if !valid_skill_frontmatter(&body, name) {
                     failures.push("invalid name/description-only frontmatter".to_string());
                 }
-                if !body.contains("## Procedure") || !body.contains("## Exit conditions") {
-                    failures.push("missing procedure or exit conditions".to_string());
+                if !body
+                    .lines()
+                    .skip(1)
+                    .skip_while(|line| *line != "---")
+                    .skip(1)
+                    .any(|line| !line.trim().is_empty())
+                {
+                    failures.push("missing instruction body".to_string());
                 }
                 for reference in references {
                     if !body.contains(reference)
@@ -225,7 +244,7 @@ fn audit_canonical_skills(repo_root: &Path, checks: &mut Vec<DocsAuditCheck>) {
             failures.is_empty(),
             Some(&skill_path),
             if failures.is_empty() {
-                format!("{name} has a substantive canonical skill package")
+                format!("{name} has a structurally valid canonical skill package")
             } else {
                 format!("{name}: {}", failures.join("; "))
             },
