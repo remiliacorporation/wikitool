@@ -41,6 +41,14 @@
       "steps": [
         "plan-exact-migration"
       ]
+    },
+    {
+      "capability": "template-brief-declarations",
+      "steps": [
+        "lua-template-brief",
+        "mixed-template-brief",
+        "source-template-brief"
+      ]
     }
   ],
   "mediawiki_fixture": {
@@ -424,6 +432,150 @@
         "json"
       ],
       "action": "command"
+    },
+    {
+      "action": "copy",
+      "id": "install-lua-template",
+      "source": "fixtures/Template_Lua_card.wiki",
+      "sha256": "e9e838616cc5f741137afbc433b675dbda8414ec48c22ef780276a9f840e76a8",
+      "target": "templates/core/Template_Lua_card.wiki"
+    },
+    {
+      "action": "copy",
+      "id": "install-lua-module",
+      "source": "fixtures/Module_Lua_card.lua",
+      "sha256": "49c26ee6895b518e287423c14215a8802f1d40e9eab26500b027ddecba098b05",
+      "target": "templates/core/Module_Lua_card.lua"
+    },
+    {
+      "action": "copy",
+      "id": "install-mixed-template",
+      "source": "fixtures/Template_Mixed_card.wiki",
+      "sha256": "72a4f51e9f74561ac889a5b5896b671e679e1f7d7eadb067293602e408c1fc14",
+      "target": "templates/core/Template_Mixed_card.wiki"
+    },
+    {
+      "action": "copy",
+      "id": "install-brief-usage",
+      "source": "fixtures/brief-usage.wiki",
+      "sha256": "4125bbc16c531beb3b2eb1bad18b3f3299682fcda18dcc18eca1dfa3ebd0d83f",
+      "target": "wiki_content/Main/Brief_usage.wiki"
+    },
+    {
+      "action": "command",
+      "id": "index-brief-usage",
+      "argv": [
+        "catalog",
+        "build",
+        "--format",
+        "json"
+      ],
+      "expect": {
+        "exit_code": 0
+      }
+    },
+    {
+      "action": "command",
+      "id": "catalog-brief-fixtures",
+      "argv": [
+        "templates",
+        "catalog",
+        "build",
+        "--format",
+        "json"
+      ],
+      "expect": {
+        "exit_code": 0
+      }
+    },
+    {
+      "action": "command",
+      "id": "lua-template-brief",
+      "argv": [
+        "templates",
+        "show",
+        "Template:Lua card",
+        "--format",
+        "json",
+        "--view",
+        "brief"
+      ],
+      "expect": {
+        "stdout": [
+          {
+            "value": 3,
+            "kind": "json_pointer_equals",
+            "pointer": "/contract/declared_parameter_count"
+          },
+          {
+            "value": true,
+            "kind": "json_pointer_equals",
+            "pointer": "/contract/has_templatedata"
+          },
+          {
+            "value": "unknown",
+            "kind": "json_pointer_equals",
+            "pointer": "/contract/observed_only_parameters/0/name"
+          }
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "action": "command",
+      "id": "mixed-template-brief",
+      "argv": [
+        "templates",
+        "show",
+        "Template:Mixed card",
+        "--format",
+        "json",
+        "--view",
+        "brief"
+      ],
+      "expect": {
+        "stdout": [
+          {
+            "value": 3,
+            "kind": "json_pointer_equals",
+            "pointer": "/contract/declared_parameter_count"
+          },
+          {
+            "value": true,
+            "kind": "json_pointer_equals",
+            "pointer": "/contract/has_templatedata"
+          }
+        ],
+        "exit_code": 0
+      }
+    },
+    {
+      "action": "command",
+      "id": "source-template-brief",
+      "argv": [
+        "templates",
+        "show",
+        "Template:Helper",
+        "--format",
+        "json",
+        "--view",
+        "brief"
+      ],
+      "expect": {
+        "stdout": [
+          {
+            "value": 1,
+            "kind": "json_pointer_equals",
+            "pointer": "/contract/declared_parameter_count"
+          },
+          {
+            "value": false,
+            "kind": "json_pointer_equals",
+            "pointer": "/contract/has_templatedata"
+          }
+        ],
+        "exit_code": 0
+      }
     }
   ]
 }

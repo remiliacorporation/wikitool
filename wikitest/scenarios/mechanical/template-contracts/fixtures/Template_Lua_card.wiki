@@ -1,0 +1,3 @@
+<includeonly>{{#invoke:Lua card|main}}</includeonly><noinclude>
+<templatedata>{"params":{"label":{"type":"string","aliases":["text"]},"count":{"type":"number"},"color":{"type":"string"}}}</templatedata>
+</noinclude>

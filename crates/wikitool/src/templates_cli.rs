@@ -623,7 +623,16 @@ fn build_template_brief(entry: &TemplateCatalogEntry) -> TemplateBrief<'_> {
         summary_text: entry.summary_text.as_deref(),
         contract: TemplateContractCard {
             has_templatedata: entry.templatedata.is_some(),
-            declared_parameter_count: entry.declared_parameter_keys.len(),
+            declared_parameter_count: entry
+                .parameters
+                .iter()
+                .filter(|parameter| {
+                    parameter
+                        .sources
+                        .iter()
+                        .any(|source| source == "templatedata" || source == "source")
+                })
+                .count(),
             required_parameters: entry
                 .parameters
                 .iter()

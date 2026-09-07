@@ -1,0 +1,3 @@
+<includeonly>{{{label|}}} {{{source_only|}}}</includeonly><noinclude>
+<templatedata>{"params":{"label":{"type":"string"},"documented":{"type":"string"}}}</templatedata>
+</noinclude>

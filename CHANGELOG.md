@@ -14,6 +14,7 @@ The release workflow extracts the section for the requested version and fails if
 
 ### Fixed
 
+- Template briefs count declarations from both TemplateData and wikitext, without double-counting shared names or treating caller-only arguments as declared parameters. Lua-backed templates no longer report zero declarations merely because they forward their arguments through Scribunto.
 - Wikitest rejects unknown fields inside steps and assertions, validates scenario fixture hashes and schemas before execution, and supports zero-request assertions and total method counts. Docs discovery, adapter profile defaults, catalog readiness, database reset, and documentation removal have structured public-CLI regressions.
 - Failed Wikitest suites replay as failed evidence when their observed coverage is incomplete; inspection still rejects forged passes or fabricated coverage. Text reports identify failed scenarios and assertions.
 
