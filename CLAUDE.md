@@ -1,134 +1,62 @@
-# Wikitool Development Guidance
+# Wikitool development
 
-This file is for implementation work in the wikitool source checkout. `CLAUDE.md` at the repo
-root is a byte-identical mirror of this file; edit both together. It is not packaged for users.
-User-facing agent procedures live only in the canonical packages under `.agents/skills/`.
+This file governs the source checkout. `CLAUDE.md` is a byte-identical mirror;
+edit both together. User-facing skills have their sole substantive owner in
+`.agents/skills/`; `.claude/skills/` contains thin source-checkout routes.
 
-When changing shipped behavior, update the relevant operator guidance and regenerate
-`docs/wikitool/reference.md`. When changing only internal implementation practice, keep the change
-scoped here.
+## Boundaries
 
-## Implementation Rules
+- The runtime project root is the caller's wiki, not this source checkout,
+  unless a command explicitly accepts a repository root.
+- `.wikitool/data/wikitool.db` is a disposable catalog.
+  `.wikitool/sync/sync.sqlite3` is durable revision identity; preserve it
+  during catalog reset and refresh.
+- Use structured parsers or state machines for wikitext, HTML extraction, and
+  command contracts. Do not add regex-based parsers.
+- Keep JSON output contracts explicit. Hidden maintainer commands stay behind
+  the `maintainer` feature; default builds are end-user builds.
+- Source work and disposable tests do not authorize live publication. Keep
+  target identity, evidence, editorial judgment, human acceptance, and mutation
+  receipts distinct.
 
-- Closely corroborate all implementation work against the authoritative sources for the project:
-  specifications, existing code, documentation, tests, and observed runtime behavior.
-- Prefer directly evidenced behavior over inferred design.
-- When work reveals a canonical or directly evidenced name that supersedes a current label, stage
-  that rename across all relevant locations in the same changeset unless a documented blocker
-  prevents immediate closeout.
-- Implement for correctness first.
-- Treat established naming, structure, and subsystem boundaries as evidence, not obligations.
-- Preserve them where they aid correctness or comprehension, but not mechanically.
-- Where behavior is not directly established, state the uncertainty explicitly, document the gap at
-  the relevant site, and do not present hypotheses as facts.
-- Do not silently infer missing behavior.
-- Do not add defensive code, fallback paths, or error-mitigating logic that obscures divergence from
-  the specification or expected behavior.
-- Surface errors, mismatches, and unhandled states immediately and locally.
-- Prefer explicit assertions, narrow failure points, and observable diagnostics over hidden recovery.
-- If the correct behavior at a site is unknown, that unknowing should be visible in the code.
-- Write lean, maintainable code with high local comprehensibility.
-- Minimize implicit state, cross-file indirection, and abstractions not yet justified by repeated
-  evidence.
-- Avoid premature generalization.
-- Only extract shared machinery when multiple cases demonstrably share the same behavior and
-  constraints.
-- Use full-cutover judgment where appropriate, but confine changes to what is directly motivated by
-  the current work.
-- Do not perform speculative rewrites of adjacent code just because it appears improvable.
-- If adjacent code is suspect, note it and continue.
+## Change and verify
 
-## Source Contracts
+Choose the smallest complete change supported by source, specifications, tests,
+and observed behavior. Preserve unrelated work. Surface unknown behavior and
+failed assumptions; avoid silent fallbacks. Keep naming and documentation
+aligned with the final implementation.
 
-- Avoid regex-based parsing for wikitext, HTML extraction, and command-contract logic. Use
-  deterministic state machines, structured parsers, or character-by-character parsing.
-- Keep CLI output contracts explicit. Agent-facing commands should prefer `--format json` when the
-  output is consumed programmatically.
-- Hidden maintainer commands belong behind the explicit `maintainer` feature; default
-  builds are end-user builds.
-- The runtime project root is the caller's wiki project, not this source checkout, unless the
-  command explicitly accepts a repository root.
-- The catalog database at `.wikitool/data/wikitool.db` is disposable. The sync store at
-  `.wikitool/sync/sync.sqlite3` is durable revision identity; resets and refreshes must preserve it.
+For Rust changes, run targeted tests and `cargo test --workspace`. Test
+infrastructure or maintainer changes also require `cargo test --workspace
+--all-features`. For maintainer code or release machinery, run
+`cargo clippy --workspace --all-targets -- -D warnings`.
 
-## Verification
+Public CLI regressions belong in Wikitest. Build default `wikitool` and
+`wikitest`, run `wikitest validate`, then the
+`wikitool-regressions --require-all` suite. Keep parser, state-machine,
+isolation, and receipt-integrity tests beside their code.
 
-- Run targeted unit tests for touched modules.
-- Run `cargo test --workspace` before considering source changes complete.
-- For test infrastructure or maintainer changes, also run `cargo test --workspace --all-features`.
-- Public CLI regressions live in Wikitest. Build the default `wikitool` and `wikitest` binaries,
-  run `wikitest validate`, then `wikitest suite wikitool-regressions --require-all`.
-  Extend those scenarios instead of adding shell smoke scripts or private HTTP test servers;
-  keep focused parser, state-machine, isolation, and receipt-integrity tests beside their code.
-- Run `cargo clippy --workspace --all-targets -- -D warnings` for maintainer-facing cleanup or
-  release-adjacent changes.
-- For CLI contract changes, run the relevant command help and regenerate
-  `docs/wikitool/reference.md` with
-  `cargo run --package wikitool --features maintainer -- docs generate-reference`.
+CLI contract changes require relevant help checks and reference regeneration:
+`cargo run --package wikitool --features maintainer -- docs generate-reference`.
+Update affected operator guidance when behavior changes.
 
-## Bounded Output
+Skill-only changes require packaging/manifest validation, usable relative
+references, aligned discovery routes, and realistic task-routing checks.
+They do not require rebuilding unchanged runtime code or regenerating CLI help.
+Disclose when a check validates structure rather than independent behavior.
 
-Contextmink is a separately versioned, project-generic tool. A release bundle
-includes its hash-verified upstream pack under `contextmink/`; run
-`contextmink/contextmink(.exe) setup-project <project-root> --skill-target both
---json` and follow its receipt-backed setup guidance. In this source checkout,
-`bash scripts/fetch_contextmink.sh --platform <platform>` stages the pinned
-upstream release under `dist/contextmink-dist/`; it does not install or rebuild
-Contextmink. Use the installed Contextmink when a file/text/JSON/SQLite/command
-read may produce more output than the transcript should carry.
+## Tool and skill ownership
 
-- Choose invocation by the active shell and target: use `scripts/contextmink ...`
-  from Bash-hosted sessions such as macOS, Linux, Git Bash, WSL, or Claude Code;
-  use `tools/contextmink/bin/contextmink(.exe) ...` directly from Windows
-  PowerShell for contextmink commands; use
-  `tools/contextmink/bin/contextmink-bridge.exe --script scripts/contextmink ...`
-  when a PowerShell-hosted Windows session needs the Bash launcher or another
-  Bash-first repository script.
+Wikitool skills are portable editorial and mechanical guidance. Site policy
+belongs to adapters; harness metadata stays in discovery adapters. Keep narrow
+tasks narrow, and put conditional procedures in references with clear triggers.
 
-- Start with `dirs` to orient in an unfamiliar tree, then `files` or `grep`
-  for candidate discovery. Prefer `files --ext json` / `--extension jsonl`
-  across Windows-to-Bash boundaries because wildcard globs can expand before
-  contextmink receives them.
+Contextmink and Papertiger are separately versioned companions. Use their
+installed project skills and receipt-owned commands when available; use
+environment guidance when no project runtime is installed. Never invent
+replacement planning state or mutate a copied worktree database.
 
-- Read source files through `outline` then `slice`, not dump windows. A named
-  file is still reconnaissance while the answer's location inside it is
-  unknown: `outline <file>` maps declaration lines with line numbers
-  (`--contains TEXT` filters rows; `--lang`, `--prefix <text>`, or
-  `--pattern <regex>` cover unrecognized extensions), then
-  `slice --range START:END` prints the region. `slice` replaces `sed -n` /
-  `cat` / `head` file windows. Keep its default caps (120-line window,
-  220-line ceiling); narrow an oversized read with `outline` or
-  `grep --context` instead of raising `--max-lines`.
-- Use `grep --pattern-file <file>` for shell-fragile regex; use `grep-terms`
-  for literal tokens or phrases (`--or` / `--any`, `--term-file`, `--limit`,
-  `--max-matches`). Narrow either with `--glob` / `--ext`, add `-i` for
-  case-insensitive matching, and `--context N` when the surrounding lines
-  would otherwise need a follow-up `slice`.
-- Use `slice --tail N` for the end of logs, `json-find`, `json-select` (with
-  `--where FIELD=VALUE` / `--where-contains FIELD=TEXT` row filters),
-  `sqlite-schema`, and `sqlite --sql-file` for bounded reads instead of
-  opening whole large files, reports, or databases.
-- Prefer a domain command's native compact/projection/limit flags first. Use
-  `capture -- <command> ...` or `run` only when output size is uncertain and no
-  native bound exists; read the child `exit_code`/`success` fields in the
-  receipt. Truncated captures keep both the head and the tail of the output.
-- Treat a `CONTEXTMINK_RECEIPT` with `"truncated": true` or `"complete": false`
-  as capped output and narrow the query. When `cap_reason` is `"scan"` or
-  lower-bound fields are true, totals and no-match results cover only the
-  scanned subset. A no-match grep with `no_match_scope: "scanned_subset"` or a
-  `json-select` with `all_null_fields` entries needs a narrower or corrected
-  query, not a conclusion.
-- Direct commands are fine when output is already known to be small or
-  structurally bounded: `git status --short`, `git diff --stat`, a focused
-  test command, a domain tool that emits compact records, or one exact file
-  region already known to fit a slice window (about 120 lines). Above that,
-  the read is reconnaissance — go through `outline`/`grep`/`slice`.
-
-Papertiger is a separately versioned optional planning companion. A release
-bundle includes its complete hash-verified upstream pack under `papertiger/`,
-but Wikitool never initializes or mutates Papertiger authority. Project setup,
-upgrade, skill installation, and uninstall belong to
-`papertiger/papertiger(.exe) setup-project|uninstall-project`; preview setup
-with `--dry-run --json` and do not opt a project in without an explicit user
-decision. Once installed, use the canonical project skill and
-`tools/papertiger/agent_integration.md`, not a Wikitool-owned planning wrapper.
+Release bundles carry hash-verified companion packs. Fetch scripts stage pinned
+releases under `dist/`; staging is not project installation. Setup and uninstall
+belong to each tool's own commands. Wikitool must not initialize or mutate
+Papertiger authority or opt a project into it implicitly.

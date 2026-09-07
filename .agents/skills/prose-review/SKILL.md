@@ -1,109 +1,67 @@
 ---
 name: prose-review
-description: Adversarially review encyclopedic wiki prose for source fidelity, due weight, reader value, BLP risk, structure, and gratuitous framing. Use for review-only, pre-publication, audit, or remediation requests; keep it independent from authoring.
+description: Independently assess encyclopedic wiki prose for source fidelity, reader value, due weight, and sensitive claims. Use for editorial review or audit; skip mechanical-only checks and prose drafting.
 ---
 
 # Prose review
 
-Review encyclopedic prose as critically as a code reviewer reviews a change: reconstruct what it claims, test those claims against the actual inputs, identify reader-facing failures, and report actionable findings before any summary.
+Test what the exact article claims against inspected sources and reader needs.
+Report actionable findings before the verdict; keep review separate from repair.
 
-## Frozen packet mode
-
-When an evaluation or delegated task supplies a frozen, blinded review packet, that export is the
-complete review boundary. Read only files explicitly listed in the export. Do not traverse to a
-parent run directory or repository, load ambient project state, run live Wikitool or network
-commands, inspect an author claim map or rationale, or seek a held-out oracle. Use only the packet's
-bound site context, candidate, sources, and mechanical observations. Reconstruct the claim map from
-the candidate itself. Missing material is a disclosed review limit, not permission to escape the
-packet.
-
-## Required context
-
-1. Read [source-fidelity.md](references/source-fidelity.md) for every review.
-2. Read [reader-value.md](references/reader-value.md) for every review.
-3. Read [blp-sensitive.md](references/blp-sensitive.md) whenever a living person, health, crime, drugs, sexuality, identity, harassment, finances, allegations, or reputational claim appears or may be implied.
-4. In an ordinary project, run `wikitool adapter inspect --format json` and read the active adapter's supplemental guidance. In frozen packet mode, use only the supplied bound site context. Treat source-review matches as review prompts, not automatic reliability verdicts.
-5. Inspect the exact article bytes and the exact source documents. If the source packet is incomplete, state the review limit and do not certify source fidelity.
+For a frozen blinded review packet, first read
+[frozen-packet.md](references/frozen-packet.md). Stay within its declared inputs.
+For ordinary reviews, identify the candidate bytes or revision and available
+sources, and read relevant site-adapter guidance. Disclose sampled or inaccessible
+material; it cannot support a complete source-fidelity verdict.
 
 ## Independence
 
-Do not silently rewrite the article while reviewing it. Keep findings separate from repair. A
-publication-grade review must come from a different agent invocation or human than the authoring
-pass and must receive only the frozen candidate, source packet, site guidance, and review
-procedure—not the author's rationale or intended verdict. Self-reported participant IDs establish
-workflow separation, not identity.
+A publication-grade review comes from a different invocation or human than the
+authoring pass. Supply the candidate, sources, site guidance, and review
+procedure without the author's rationale or desired verdict. Participant labels
+do not authenticate identity. When independence is unavailable, label the work
+self-review; it can identify defects but cannot satisfy independent review.
 
-When no independent reviewer is available, perform a clearly labelled self-review: discard the
-authoring rationale, rebuild the claim-source map from the text, and look for reasons the prose
-should not ship. A self-review may find and block defects, but it cannot satisfy the independent
-review exit condition.
+## Exercise editorial judgment
 
-## Procedure
+Read as a reader and reconstruct material claims from the candidate, including
+infoboxes, captions, headings, and categories. Test them against the actual cited
+documents. Use [source-fidelity.md](references/source-fidelity.md) for entailment,
+citation laundering, attribution, and source limits, and
+[reader-value.md](references/reader-value.md) for structure, framing, and weight.
 
-### 1. Freeze the review target
+Check that dates, actors, quantities, confidence, and causal direction survive
+the source-to-prose transformation. A true detail may still be misleading in
+placement or emphasis. Relationships to the host wiki need supported importance.
+Diagnose concrete failures such as unsupported synthesis, confusing chronology,
+or redundant paragraphs; "sounds AI-generated" is not a finding by itself.
 
-Record the title, path, revision or content hash, namespace, stated article object, and available source packet. Note whether the review is complete, sampled, or blocked by inaccessible material. A later prose change invalidates the review result.
+Use [blp-sensitive.md](references/blp-sensitive.md) when living-person, health,
+crime, drugs, sexuality, identity, harassment, finance, or reputational claims
+appear or are implied. Material sensitive claims without adequate support block
+publication.
 
-### 2. Read once as a reader
+Use appropriate Wikitool mechanical checks for syntax and link diagnostics in
+ordinary work. Frozen packets use only supplied observations. Mechanical success
+cannot override an editorial defect.
 
-Read without opening sources first. Answer:
+## Report
 
-- What does this article say the subject is?
-- What new understanding does each section give the reader?
-- Does the lead reflect the supported center of gravity?
-- Where does attention drift to an institution, scene, author, or local wiki relationship that is not the subject?
-- Would a reader choose to continue, and where would they stop?
+Give each finding a precise location, evidence, reader impact, and repair direction.
+Distinguish verified defects from inference and review limits.
 
-Record confusion, boredom, repetition, inflated significance, missing context, and abrupt compression. Do not reduce this pass to forbidden phrases.
+- **P0 / stop:** acute privacy, safety, fabrication, legal, or destructive sync risk.
+- **P1 / block:** material source failure, sensitive-claim defect, plagiarism,
+  wrong article object, or fundamentally misleading framing.
+- **P2 / revise:** significant weight, readability, structure, attribution,
+  context, or evidence-coverage defect.
+- **P3 / polish:** bounded clarity or consistency issue without distorted meaning.
 
-### 3. Reconstruct every material claim
+Then give the reader verdict, source coverage (complete, incomplete, or not
+assessable), disposition, and residual risk. Any P0/P1 requires `block`; P2
+requires `revise`; P3-only findings may accompany `accept`. If there are no
+findings, say so and state the evidence scope. Do not manufacture cosmetic
+findings.
 
-Map factual statements, quotations, implications, infobox fields, captions, section headings, and category memberships to sources. Open each citation. Confirm that the URL is the cited work and that the source entails the nearby claim with the same actors, dates, quantities, confidence, and causal direction.
-
-Flag citation laundering, tertiary compression, citation bundles, source-title mismatches, failed links, overbroad reuse, and claims supported only by snippets, memory, retrieval, or neighboring pages.
-
-### 4. Test weight and framing
-
-Compare prose weight with source weight. Ask whether independent sources make the claimed relationship, reception, controversy, or significance central enough to include and prominent enough for its placement. A true fact can still be gratuitous, disproportionate, or misleading.
-
-Check whether the subject leads on its own terms. A host-wiki connection belongs only when important, sourced, and proportionate. Local relevance is not an encyclopedic definition.
-
-### 5. Apply the sensitive-claim pass
-
-When the BLP/sensitive reference is triggered, inspect every such claim individually. Require direct, high-quality support and careful attribution. Block publication when a material sensitive claim lacks adequate evidence, even if the rest of the article is sound.
-
-### 6. Inspect prose and structure
-
-Review paragraph purpose, information density, transitions, chronology, terminology, headings, lead-body agreement, repetition, quotations, and source voice. Identify artificial prose by its failure mode: vague subject, generic consequence, unsupported synthesis, repetitive cadence, ornamental abstraction, or a paragraph that could fit many topics.
-
-Do not report “sounds AI-generated” as a standalone finding. Point to the exact information or reader problem and show how to repair it.
-
-### 7. Run mechanical checks last
-
-In an ordinary project, use Wikitool lint, duplicate-reference inspection, validation, and live link/redirect verification as appropriate. In frozen packet mode, inspect only the supplied mechanical observations and disclose anything they do not establish. Mechanical findings supplement the editorial review; they cannot override it.
-
-## Findings format
-
-Report findings first, ordered by severity:
-
-- **P0 — stop:** publication would create acute legal, privacy, safety, fabrication, or destructive sync risk.
-- **P1 — block:** material claim-source failure, BLP/sensitive defect, plagiarism or close paraphrase, wrong article object, or fundamentally misleading framing.
-- **P2 — revise:** significant due-weight, readability, structure, attribution, context, or evidence-coverage defect.
-- **P3 — polish:** bounded clarity, style, wikitext, or consistency issue that does not distort the article.
-
-Each finding must include the smallest useful location, the exact problem, evidence for the diagnosis, reader or publication impact, and a concrete repair direction. Distinguish verified defects from inferences and review limitations.
-
-After findings, provide:
-
-1. **Reader verdict:** directly answer “Would someone want to read this article?” and why.
-2. **Source verdict:** complete, incomplete, or not assessable, with the principal evidence gap.
-3. **Disposition:** `accept`, `revise`, or `block`.
-4. **Residual risk:** what still requires a human judgment or inaccessible source.
-
-Map severity to disposition consistently: any P0 or P1 requires `block`; one or more P2 findings with no P0/P1 require `revise`; P3-only findings may accompany `accept`. A P3 is a bounded polish item, not a hidden publication block.
-
-If there are no findings, say so explicitly and still state the evidence scope. Do not inflate a review with cosmetic comments.
-
-## Exit conditions
-
-A review is complete only when the exact target bytes are frozen and identified, the cited source packet has been inspected or its absence disclosed, conditional sensitive review has run, mechanical checks are separated from editorial judgment, and the disposition follows from enumerated findings. Review completion is not human acceptance and must not create a publication authorization.
+A changed candidate invalidates the prior review. Completing review does not
+record human acceptance or authorize publication.

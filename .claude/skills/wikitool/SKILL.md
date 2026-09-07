@@ -1,6 +1,6 @@
 ---
 name: wikitool
-description: Operate Wikitool for target configuration, retrieval, deterministic checks, guarded sync, and other mechanical MediaWiki work.
+description: Operate Wikitool for MediaWiki retrieval, template inspection, deterministic checks, target configuration, and revision-bound sync. Use for mechanical wiki work; skip infrastructure-only tasks and route prose judgment to the editorial skills.
 ---
 
 Read and follow `../../../.agents/skills/wikitool/SKILL.md` completely. If the request

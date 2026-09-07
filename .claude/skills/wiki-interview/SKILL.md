@@ -1,6 +1,6 @@
 ---
 name: wiki-interview
-description: Interview a human to capture article scope, firsthand knowledge, source leads, exclusions, terminology, chronology, and unresolved claims in a neutral Wikitool ledger. Use before research or drafting when important knowledge is not already recorded.
+description: Capture missing human knowledge, article scope, source leads, and exclusions in a neutral Wikitool interview ledger. Use when that input is needed; skip complete briefs, source-only research, and routine edits.
 ---
 
 Read and follow `../../../.agents/skills/wiki-interview/SKILL.md` completely.

@@ -1,6 +1,6 @@
 ---
 name: wiki-writing
-description: Write or substantially revise evidence-bound encyclopedic MediaWiki articles. Use when asked to draft, rewrite, expand, or convert sources or human notes into article prose; do not use for a review-only request.
+description: Draft or substantially revise encyclopedic MediaWiki prose from inspected sources and human notes. Use for authoring; skip review-only, mechanical template, and infrastructure work.
 ---
 
 Read and follow `../../../.agents/skills/wiki-writing/SKILL.md` completely.
