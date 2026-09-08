@@ -34,6 +34,12 @@ before and after. Scope template-only categories to `noinclude` or equivalent
 documentation, and use `[[:Category:Name]]` for ordinary category links. Category
 creation and hierarchy changes remain separate site-policy decisions.
 
+For standard Scribunto documentation, use `Module:Name/doc` with wikitext and
+place module-only category membership inside `includeonly`. Verify the module's
+actual category membership after publication; do not add category syntax to Lua
+source. Wikitool excludes these documentation pages from executable module discovery,
+including legacy local copies with a `.lua` extension.
+
 The current HTML assertions below do not compare parser category arrays.
 Passing them does not establish category isolation. Preserve separate category
 observations with page/revision identity; indexed memberships may lag a template

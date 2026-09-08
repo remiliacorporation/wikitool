@@ -1,0 +1,5 @@
+Documentation containing a Lua example, not an executable module:
+<syntaxhighlight lang="lua">
+function p.example_only() return "example" end
+</syntaxhighlight>
+<includeonly>[[Category:Modules]]</includeonly>

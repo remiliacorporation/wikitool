@@ -1016,6 +1016,8 @@ fn file_extension(namespace: Namespace, title: &str) -> &'static str {
         Namespace::Module => {
             if title.ends_with("/styles.css") {
                 ".css"
+            } else if title.ends_with("/doc") {
+                ".wiki"
             } else {
                 ".lua"
             }

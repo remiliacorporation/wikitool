@@ -50,6 +50,16 @@ fn mapping_roundtrip_content_and_templates() {
         ("Alpha", false, "wiki_content/Main/Alpha.wiki"),
         ("Category:Test", false, "wiki_content/Category/Test.wiki"),
         (
+            "Module:Example/doc",
+            false,
+            "templates/misc/Module_Example/doc.wiki",
+        ),
+        (
+            "Module:Example/configuration",
+            false,
+            "templates/misc/Module_Example/configuration.lua",
+        ),
+        (
             "Template:Infobox person",
             false,
             "templates/infobox/Template_Infobox_person.wiki",

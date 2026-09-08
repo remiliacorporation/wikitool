@@ -75,7 +75,7 @@ pub(super) fn build_module_surfaces(
     if let Some(local_modules) = local_modules {
         for module in local_modules.values() {
             let key = normalize_module_title(&module.module_title);
-            if key.is_empty() || is_module_asset_title(&key) {
+            if key.is_empty() || is_module_support_page_title(&key) {
                 continue;
             }
             let entry = modules
@@ -95,7 +95,7 @@ pub(super) fn build_module_surfaces(
         for entry in &catalog.entries {
             for module_title in &entry.module_titles {
                 let key = normalize_module_title(module_title);
-                if key.is_empty() || is_module_asset_title(&key) {
+                if key.is_empty() || is_module_support_page_title(&key) {
                     continue;
                 }
                 let module =
@@ -147,7 +147,7 @@ pub(super) fn count_distinct_modules(
     let mut modules = BTreeSet::new();
     if let Some(local_modules) = local_modules {
         for title in local_modules.keys() {
-            if !is_module_asset_title(title) {
+            if !is_module_support_page_title(title) {
                 modules.insert(title.clone());
             }
         }
@@ -156,7 +156,7 @@ pub(super) fn count_distinct_modules(
         for entry in &catalog.entries {
             for module_title in &entry.module_titles {
                 let normalized = normalize_module_title(module_title);
-                if !normalized.is_empty() && !is_module_asset_title(&normalized) {
+                if !normalized.is_empty() && !is_module_support_page_title(&normalized) {
                     modules.insert(normalized);
                 }
             }
@@ -182,7 +182,7 @@ pub(super) fn scan_local_modules(
             continue;
         }
         let normalized = normalize_module_title(&file.title);
-        if normalized.is_empty() || is_module_asset_title(&normalized) {
+        if normalized.is_empty() || is_module_support_page_title(&normalized) {
             continue;
         }
         modules.insert(
@@ -198,9 +198,9 @@ pub(super) fn scan_local_modules(
     Ok(modules)
 }
 
-fn is_module_asset_title(title: &str) -> bool {
+fn is_module_support_page_title(title: &str) -> bool {
     let lower = title.to_ascii_lowercase();
-    lower.ends_with(".css") || lower.ends_with(".js")
+    lower.ends_with(".css") || lower.ends_with(".js") || title.ends_with("/doc")
 }
 
 /// Scan local Lua module sources and return, per normalized module title, the set of
@@ -222,7 +222,7 @@ pub fn scan_local_module_functions(
             continue;
         }
         let module_title = normalize_module_title(&file.title);
-        if module_title.is_empty() || is_module_asset_title(&module_title) {
+        if module_title.is_empty() || is_module_support_page_title(&module_title) {
             continue;
         }
         let absolute_path = paths.project_root.join(&file.relative_path);

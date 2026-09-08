@@ -9,7 +9,8 @@
   "coverage": [
     {"capability": "template-closure-v2", "steps": ["export-v2-closure"]},
     {"capability": "capability-bound-runtime-dependencies", "steps": ["reject-absent-capabilities", "sync-v2-capabilities", "assert-capability-wire-contract", "export-v2-closure"]},
-    {"capability": "template-closure-failure-evidence", "steps": ["reject-absent-capabilities", "export-v2-closure"]}
+    {"capability": "template-closure-failure-evidence", "steps": ["reject-absent-capabilities", "export-v2-closure"]},
+    {"capability": "module-documentation-isolation", "steps": ["module-surface-excludes-documentation"]}
   ],
   "mediawiki_fixture": {
     "source": "fixtures/mediawiki.json",
@@ -110,6 +111,33 @@
           {"kind": "contains", "path": ".wikitool/closures/root.json", "value": "\"title\": \"Module:Missing\""},
           {"kind": "contains", "path": ".wikitool/closures/root.json", "value": "loads_data_argument_is_not_a_string_literal"},
           {"kind": "contains", "path": ".wikitool/closures/root.json", "value": "parser_function_not_in_capability_manifest:#notRegistered"}
+        ]
+      }
+    },
+    {
+      "action": "copy",
+      "id": "install-module-documentation",
+      "source": "fixtures/module-doc.wiki",
+      "target": "templates/core/Module_Root/doc.wiki",
+      "sha256": "74db13d998084a211f327d98ba8708f5c661b0ba7c283f078b23225b34dfea0a"
+    },
+    {
+      "action": "copy",
+      "id": "install-legacy-documentation-path",
+      "source": "fixtures/module-doc.wiki",
+      "target": "templates/core/Module_Legacy/doc.lua",
+      "sha256": "74db13d998084a211f327d98ba8708f5c661b0ba7c283f078b23225b34dfea0a"
+    },
+    {
+      "action": "command",
+      "id": "module-surface-excludes-documentation",
+      "argv": ["catalog", "surface", "show", "--format", "json", "--view", "full"],
+      "expect": {
+        "exit_code": 0,
+        "stdout": [
+          {"kind": "json_pointer_equals", "pointer": "/module_count_total", "value": 1},
+          {"kind": "json_pointer_equals", "pointer": "/modules/0/module_title", "value": "Module:Root"},
+          {"kind": "json_pointer_equals", "pointer": "/modules/0/exported_functions", "value": []}
         ]
       }
     }
