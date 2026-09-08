@@ -1,7 +1,7 @@
 {
-  "description": "Mark source-authored text as verified or unverified and retain its stated verification source.",
+  "description": "Display a claim's stated verification status and supporting source.",
   "documentation_footer_wikitext": "[[Category:Formatting templates]]",
-  "documentation_wikitext": "\n__NOTOC__\nMark source-authored text as verified or unverified and retain its stated verification source.\n\n== Usage ==\n\u003csyntaxhighlight lang=\"wikitext\"\u003e\n{{Claim status|status=verified|text=Example claim.|source_url=https://example.org/|source_description=Example evidence}}\n\u003c/syntaxhighlight\u003e\n\nOmit optional parameters that do not apply. The parameter reference below lists supported names and aliases.\n\n",
+  "documentation_wikitext": "\n__NOTOC__\nDisplay a claim's stated verification status and supporting source.\n\n== Usage ==\n\u003csyntaxhighlight lang=\"wikitext\"\u003e\n{{Claim status|status=verified|text=Example claim.|source_url=https://example.org/|source_description=Example evidence}}\n\u003c/syntaxhighlight\u003e\n\nOmit optional parameters that do not apply. The parameter reference below lists supported names and aliases.\n\n",
   "examples": [
     {
       "description": "A verified claim with its source link and description.",
@@ -24,7 +24,7 @@
   },
   "parameters": [
     {
-      "description": "Verification state asserted by the archived source.",
+      "description": "Verification state stated by the cited source. The template displays this value; it does not establish verification.",
       "label": "Status",
       "name": "status",
       "required": true,
@@ -35,20 +35,20 @@
       "type": "string"
     },
     {
-      "description": "Source-authored claim text.",
+      "description": "Claim text; accepts wikitext.",
       "label": "Text",
       "name": "text",
       "required": true,
       "type": "content"
     },
     {
-      "description": "Optional source URL supplied by the archived page.",
+      "description": "URL of the supporting source.",
       "label": "Source URL",
       "name": "source_url",
       "type": "url"
     },
     {
-      "description": "Optional source description supplied by the archived page.",
+      "description": "Short description of the supporting source.",
       "label": "Source description",
       "name": "source_description",
       "type": "string"
