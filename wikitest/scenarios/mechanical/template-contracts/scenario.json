@@ -2,7 +2,7 @@
   "schema": "wikitest.scenario.v4",
   "id": "mechanical-template-contracts",
   "title": "Template contract plan, scaffold, and render lifecycle",
-  "description": "Exercises contract validation, exact-state scaffold planning and application, replay refusal, observed-contract capture, and semantic action=parse render assertions through public Wikitool commands.",
+  "description": "Exercises contract validation, exact-state scaffold planning and application, replay refusal, observed-contract capture, and semantic action=parse render assertions through public Wikitool commands. Literal code examples remain valid rendered documentation.",
   "kind": "mechanical",
   "environment": "isolated",
   "timeout_ms": 120000,
@@ -53,7 +53,7 @@
   ],
   "mediawiki_fixture": {
     "source": "fixtures/mediawiki.json",
-    "sha256": "6d327eaeadadb72edacc73754317e4caa9fe8de036553e0ca425fb660c3aa187"
+    "sha256": "411d79e0f5855cf691f0ba080ebf6738b1523e6f34b0d8b37b2808edd83e04ed"
   },
   "steps": [
     {

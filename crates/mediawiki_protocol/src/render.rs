@@ -691,6 +691,15 @@ fn process_html_text(text: &str, stack: &[OpenElement], analysis: &mut HtmlAnaly
             }
         }
     }
+    // Literal wiki syntax is intentional in code examples and preformatted
+    // source. Keep error markup checks active there, but do not classify the
+    // example itself as a broken rendered link (including nested highlighters).
+    if stack
+        .iter()
+        .any(|open| matches!(open.name.as_str(), "code" | "pre" | "samp" | "kbd"))
+    {
+        return;
+    }
     let literals = literal_wikilink_snippets(&decoded);
     if literals.is_empty() {
         return;
@@ -1084,6 +1093,38 @@ mod tests {
                 .issues
                 .iter()
                 .any(|issue| issue.code == "literal_wikilink" && issue.scope_index == Some(0))
+        );
+    }
+
+    #[test]
+    fn render_check_distinguishes_literal_examples_from_broken_links() {
+        let report = analyze_rendered_page(
+            &rendered(
+                r#"<div class="trait-item"><a href="/Trait">image</a><code>[[Example]]</code><pre><span>[[Highlighted]]</span></pre><samp>[[Output]]</samp><kbd>[[Input]]</kbd><p>[[Broken]]</p></div>"#,
+            ),
+            &options("trait-item"),
+            None,
+        );
+        assert_eq!(report.literal_wikilink_count, 1);
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| issue.code == "literal_wikilink"
+                    && issue.message.contains("[[Broken]]"))
+        );
+        let error = analyze_rendered_page(
+            &rendered(
+                r#"<div class="trait-item"><a href="/Trait">image</a><code><strong class="error">Actual parser failure</strong></code></div>"#,
+            ),
+            &options("trait-item"),
+            None,
+        );
+        assert!(
+            error
+                .issues
+                .iter()
+                .any(|issue| issue.code == "parser_error_markup")
         );
     }
 
