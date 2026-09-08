@@ -1,7 +1,7 @@
 schema_version = "site_adapter_v2"
 adapter_id = "remilia-wiki"
 docs_profile = "mw-1.44-site-authoring"
-guidance_documents = ["editorial.md", "extensions.md", "templates.md", "visual_subjects.md"]
+guidance_documents = ["editorial.md", "categories.md", "extensions.md", "templates.md", "visual_subjects.md"]
 
 [authoring]
 require_short_description = true

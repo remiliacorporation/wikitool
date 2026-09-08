@@ -5,7 +5,7 @@ Wikitool follows a four-layer model:
 ```text
 human intent and exact-prose acceptance
                  |
-agent skills: interview -> research/write -> independent review
+agent skills selected by outcome: intake, writing, review or mechanics
                  |
 project site adapter: local machine policy + supplemental guidance
                  |
@@ -26,21 +26,25 @@ Encoding prose doctrine in the binary makes it stale, hard to audit, and falsely
 
 Keep routing coarse enough that safety-critical variants cannot be skipped by choosing the wrong sibling skill:
 
-- Human notes are an input mode within `wiki-writing`. The procedure still requires source discrimination, a claim-source map, subject-derived structure, and the same authoring exit conditions.
+- Human notes are an input mode within `wiki-writing`, retaining source discrimination, reviewable claim support and the same authoring exit conditions.
 - Living-person and contentious-claim remediation is a mandatory branch within `prose-review`. It is not an optional alternative to ordinary review.
 - `wiki-interview` is separate because interactive intake has its own conversation state, stopping conditions, and neutral ledger artifact.
 
 Create a new top-level skill only when its trigger, procedure, and output authority are genuinely distinct. Scenario-specific rigor belongs in required references and conditional branches when the underlying task is still writing or review.
 
-## Standard flow
+## Task boundaries
 
-1. Select the skill for the requested outcome; resolve only the target and context it needs.
-2. The interview skill captures human knowledge and boundaries when needed.
-3. The writing skill inspects sources, builds a claim map, and drafts.
-4. Wikitool applies deterministic checks and safe mechanical fixes.
-5. The prose-review skill independently checks source fidelity, weight, sensitive claims, and reader value.
-6. A named human reads the exact final prose.
-7. Wikitool records a hash-bound decision, promotes the exact bytes, and performs revision-bound sync review.
+| Request | Completion |
+|---|---|
+| Parameter lookup | Interface with local/live evidence and limits; no migration or editorial workflow |
+| Draft from adequate sources | Finished sourced candidate, affected mechanical checks and independent review or its disclosed absence |
+| Missing human knowledge | Useful intake ledger with unresolved limits; no repeated interview for facts already supplied |
+| Editorial assessment | Findings and scoped disposition; no unsolicited rewrite or publication |
+| Authorized publication | Exact plan/apply and resulting state verification; reconcile any ambiguous outcome |
+
+Human acceptance applies to publication of Main prose, not to completing a
+draft. Preview and apply are two tool phases within already authorized work.
+Do not add a human approval stop between them when the same authorization holds.
 
 No single readiness flag collapses these stages.
 
@@ -60,3 +64,7 @@ Validate skill distributions with `release build-skills` in a maintainer build
 and `skills inspect`. Exercise `skills setup-project --skill-target both` in
 a disposable project when changing packaging or references. Packaging success
 establishes artifact integrity; it does not demonstrate improved agent judgment.
+
+The project directory must already exist. Retain install receipts and verify
+both harness copies against the distribution; source-checkout routes and installed
+full packages are different delivery modes.

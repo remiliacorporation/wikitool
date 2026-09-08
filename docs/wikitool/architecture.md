@@ -112,7 +112,7 @@ Canonical procedures live under `.agents/skills/`:
 - `wikitool` operates the mechanical surface and preserves mutation boundaries.
 - `wiki-interview` asks from supplied material and the conversation rather than a canned
   questionnaire, then stores a neutral ledger.
-- `wiki-writing` requires inspected source documents and a claim-source map before prose.
+- `wiki-writing` keeps material claims bound to inspected sources, retaining a claim map for substantial synthesis.
 - `prose-review` reconstructs claims independently, opens the exact sources, tests weight and BLP
   concerns, and answers whether a reader would want the article.
 
@@ -121,28 +121,12 @@ directories and records their exact identities. It does not generate wrappers or
 instruction files. Packaging never replaces public skills with host-project skills; an explicit
 host can contribute only a site-adapter supplement.
 
-## Authoring flow
+## Authoring boundaries
 
 ```text
-local wiki context + inspected external sources + human notes
-                           |
-                           v
-          article_scout_v1 machine context surface
-                           |
-                           v
-          claim-source map and explicit unknowns
-                           |
-                           v
-       wiki-writing skill drafts body, then the lead
-                           |
-                           v
-      prose-review skill + deterministic article lint
-                           |
-                           v
-        named human reads the exact final prose
-                           |
-                           v
- article_acceptance_ledger_v3 -> promotion -> revision-bound push
+Requested draft: inspected sources -> supported candidate -> independent review
+Requested publication: exact human decision -> promotion -> revision-bound push
+Optional inputs: local scout context, human intake, template/capability inspection
 ```
 
 `article scout --format json --view brief` returns local state, context coverage,
@@ -178,7 +162,7 @@ review skill instead locates concrete failures:
 - vague synthesis that spends attention without teaching a sourced distinction;
 - structure or pacing unsupported by the evidence volume.
 
-Mechanical lint runs after this review and remains a separate result. Zero lint findings cannot
+Mechanical lint remains a separate result; choose its timing for the actual changes. Zero findings cannot
 certify truth, originality, readability, or source fidelity.
 
 ## Publication-acceptance store
@@ -324,13 +308,8 @@ Contextmink source fork and no duplicate installer.
 
 ## Development contract
 
-When behavior changes:
-
-1. update the typed model and schema version at the boundary that changed;
-2. test behavior rather than only command construction or prose snapshots;
-3. regenerate `docs/wikitool/reference.md` from clap help;
-4. run `docs audit` to verify target neutrality, skill package shape, adapter routing, and generated
-   reference freshness;
-5. run the relevant Wikitest suites, replay their receipts, and externally anchor release evidence;
-6. build and inspect the deterministic skills distribution, then package any explicit host-adapter supplement;
-7. keep live writes out of tests unless the test is explicitly authorized and revision-bound.
+Use [AGENTS.md](../../AGENTS.md) and [testing](../../wikitest/TESTING.md) for
+change-specific checks. CLI shape changes require generated-reference refresh;
+guidance-only changes require docs/package and behavioral checks, not a schema
+bump or unrelated release campaign. Schema identity changes only when the data
+contract changes. Live writes remain outside ordinary fixtures.

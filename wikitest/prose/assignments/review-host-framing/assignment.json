@@ -14,7 +14,8 @@
     "sensitive": false
   },
   "review_instructions": [
-    {"id": "prose-review", "root": "repository", "locator": ".agents/skills/prose-review/SKILL.md", "sha256": "1ce793c4828c28d23fbcf7a1df7d65e5dceb1796bb2efc3b0f01323ed820401a"},
+    {"id":"review-frozen-packet","root":"repository","locator":".agents/skills/prose-review/references/frozen-packet.md","sha256":"6621ca1f41a038702fe4818db17f87e394732df1c86217bc096b27a659a3de7c"},
+    {"id": "prose-review", "root": "repository", "locator": ".agents/skills/prose-review/SKILL.md", "sha256": "504c04c141bcbe61fc42972a07d986507c3855f94de41e74f862278a8b03fb72"},
     {"id": "source-fidelity", "root": "repository", "locator": ".agents/skills/prose-review/references/source-fidelity.md", "sha256": "2e9abe460a79bedaa85232822175f26f275baad79307981a51ebd1dba269beda"},
     {"id": "reader-value", "root": "repository", "locator": ".agents/skills/prose-review/references/reader-value.md", "sha256": "04bcfb437070a0baafefc0428c73683d8190153a145073a082333aeb81105a58"}
   ],

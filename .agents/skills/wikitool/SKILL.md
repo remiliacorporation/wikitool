@@ -1,42 +1,38 @@
 ---
 name: wikitool
-description: Operate Wikitool for MediaWiki retrieval, template inspection, deterministic checks, target configuration, and revision-bound sync. Use for mechanical wiki work; skip infrastructure-only tasks and route prose judgment to the editorial skills.
+description: Use Wikitool for MediaWiki retrieval, templates, mechanical checks and revision-bound sync.
 ---
 
-# Use Wikitool
+# Wikitool
 
-Choose the smallest operation that answers the request. CLI help owns flags.
-The runtime root is the caller's wiki project, not the Wikitool source checkout.
-Check `config show` when target identity is unknown or before a write; do not
-dump configuration or credentials into reports.
+Use the smallest operation that answers the task. CLI help owns flags. Run from
+the wiki project or pass `--project-root`; the tool's source checkout is not
+automatically the runtime. Check `config show` when target identity is unknown
+or before a write. Keep credentials out of reports.
 
-Inspect the relevant local changes before modifying content. Article status
-does not cover templates: include `status --templates` for template work.
-Preserve unrelated edits. Check catalog health or hydrate capabilities when
-the task depends on them; a simple lookup needs no universal startup sequence.
-State when observations are cached, partial, or live.
+For template parameters, start with `templates show NAME --format json --view brief` and follow
+its full-view command when all parameters are needed. This is local catalog
+evidence. For current remote contracts, use `source mediawiki-templates URL`
+with the exact template and freshness options from help. Inspect coverage limits.
 
-Use the active adapter for site-specific policy and terminology. Load its
-relevant guidance when making site-specific decisions. Retrieval readiness,
-search rank, and neighboring pages identify material to inspect; they do not
-establish factual truth or publishability. Verify suspected missing pages and
-redirect failures against the target API before proposing repairs.
+Before editing, inspect relevant local changes; include template-scoped status
+for template work. Refresh catalogs or capabilities only when missing or stale
+for the decision. There is no universal startup sequence. Live pages, local
+indexes and generated suggestions have different authority.
 
-## Select the lane
+Load the procedure that applies:
+- [Template engineering](references/template-engineering.md): creation, interface
+  changes and migration; a read-only parameter lookup does not need it.
+- [Sync and acceptance](references/sync-and-acceptance.md): remote writes,
+  target changes and uncertain mutation outcomes.
+- [macOS release trust](references/macos-release-trust.md): first-run quarantine
+  problems on unsigned macOS releases.
 
-- For template creation or migration, read [template engineering](references/template-engineering.md).
-- For remote edits, deletion, target changes, or uncertain write outcomes, read
-  [sync and acceptance](references/sync-and-acceptance.md) before acting.
-- For prose drafting or substantive revision, use `wiki-writing`; for editorial
-  assessment, use `prose-review`; for missing human knowledge, use `wiki-interview`.
-  An ordinary lookup or syntax fix need not load all three.
-- For macOS first-run quarantine problems, read
-  [release trust](references/macos-release-trust.md).
+Use the selected adapter for site policy. `wiki-writing` owns substantial prose,
+`prose-review` editorial assessment, and `wiki-interview` missing human knowledge.
+Mechanical checks and safe fixes do not certify prose or authorize new categories.
+Verify suspected missing pages and redirect failures against the intended live API.
 
-`article lint` and safe fixes are mechanical checks. Inspect applied changes;
-a passing lint result does not approve prose. Access challenges require an
-authorized access path or user help.
-
-Complete the requested scope and report changes, verification, and material
-remaining limits. A preview is not a remote write, and a recorded editor name
-is not authenticated human identity.
+Complete the requested scope and report changed behavior, verification and limits.
+Preview/apply is one workflow when already authorized. Never replay an ambiguous
+write; use the mutation receipt and recovery procedure.

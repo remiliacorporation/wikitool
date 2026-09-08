@@ -4,13 +4,20 @@
 
 Use the smallest structure that makes the subject intelligible. Do not create empty or speculative sections to resemble a long encyclopedia article. Avoid generic “Impact,” “Legacy,” “Future,” “Broader context,” and “Conclusion” headings unless the evidence genuinely supports that specific treatment.
 
-Write the lead last. It should define the subject, establish the most important supported facts, and summarize the article without citations doing hidden work. A relation to the host wiki or its community belongs in the lead only when it is independently important to identifying the subject and proportionate to the evidence.
+The lead should define the subject, establish the most important supported facts, and accurately summarize the body. A relation to the host wiki or its community belongs there only when independently important to identifying the subject and proportionate to the evidence.
 
 ## Templates and categories
 
 Read the active site adapter and inspect live template data or examples before adding templates. Infobox fields are structured claims and require the same evidence as prose. Omit unknown parameters rather than guessing.
 
-Categories describe established membership, not loose association. Verify that the category exists and that the subject belongs in it. Do not pad category counts.
+Categories are browsing indexes, not association tags. Inspect the live title,
+any definition, representative members and the site's category policy, then
+establish the subject's membership from sources. Some sites permit populated
+categories without description pages; population alone neither approves nor
+forbids their use. Do not copy neighboring tags, translate names, repeat broad
+ancestors or pad counts merely to improve apparent integration.
+
+Creating, renaming or restructuring categories requires an explicit taxonomy scope under site policy. Ordinary article work should use suitable existing categories or record the gap outside the draft. An uncategorized-page diagnostic is not permission to invent membership. Link to a category with `[[:Category:Name]]` when the page should not become a member.
 
 ## Citations
 
@@ -28,4 +35,4 @@ Prefer ordinary prose and simple wikitext over a complex template, module, chart
 
 ## Mechanical closeout
 
-Lint the exact file with the exact title. Apply only safe fixes, inspect their diff, and lint again. Verify live redirects and links when the local index may be stale. Mechanical validation confirms syntax and configured policy; it does not establish source fidelity, due weight, readability, or human acceptance.
+Lint the exact file with the exact title. If mechanical repairs are needed, inspect their diff and repeat affected checks. Verify live redirects and links when the local index may be stale. Mechanical validation confirms syntax and configured policy; it does not establish source fidelity, due weight, readability, or human acceptance.

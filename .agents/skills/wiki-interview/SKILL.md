@@ -1,40 +1,30 @@
 ---
 name: wiki-interview
-description: Capture missing human knowledge, article scope, source leads, and exclusions in a neutral Wikitool interview ledger. Use when that input is needed; skip complete briefs, source-only research, and routine edits.
+description: Capture missing human knowledge, source leads and exclusions for a wiki article.
 ---
 
 # Wiki interview
 
-Build a usable knowledge and source-intake record through an adaptive conversation.
-The human need not pre-write encyclopedia prose. Intake does not authorize
-publication or turn testimony into independent evidence.
+Produce a useful, neutral intake record when the article needs human knowledge.
+Read supplied material and reuse established scope before asking questions.
+An adequate brief, source-only research or routine edit does not need an interview.
 
-Read supplied materials first. Reuse known scope, terminology, and privacy
-choices; ask only about consequential gaps. Clarify whether ambiguous sensitive
-material is private, off the record, attribution-limited, or excluded, and
-record only the minimum necessary operational boundary.
+Follow the consequential gaps in the person's account: identity, chronology,
+firsthand versus secondhand knowledge, source locations, disputed relationships
+or exclusions. Do not force a fixed questionnaire. Ask only what materially
+changes the article or its research.
 
-Use [interview-ledger.md](references/interview-ledger.md) when creating or
-updating the brief. In a configured project, `interview init` can supply scout
-facts; inspect those facts without letting neighboring pages dictate framing.
-Read relevant adapter guidance when the subject has specialized site rules.
-Current CLI help owns flags.
+Keep testimony, inspected sources, leads and interviewer inference distinct.
+Preserve corrections and disagreement. Resolve whether ambiguous sensitive
+material is private, attribution-limited or excluded; retain only the operational
+boundary future work needs, not unnecessary private detail.
 
-Invite an open account suited to what is already known, then follow the actual
-gaps: identity, chronology, firsthand versus secondhand knowledge, source
-locations, disputed relationships, or exclusions. Ask focused questions without
-forcing every topic through a questionnaire or repeated confirmation.
+For a durable brief, use [the ledger contract](references/interview-ledger.md)
+and live command help. `interview init` can supply local scout observations;
+they do not become human testimony or a required outline. Read site-adapter
+guidance only where it changes the subject's treatment.
 
-Keep testimony, inspected evidence, source leads, interviewer inference, and
-unresolved claims distinct. Preserve corrections and disagreement. Record
-concrete leads with enough provenance to find them. Repetition does not verify
-a claim, and a suggested article shape is not a required outline.
-
-Before handing off, check whether material ambiguity would mislead an author.
-Resolve it with the human where possible and retain unresolved limits otherwise.
-Run `interview validate` for the ledger; structural validity does not establish
-truth, drafting readiness, or consent to publish.
-
-Return the brief location, useful source leads, and remaining research or human
-questions. Continue into authoring when requested; an unfinished interview may
-still yield a useful partial record.
+Validate the ledger and return its location, useful leads and remaining limits.
+Structural validity does not establish truth or publication consent. Continue
+into authoring when requested; missing nonessential facts can remain recorded
+without preventing a useful bounded draft.

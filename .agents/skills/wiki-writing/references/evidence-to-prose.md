@@ -20,7 +20,10 @@ These are never evidence by themselves:
 
 ## Claim-source map
 
-Make the map at claim granularity, not paragraph granularity. A practical row contains:
+Keep material claims traceable to exact support. For substantial source synthesis,
+a claim map helps the author and reviewer; a small sourced correction may keep
+the same evidence in a concise note. When using a map, work at claim granularity,
+not paragraph granularity. A practical row contains:
 
 | Planned claim | Exact source | Entailing passage or record | Source role | Qualification or hold |
 |---|---|---|---|---|

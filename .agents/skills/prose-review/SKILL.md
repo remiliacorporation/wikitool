@@ -1,67 +1,40 @@
 ---
 name: prose-review
-description: Independently assess encyclopedic wiki prose for source fidelity, reader value, due weight, and sensitive claims. Use for editorial review or audit; skip mechanical-only checks and prose drafting.
+description: Independently review encyclopedic prose against sources, due weight and reader needs.
 ---
 
 # Prose review
 
-Test what the exact article claims against inspected sources and reader needs.
-Report actionable findings before the verdict; keep review separate from repair.
+Assess the exact candidate and inspected sources within the requested scope.
+Identify concrete defects and their reader impact; do not turn review-only work
+into unsolicited rewriting or manufacture findings.
 
-For a frozen blinded review packet, first read
-[frozen-packet.md](references/frozen-packet.md). Stay within its declared inputs.
-For ordinary reviews, identify the candidate bytes or revision and available
-sources, and read relevant site-adapter guidance. Disclose sampled or inaccessible
-material; it cannot support a complete source-fidelity verdict.
+A publication-grade review uses a different invocation or human from the authoring
+pass, with candidate, sources and applicable site guidance but no author rationale
+or desired verdict. Labels do not authenticate identity. Disclose self-review,
+sampling and inaccessible sources; none can establish complete independent coverage.
 
-## Independence
+Use the relevant references:
+- [Source fidelity](references/source-fidelity.md): entailment, citation coverage,
+  attribution, compression and source roles.
+- [Reader value](references/reader-value.md): subject, structure and due weight.
+- [Sensitive claims](references/blp-sensitive.md): required when living-person,
+  private, health, crime, identity or reputational claims appear or are implied.
+- [Frozen packets](references/frozen-packet.md): closed evaluation inputs only.
 
-A publication-grade review comes from a different invocation or human than the
-authoring pass. Supply the candidate, sources, site guidance, and review
-procedure without the author's rationale or desired verdict. Participant labels
-do not authenticate identity. When independence is unavailable, label the work
-self-review; it can identify defects but cannot satisfy independent review.
+Reconstruct material claims, including infoboxes, captions, headings and category
+placement. Check category scope and browsing value under the site's policy, not
+just whether the label could be technically true. Mechanical Wikitool checks
+supply syntax and local-state observations; they cannot overrule an editorial defect.
 
-## Exercise editorial judgment
+Give findings with location, supporting evidence and the smallest useful repair:
+- P0: acute privacy, fabrication, safety or destructive-operation risk; stop.
+- P1: material source, sensitive-claim, plagiarism or misleading-framing failure; block.
+- P2: material weight, clarity, structure or coverage failure; revise.
+- P3: bounded clarity or consistency defect; polish.
 
-Read as a reader and reconstruct material claims from the candidate, including
-infoboxes, captions, headings, and categories. Test them against the actual cited
-documents. Use [source-fidelity.md](references/source-fidelity.md) for entailment,
-citation laundering, attribution, and source limits, and
-[reader-value.md](references/reader-value.md) for structure, framing, and weight.
-
-Check that dates, actors, quantities, confidence, and causal direction survive
-the source-to-prose transformation. A true detail may still be misleading in
-placement or emphasis. Relationships to the host wiki need supported importance.
-Diagnose concrete failures such as unsupported synthesis, confusing chronology,
-or redundant paragraphs; "sounds AI-generated" is not a finding by itself.
-
-Use [blp-sensitive.md](references/blp-sensitive.md) when living-person, health,
-crime, drugs, sexuality, identity, harassment, finance, or reputational claims
-appear or are implied. Material sensitive claims without adequate support block
-publication.
-
-Use appropriate Wikitool mechanical checks for syntax and link diagnostics in
-ordinary work. Frozen packets use only supplied observations. Mechanical success
-cannot override an editorial defect.
-
-## Report
-
-Give each finding a precise location, evidence, reader impact, and repair direction.
-Distinguish verified defects from inference and review limits.
-
-- **P0 / stop:** acute privacy, safety, fabrication, legal, or destructive sync risk.
-- **P1 / block:** material source failure, sensitive-claim defect, plagiarism,
-  wrong article object, or fundamentally misleading framing.
-- **P2 / revise:** significant weight, readability, structure, attribution,
-  context, or evidence-coverage defect.
-- **P3 / polish:** bounded clarity or consistency issue without distorted meaning.
-
-Then give the reader verdict, source coverage (complete, incomplete, or not
-assessable), disposition, and residual risk. Any P0/P1 requires `block`; P2
-requires `revise`; P3-only findings may accompany `accept`. If there are no
-findings, say so and state the evidence scope. Do not manufacture cosmetic
-findings.
-
-A changed candidate invalidates the prior review. Completing review does not
-record human acceptance or authorize publication.
+Then state evidence coverage and disposition: any P0/P1 means `block`, P2 means
+`revise`, and P3-only or no findings may permit `accept` within the stated scope.
+Do not label inaccessible material verified. A changed candidate needs assessment
+of the changed bytes; substantive changes require renewed independent review.
+Review does not record human acceptance or authorize publication.

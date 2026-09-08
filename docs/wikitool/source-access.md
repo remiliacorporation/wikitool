@@ -7,8 +7,8 @@ fingerprint impersonation, paid crawl routes, or third-party reader proxies.
 When `wikitool source fetch URL --output json` returns `error.challenge_handoffs`, follow the
 handoff explicitly:
 
-1. Open the URL in a normal browser where you have lawful access.
-2. Solve the source challenge.
+1. Open the URL in a normal browser where the user has authorized access.
+2. Have the human solve the source challenge; an agent must not automate or bypass it.
 3. Export or copy the source-issued cookies.
 4. Import them with the `suggested_argv` from the handoff, usually:
 
@@ -62,6 +62,7 @@ wikitool source session prune --format json
 ```
 
 Matching sessions are used automatically by `source fetch`, live MediaWiki template inspection,
-and `export`. The source-document cache key does not include cookies; cookies affect
-access, not source identity. If an earlier unauthenticated fetch failed, retry with `--refresh`
-after importing the session.
+and `export`. Fetch and template-report cache keys include a session fingerprint
+and relevant request options, separating authenticated acquisition contexts
+without printing cookies. This is cache identity, not evidence that the source
+is suitable. Use `--refresh` after importing a session when live retrieval is needed.

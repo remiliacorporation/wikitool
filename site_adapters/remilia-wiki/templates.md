@@ -14,6 +14,10 @@ constraints. Create a specialized template only when the semantics or validation
 differ. `Template:Infobox subject` is a last-resort fallback; use a subject-specific infobox when
 one fits.
 
+Apply [category policy](categories.md) when template changes affect membership.
+Verify template-page and caller categories separately; a rendering cutover does
+not authorize extending the category hierarchy.
+
 Article-level source maintenance boxes map to `Template:Ambox` only after the source profile admits
 their observed table class and shape; section-scoped source notices use `Template:Section notice`.
 Use `image_content` for a native Image invocation; `image` is reserved for a native wiki

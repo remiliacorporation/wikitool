@@ -4,6 +4,41 @@ Use contracts to describe the intended template surface, render fixtures to chec
 and migration plans to inspect the current source bytes. None of these observations authorizes
 publication or proves that a template can be removed from a live wiki.
 
+For a parameter lookup, use `templates show` and its full-view drilldown; this
+engineering workflow is for a change. Refresh a catalog or capability snapshot
+when the decision needs fresher evidence, not before every command.
+
+## Interfaces and closure
+
+`templates closure NAME` exports exact local dependencies and file hashes,
+including literal Scribunto loads and runtime capabilities. `noinclude`
+documentation examples are excluded from runtime edges. Missing dependencies
+and dynamic loads remain explicit; a node limit fails rather than implying a
+complete smaller graph. Closure v2 requires magic-word capability data and
+reports the refresh command if missing.
+
+Use `templates contract capture` for an observed starter when useful. The
+strict `template_engineering_contract_v1` design owns implementation, parameters,
+aliases, dependencies and examples; capture does not approve them. See
+[the example contract](examples/template-contract.json). `contract check` checks
+structure and compatibility; `scaffold` previews an exact path/content/state
+plan, and apply requires that plan ID. Replacing different bytes requires
+`--overwrite`. `contract render-check` runs its fixtures through the configured
+target's unsaved parser path. No command implicitly migrates callers.
+
+## Category effects
+
+Inspect own-page and caller categories separately through the target API when
+template changes may affect membership. Compare representative parameter branches
+before and after. Scope template-only categories to `noinclude` or equivalent
+documentation, and use `[[:Category:Name]]` for ordinary category links. Category
+creation and hierarchy changes remain separate site-policy decisions.
+
+The current HTML assertions below do not compare parser category arrays.
+Passing them does not establish category isolation. Preserve separate category
+observations with page/revision identity; indexed memberships may lag a template
+change, so corroborate affected callers with parser evidence.
+
 ## Render assertions
 
 Every `render_fixtures` entry may include `dom_assertions` and

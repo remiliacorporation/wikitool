@@ -63,7 +63,21 @@ project-relative path and record that path in `.wikitool/config.toml`.
 
 ## Supplemental guidance
 
-Keep target names, relationships, local first-party-source rules, visual-subject conventions, and extension semantics in adapter Markdown. Generic skills read those documents after loading their public procedure. A host supplement may strengthen local requirements but should not redefine retrieval artifacts as evidence or claim that transactional publication acceptance authenticates an editor.
+Keep target names, relationships, local source rules, category governance,
+visual-subject conventions and extension semantics in adapter Markdown. Load
+only guidance relevant to the current task. A host supplement must not redefine
+retrieval observations as evidence or claim that acceptance authenticates an editor.
+
+Put category definitions and the boundary around taxonomy creation here, not
+in a portable skill's hard-coded list. `preferred_categories` contains hints;
+it does not enforce a live approved vocabulary. Membership counts, existing
+category tags and template catalog families do not imply editorial approval.
+
+All declared guidance contributes to the adapter identity even when an agent
+does not need to read every document for a particular task. Changing guidance
+invalidates acceptance bound to the previous policy; do not copy old decisions
+onto the new identity. A copied adapter remains owned by the consuming project
+and does not update automatically when the distribution changes.
 
 ## Portability test
 

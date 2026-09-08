@@ -42,7 +42,7 @@ Avoid padding thin evidence with broad NFT, internet-culture, art-scene, or Remi
 
 Main-namespace articles use `SHORTDESC`, `Template:Article quality`, sentence-case headings, a References section with `Template:Reflist`, straight quotes, and wikitext rather than Markdown. These requirements are encoded in `site-adapter.toml` and enforced mechanically by Wikitool.
 
-Use live template data and examples before filling an infobox. `parent_group = Remilia` is appropriate only for an actual Remilia project when the template supports it. Categories require real membership; there is no universal `Category:Remilia` default and no target category count.
+Use live template data and examples before filling an infobox. `parent_group = Remilia` is appropriate only for an actual Remilia project when the template supports it. Apply [category policy](categories.md) when selecting memberships or changing taxonomy; existing tags and retrieval suggestions are not approval.
 
 ## Acceptance
 

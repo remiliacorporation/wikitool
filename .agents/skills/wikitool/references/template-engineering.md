@@ -16,6 +16,14 @@ HTML structure, text, and attributes; browser testing establishes responsive
 and interactive behavior. A read-only parameter lookup does not need a
 migration contract or browser session.
 
+Check category behavior separately from visible HTML: inspect the template's
+own categories and representative callers, including parameter branches that
+can generate membership. Template-only categories belong in `noinclude` or
+equivalently scoped documentation; category links in examples need a leading
+colon when they should not assign membership. Compare intended before/after
+categories through the target API. A successful HTML fixture does not prove
+category isolation, and a template migration does not authorize taxonomy expansion.
+
 `templates scaffold` uses exact-state plan/apply. Review different existing
 bytes before choosing `--overwrite`. Source-wiki HTML and templates are design
 evidence, not authority to clone. Migration plans inventory current bytes and

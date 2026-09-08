@@ -1,62 +1,50 @@
 # Wikitool development
 
-This file governs the source checkout. `CLAUDE.md` is a byte-identical mirror;
-edit both together. User-facing skills have their sole substantive owner in
-`.agents/skills/`; `.claude/skills/` contains thin source-checkout routes.
+This governs the source checkout. `CLAUDE.md` routes here. Public skills live
+in `.agents/skills/`; source `.claude/skills/` files are thin routes.
 
-## Boundaries
+## Authority
 
-- The runtime project root is the caller's wiki, not this source checkout,
-  unless a command explicitly accepts a repository root.
-- `.wikitool/data/wikitool.db` is a disposable catalog.
-  `.wikitool/sync/sync.sqlite3` is durable revision identity; preserve it
-  during catalog reset and refresh.
-- Use structured parsers or state machines for wikitext, HTML extraction, and
-  command contracts. Do not add regex-based parsers.
-- Keep JSON output contracts explicit. Hidden maintainer commands stay behind
-  the `maintainer` feature; default builds are end-user builds.
-- Source work and disposable tests do not authorize live publication. Keep
-  target identity, evidence, editorial judgment, human acceptance, and mutation
-  receipts distinct.
+The runtime project is the caller's wiki, not this checkout. Preserve unrelated
+work. Source development and disposable fixtures authorize local iteration;
+they do not authorize live edits, release publication or deployment.
 
-## Change and verify
+`.wikitool/data/wikitool.db` is derived. Sync revisions and mutation receipts in
+`.wikitool/sync/sync.sqlite3`, and decisions in
+`.wikitool/acceptance/acceptance.sqlite3`, are durable. Do not delete them to
+clear a failure or initialize replacement planning history.
 
-Choose the smallest complete change supported by source, specifications, tests,
-and observed behavior. Preserve unrelated work. Surface unknown behavior and
-failed assumptions; avoid silent fallbacks. Keep naming and documentation
-aligned with the final implementation.
+Keep MediaWiki transport and state transitions in code, editorial judgment in
+portable skills, site policy in adapters, and harness metadata in its routes.
+Retrieval, source support, review, human acceptance and remote mutation are
+different outcomes. A recorded name is not authenticated identity.
 
-For Rust changes, run targeted tests and `cargo test --workspace`. Test
-infrastructure or maintainer changes also require `cargo test --workspace
---all-features`. For maintainer code or release machinery, run
-`cargo clippy --workspace --all-targets -- -D warnings`.
+Use structured parsers or state machines for wikitext, HTML and command contracts.
+Preserve explicit JSON contracts and bounds. Maintainer commands stay behind the
+`maintainer` feature; default builds are end-user builds.
 
-Public CLI regressions belong in Wikitest. Build default `wikitool` and
-`wikitest`, run `wikitest validate`, then the
-`wikitool-regressions --require-all` suite. Keep parser, state-machine,
-isolation, and receipt-integrity tests beside their code.
+## Work and verification
 
-CLI contract changes require relevant help checks and reference regeneration:
-`cargo run --package wikitool --features maintainer -- docs generate-reference`.
-Update affected operator guidance when behavior changes.
+Choose checks for the changed behavior using [testing](wikitest/TESTING.md).
+The local mechanical fixtures have no production access; run them, repair
+failures caused by the change, and repeat affected checks within the requested scope.
 
-Skill-only changes require packaging/manifest validation, usable relative
-references, aligned discovery routes, and realistic task-routing checks.
-They do not require rebuilding unchanged runtime code or regenerating CLI help.
-Disclose when a check validates structure rather than independent behavior.
+- Rust behavior: focused tests and `cargo test --workspace`. Maintainer or test
+  infrastructure changes also need all-features tests; maintainer/release code
+  needs strict Clippy.
+- Public CLI behavior: default Wikitool/Wikitest build, `wikitest validate`,
+  and `wikitool-regressions --require-all`.
+- CLI shape: regenerate the command reference and run docs audit.
+- Skills/docs: validate affected links, discovery, packaging and real task routes.
+  Run relevant commands to check claims. Structural success is not behavioral proof.
 
-## Tool and skill ownership
+Use [architecture](docs/wikitool/architecture.md) for cross-layer changes,
+[skill integration](docs/wikitool/skill-integration.md) for agent guidance,
+and [versioning](VERSIONING.md) for releases. These are conditional references,
+not startup requirements. Complete implementation and affected verification;
+ask only for a missing decision that actually blocks the authorized outcome.
 
-Wikitool skills are portable editorial and mechanical guidance. Site policy
-belongs to adapters; harness metadata stays in discovery adapters. Keep narrow
-tasks narrow, and put conditional procedures in references with clear triggers.
-
-Contextmink and Papertiger are separately versioned companions. Use their
-installed project skills and receipt-owned commands when available; use
-environment guidance when no project runtime is installed. Never invent
-replacement planning state or mutate a copied worktree database.
-
-Release bundles carry hash-verified companion packs. Fetch scripts stage pinned
-releases under `dist/`; staging is not project installation. Setup and uninstall
-belong to each tool's own commands. Wikitool must not initialize or mutate
-Papertiger authority or opt a project into it implicitly.
+Contextmink and Papertiger own their independent setup, receipts and state.
+Prefer installed project commands; do not vendor their rendered skills or mutate
+a copied worktree database. Wikitool must not initialize companion authority
+or opt a project into it implicitly.

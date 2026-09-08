@@ -103,19 +103,12 @@ when a capability change warrants the full deterministic campaign, and schedule 
 `complex-prose-stress` campaign for substantive authoring/evaluator changes. Packet preparation by
 itself is not a pass and must never be used to bless a release.
 
-5. Validate the catalog and authoring-support cutover from a fresh runtime:
-   - `cargo run --package wikitool -- db reset --yes`
-   - `cargo run --package wikitool -- catalog warm --docs-profile mw-1.44-authoring --docs-mode missing`
-   - `cargo run --package wikitool -- wiki capabilities sync`
-   - `cargo run --package wikitool -- templates catalog build`
-   - `cargo run --package wikitool -- catalog status --docs-profile mw-1.44-authoring`
-   - `cargo run --package wikitool -- article scout "Example Topic" --docs-profile mw-1.44-authoring --format json`
-   - `cargo run --package wikitool -- source wiki-search "Example Topic" --format json`
-   - `cargo run --package wikitool -- article lint wiki_content/Main/Example_Topic.wiki --format json`
-   - `cargo run --package wikitool -- catalog inspect references duplicates --title "Example Topic" --format json`
-   - `cargo run --package wikitool -- status --conflicts --title "Example Topic"`
-   - `cargo run --package wikitool -- module lint --format text`
-   - `cargo run --package wikitool --features maintainer -- docs generate-reference`
+5. Exercise any changed catalog, authoring or skill surface in an isolated fixture
+   or explicitly read-only host. Use the scenarios in `wikitest/TESTING.md`; do
+   not reset an operator's real project as a release smoke test. Run docs audit,
+   and regenerate the reference only if CLI shape changed. For skill changes,
+   build and inspect the distribution and exercise installation plus realistic
+   requests. Packaging cannot certify editorial quality.
 6. Build release bundles:
    - `bash scripts/fetch_contextmink.sh --platform <platform> --dest dist/contextmink-dist`
    - `bash scripts/fetch_papertiger.sh --platform <platform> --dest dist/papertiger-dist`

@@ -12,9 +12,14 @@ Use one authority for each kind of evidence:
 
 ## Routine regression suite
 
+Run this for Rust/public-CLI behavior changes. For documentation and skill-only
+work, exercise the documented commands and affected task routes, run docs audit,
+and validate/install the skills distribution in a disposable project. Do not
+treat an unchanged full capability campaign as evidence of improved instructions.
+
 ```text
 cargo test --workspace
-cargo test --workspace --all-features
+# Also use --all-features for maintainer or test-infrastructure changes.
 cargo build -p wikitool -p wikitest
 target/debug/wikitest validate
 target/debug/wikitest suite wikitool-regressions --require-all
@@ -37,6 +42,12 @@ does not execute the tested tool or certify prose source packets. Execution chec
 Keep fixtures in LF form so their committed hashes survive a fresh Windows or Unix checkout.
 
 ## Writing a useful regression
+
+Guidance revisions need observable task outcomes as well as package checks.
+Include a real positive request, a neighboring task that should skip the skill,
+and a relevant authority boundary. Record loaded paths, actions, outputs and
+what was only simulated. A route trace is useful but does not establish that an
+article was actually written or a failed write was actually reconciled.
 
 Choose the smallest existing scenario that owns the behavior. Add a new scenario when the initial
 state or failure mode needs independent isolation, not for every command spelling. Bind capability

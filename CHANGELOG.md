@@ -8,6 +8,7 @@ The release workflow extracts the section for the requested version and fails if
 
 ### Changed
 
+- Documentation and skills now select workflows by the requested outcome instead of requiring session-wide refreshes, repeated interviews or publication steps for draft-only work. Template inspection distinguishes compact suggestions from complete local parameters and current live contracts. Remilia category creation is a separate researched taxonomy scope; adopting the updated adapter changes its policy identity and invalidates article acceptance bound to the previous policy.
 - Wikitest owns public CLI integration testing through the portable `wikitool-regressions` suite in Linux and Windows CI. The duplicate Bash/Python harness and separate docs-discovery/profile CLI tests are retired; focused invariant tests and native release/companion checks retain their own authorities. The broader capability and external prose campaigns remain opt-in.
 - MediaWiki fixtures use `wikitest.mediawiki-fixture.v5` with a complete `siteinfo_response`, allowing API-error and missing-evidence controls. The runner binds documentation discovery and fetches to the same observed loopback API.
 - Evidence hashing uses a fixed 64 KiB read buffer and an optimized SHA-256 dependency in debug/test builds; every verification still re-reads the exact bytes.

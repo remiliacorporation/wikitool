@@ -86,6 +86,13 @@ independent immutable or signed channel.
 
 Prepare the prose campaign or one assignment:
 
+The evaluated Wikitool executable must reside within the selected source
+repository so its evidence locator is portable. Prefer text output for participant
+handoffs: it prints the physical request/output paths, while JSON receipts use
+stable export tokens. If skills change, update the assignment's pinned instruction
+hashes before preparing a new run; never rewrite historical receipts. Include
+the frozen-packet reference in each participant's instruction allowlist.
+
 ```text
 target/debug/wikitest prose prepare-suite prose-dogfood
 target/debug/wikitest prose prepare-suite complex-prose-stress
@@ -102,6 +109,10 @@ the full evaluated protocol.
 The request names generated strict templates. Each prepare/submit command prints a participant
 request path and a sibling `output/` directory. An external author supplies an article, a
 `wikitest.claim-map.v1`, and an author submission copied from the template:
+
+Replace sample identity values with observed execution information and disclose
+unavailable details. Omit optional `metrics` when none is available; an empty
+metrics object is invalid, and the template's sample duration is not a measurement.
 
 ```text
 target/debug/wikitest prose submit-author RUN --submission author-submission.json
