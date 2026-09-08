@@ -415,6 +415,16 @@ pub(super) fn clear_sync_title_invalidation(connection: &Connection, title: &str
     Ok(())
 }
 
+pub(super) fn load_invalidated_sync_titles(connection: &Connection) -> Result<Vec<String>> {
+    let mut statement = connection
+        .prepare("SELECT title FROM sync_invalidated_titles ORDER BY title_key")
+        .context("failed to prepare invalidated sync title listing")?;
+    statement
+        .query_map([], |row| row.get(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("failed to list invalidated sync titles")
+}
+
 pub(super) fn begin_edit_mutation(
     paths: &SyncProjectPaths,
     connection: &Connection,

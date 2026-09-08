@@ -38,6 +38,7 @@ pub fn pull_from_remote_with_api<A: WikiReadApi>(
                 &connection,
                 &pages_to_pull,
                 &existing_local_by_title,
+                &options.namespaces,
                 &mut report,
             )?;
             mark_global_baseline_established(paths, &mut connection, target)?;
@@ -267,6 +268,7 @@ pub fn pull_from_remote_with_api<A: WikiReadApi>(
                 &connection,
                 &pages_to_pull,
                 &existing_local_by_title,
+                &options.namespaces,
                 &mut report,
             )?;
             mark_global_baseline_established(paths, &mut connection, target)?;
@@ -293,6 +295,7 @@ fn reconcile_global_baseline_ledger(
     connection: &Connection,
     remote_titles: &[String],
     local_by_title: &BTreeMap<String, ScannedFile>,
+    covered_namespaces: &[i32],
     report: &mut PullReport,
 ) -> Result<()> {
     let remote_keys = remote_titles
@@ -382,6 +385,34 @@ fn reconcile_global_baseline_ledger(
             action: "deleted_remote_absent".to_string(),
             detail: Some(
                 "unchanged local page removed after authoritative remote deletion".to_string(),
+            ),
+        });
+    }
+    // A failed creation has no prior ledger row. Its retained local candidate
+    // still needs the same absence refresh as previously synchronized pages.
+    // Only complete enumeration of its actual local namespace establishes that
+    // absence; a scoped pull or an unrecognized namespace cannot unlock it.
+    for title in storage::load_invalidated_sync_titles(connection)? {
+        let key = normalized_title_key(&title);
+        let Some(local) = local_by_title.get(&key) else {
+            continue;
+        };
+        let Some(namespace) = namespace_name_to_id(&local.namespace) else {
+            continue;
+        };
+        if !covered_namespaces.contains(&namespace)
+            || remote_keys.contains(&key)
+            || unresolved_remote_mutation(connection, &title)?.is_some()
+        {
+            continue;
+        }
+        clear_sync_title_invalidation(connection, &title)?;
+        report.pages.push(PullPageResult {
+            title,
+            action: "refreshed_absent_baseline".to_string(),
+            detail: Some(
+                "complete target namespace enumeration confirms current absence; local candidate and unresolved closure receipt were retained"
+                    .to_string(),
             ),
         });
     }

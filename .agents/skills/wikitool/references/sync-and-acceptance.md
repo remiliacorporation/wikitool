@@ -24,6 +24,11 @@ than success, invalidates that title's baseline, and requires `pull --full --all
 before another write. Local drift may additionally require deliberate
 `--overwrite-local`; a closure is not permission to discard edits.
 
+For a closed creation whose page is currently absent, retain the local candidate
+and run the full pull. Complete enumeration of its namespace refreshes current
+absence without claiming what happened to the original request. A scoped pull
+does not establish that absence or clear the invalidation.
+
 ## Article acceptance
 
 Follow the project's human publication policy. Never invent a human decision

@@ -2434,6 +2434,107 @@ fn operator_close_is_inspectable_and_requires_fresh_pull_before_write() {
 }
 
 #[test]
+fn full_pull_recovers_closed_creation_without_a_previous_ledger_row() {
+    for with_existing_page in [false, true] {
+        let temp = tempdir().expect("tempdir");
+        let paths = paths(temp.path());
+        fs::create_dir_all(&paths.wiki_content_dir).expect("content directory");
+        let mut api = MockApi::default();
+        let full = PullOptions {
+            namespaces: authoritative_namespaces(),
+            category: None,
+            full: true,
+            coverage: PullCoverage::GlobalAllNamespaces,
+            overwrite_local: false,
+        };
+        if with_existing_page {
+            api.all_pages_by_namespace
+                .insert(NS_MAIN, vec!["Alpha".into()]);
+            api.page_contents
+                .insert("Alpha".into(), base_page("Alpha", "alpha"));
+        }
+        assert!(
+            pull_from_remote_with_api(&paths, &full, &mut api)
+                .unwrap()
+                .success
+        );
+        let source = paths.wiki_content_dir.join("Main/Beta.wiki");
+        write_file(&source, "local candidate\n");
+        api.edit_error_after_apply = Some("lost creation response".into());
+        let failed = push_to_remote_with_api(
+            &paths,
+            &write_push_options("create beta"),
+            &mut api,
+            Some(("bot", "pass")),
+        )
+        .unwrap();
+        assert!(!failed.success);
+        let pending = super::list_remote_mutations(&paths, &default_target(), true).unwrap();
+        let mutation_id = pending.mutations[0].mutation_id;
+        super::close_remote_mutation(
+            &paths,
+            &default_target(),
+            super::RemoteMutationOperation::Edit,
+            mutation_id,
+            "Operator",
+            "creation outcome is unavailable",
+        )
+        .unwrap();
+        api.page_contents.remove("Beta");
+        api.page_timestamps.remove("Beta");
+        api.edit_error_after_apply = None;
+        let scoped = PullOptions {
+            coverage: PullCoverage::Scoped,
+            ..full.clone()
+        };
+        pull_from_remote_with_api(&paths, &scoped, &mut api).unwrap();
+        let blocked = push_to_remote_with_api(
+            &paths,
+            &write_push_options("still blocked"),
+            &mut api,
+            Some(("bot", "pass")),
+        )
+        .unwrap();
+        assert!(!blocked.success);
+        assert_eq!(api.edited_pages, vec!["Beta"]);
+
+        let refreshed = pull_from_remote_with_api(&paths, &full, &mut api).unwrap();
+        assert!(refreshed.success);
+        assert!(
+            refreshed
+                .pages
+                .iter()
+                .any(|p| p.title == "Beta" && p.action == "refreshed_absent_baseline")
+        );
+        assert_eq!(fs::read_to_string(&source).unwrap(), "local candidate\n");
+        let receipt = super::show_remote_mutation(
+            &paths,
+            &default_target(),
+            super::RemoteMutationOperation::Edit,
+            mutation_id,
+        )
+        .unwrap();
+        assert_eq!(
+            receipt.closure.unwrap().reason,
+            "creation outcome is unavailable"
+        );
+        let applied = push_to_remote_with_api(
+            &paths,
+            &write_push_options("fresh creation"),
+            &mut api,
+            Some(("bot", "pass")),
+        )
+        .unwrap();
+        assert!(applied.success);
+        assert_eq!(api.edited_pages, vec!["Beta", "Beta"]);
+        assert_eq!(
+            api.edit_constraints.last().unwrap().1,
+            EditConstraint::CreateOnly
+        );
+    }
+}
+
+#[test]
 fn operator_close_prepares_and_revalidates_a_bound_delete_backup() {
     let (_temp, paths, _api) = modified_alpha_fixture();
     let source = paths.wiki_content_dir.join("Main/Alpha.wiki");
