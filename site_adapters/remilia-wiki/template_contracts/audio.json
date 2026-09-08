@@ -1,0 +1,188 @@
+{
+  "description": "Display an audio using a wiki file or verified archive sources.",
+  "documentation_footer_wikitext": "[[Category:Formatting templates]]",
+  "documentation_wikitext": "\nDisplay an audio using a wiki file or verified archive sources.\n\n== Usage ==\n\u003csyntaxhighlight lang=\"wikitext\"\u003e\n{{Audio|file=Example.ogg|label=Spoken excerpt|transcript=Transcript of the excerpt.}}\n\u003c/syntaxhighlight\u003e\n\nFor an uploaded file, supply \u003ccode\u003efile\u003c/code\u003e (or positional parameter 1). MediaWiki supplies the file link and its native image or media presentation. Use ordinary \u003ccode\u003e\u003cnowiki\u003e[[File:...]]\u003c/nowiki\u003e\u003c/code\u003e syntax when a reusable template is unnecessary.\n\nFor a source held in an archive, omit \u003ccode\u003efile\u003c/code\u003e and supply the archive identity parameters below. Source filenames and SHA-256 values must match the archive's retained records; imports should fill these fields from verified source bindings. The storage backend does not change the template's purpose.\n\nPlayback requires reader interaction. Uploaded files use TimedMediaHandler. Ordered archive sources must occupy consecutive slots.\n\n",
+  "examples": [
+    {
+      "description": "An OGG source followed by an MP3 fallback and a plain-text transcript.",
+      "id": "ogg-with-mp3-fallback",
+      "invocation": "{{Audio\n| site = example-site\n| label = Spoken dialogue sample\n| transcript = Optional plain-text transcript.\n| source1_sha256 = 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n| source1_type = ogg\n| source1_filename = Dialogue sample.ogg\n| source2_sha256 = fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210\n| source2_type = mp3\n| source2_filename = Dialogue sample.mp3\n}}"
+    }
+  ],
+  "format": "block",
+  "implementation": {
+    "body_wikitext": "{{#invoke:Media|audio}}",
+    "module_dependencies": [
+      "Module:Media"
+    ],
+    "template_dependencies": []
+  },
+  "parameters": [
+    {
+      "aliases": [
+        "1"
+      ],
+      "description": "Uploaded media filename, with or without File:. Use this or archive sources.",
+      "label": "Wiki file",
+      "name": "file",
+      "type": "wiki-file-name"
+    },
+    {
+      "description": "Published PreservationArchive site slug.",
+      "label": "Archive site",
+      "name": "site",
+      "type": "string"
+    },
+    {
+      "description": "Short descriptive label for the player, also displayed as its caption.",
+      "label": "Accessible label",
+      "name": "label",
+      "required": true,
+      "type": "string"
+    },
+    {
+      "description": "Optional transcript displayed after the player.",
+      "label": "Transcript",
+      "name": "transcript",
+      "type": "string"
+    },
+    {
+      "description": "Source 1 SHA-256. Used with archive sources.",
+      "label": "Source 1 SHA-256",
+      "name": "source1_sha256",
+      "type": "string"
+    },
+    {
+      "description": "Source 1 type. Used with archive sources.",
+      "label": "Source 1 type",
+      "name": "source1_type",
+      "suggested_values": [
+        "ogg",
+        "mp3"
+      ],
+      "type": "string"
+    },
+    {
+      "description": "Exact source-record filename for the first archived object.",
+      "label": "Source 1 filename",
+      "name": "source1_filename",
+      "type": "wiki-file-name"
+    },
+    {
+      "description": "Source 2 SHA-256. Used with archive sources.",
+      "label": "Source 2 SHA-256",
+      "name": "source2_sha256",
+      "type": "string"
+    },
+    {
+      "description": "Source 2 type. Used with archive sources.",
+      "label": "Source 2 type",
+      "name": "source2_type",
+      "suggested_values": [
+        "ogg",
+        "mp3"
+      ],
+      "type": "string"
+    },
+    {
+      "description": "Exact source-record filename for the second archived object.",
+      "label": "Source 2 filename",
+      "name": "source2_filename",
+      "type": "wiki-file-name"
+    },
+    {
+      "description": "Source 3 SHA-256. Used with archive sources.",
+      "label": "Source 3 SHA-256",
+      "name": "source3_sha256",
+      "type": "string"
+    },
+    {
+      "description": "Source 3 type. Used with archive sources.",
+      "label": "Source 3 type",
+      "name": "source3_type",
+      "suggested_values": [
+        "ogg",
+        "mp3"
+      ],
+      "type": "string"
+    },
+    {
+      "description": "Exact source-record filename for the third archived object.",
+      "label": "Source 3 filename",
+      "name": "source3_filename",
+      "type": "wiki-file-name"
+    },
+    {
+      "description": "Source 4 SHA-256. Used with archive sources.",
+      "label": "Source 4 SHA-256",
+      "name": "source4_sha256",
+      "type": "string"
+    },
+    {
+      "description": "Source 4 type. Used with archive sources.",
+      "label": "Source 4 type",
+      "name": "source4_type",
+      "suggested_values": [
+        "ogg",
+        "mp3"
+      ],
+      "type": "string"
+    },
+    {
+      "description": "Exact source-record filename for the fourth archived object.",
+      "label": "Source 4 filename",
+      "name": "source4_filename",
+      "type": "wiki-file-name"
+    },
+    {
+      "description": "Boolean: yes/true/1 enables; no/false/0 disables. Playback still requires reader interaction.",
+      "label": "Loop",
+      "name": "loop",
+      "type": "boolean"
+    },
+    {
+      "description": "Boolean: yes/true/1 enables; no/false/0 disables. Playback still requires reader interaction.",
+      "label": "Muted",
+      "name": "muted",
+      "type": "boolean"
+    },
+    {
+      "description": "Wiki files only: time in seconds or HH:MM:SS, passed to TimedMediaHandler.",
+      "label": "Start",
+      "name": "start",
+      "type": "string"
+    },
+    {
+      "description": "Wiki files only: time in seconds or HH:MM:SS, passed to TimedMediaHandler.",
+      "label": "End",
+      "name": "end",
+      "type": "string"
+    },
+    {
+      "description": "Wiki files only: time in seconds or HH:MM:SS, passed to TimedMediaHandler.",
+      "label": "Thumbtime",
+      "name": "thumbtime",
+      "type": "string"
+    }
+  ],
+  "render_fixtures": [
+    {
+      "expected_scope_count": 1,
+      "forbid_literal_wikilinks": true,
+      "id": "two-source-audio",
+      "invocation": "{{Audio|site=tcrf|label=Ikachan Magirete 1.2|source1_sha256=8cd36dbb45a26c04ca3d22166064dfa859c43a51f9229e9f98d23debbe578735|source1_type=mp3|source1_filename=Ikachan_Magirete_1.2.ogg.mp3|source2_sha256=08db277b6714e4dc25bb242476812559965d70955d72b0d9fdf112472fca0b68|source2_type=ogg|source2_filename=Ikachan_Magirete_1.2.ogg}}",
+      "require_interactive_link": true,
+      "required_href_substrings": [
+        "Special:ArchiveFile/tcrf/8cd36dbb45a26c04ca3d22166064dfa859c43a51f9229e9f98d23debbe578735/Ikachan_Magirete_1.2.ogg.mp3",
+        "Special:ArchiveFile/tcrf/08db277b6714e4dc25bb242476812559965d70955d72b0d9fdf112472fca0b68/Ikachan_Magirete_1.2.ogg"
+      ],
+      "required_link_classes": [
+        "mw-file-description",
+        "mw-preservation-archive-audio-file-link"
+      ],
+      "scope_class": "mw-preservation-archive-audio"
+    }
+  ],
+  "schema_version": "template_engineering_contract_v1",
+  "template_title": "Template:Audio"
+}

@@ -1,72 +1,79 @@
 {
-  "schema_version": "template_engineering_contract_v1",
-  "template_title": "Template:Claim status",
-  "description": "Marks source-authored text as verified or unverified and preserves its stated verification source.",
+  "description": "Mark source-authored text as verified or unverified and retain its stated verification source.",
+  "documentation_footer_wikitext": "[[Category:Formatting templates]]",
+  "documentation_wikitext": "\n__NOTOC__\nMark source-authored text as verified or unverified and retain its stated verification source.\n\n== Usage ==\n\u003csyntaxhighlight lang=\"wikitext\"\u003e\n{{Claim status|status=verified|text=Example claim.|source_url=https://example.org/|source_description=Example evidence}}\n\u003c/syntaxhighlight\u003e\n\nOmit optional parameters that do not apply. The parameter reference below lists supported names and aliases.\n\n",
+  "examples": [
+    {
+      "description": "A verified claim with its source link and description.",
+      "id": "verified-source",
+      "invocation": "{{Claim status|status=verified|text=File format version 1|source_url=https://example.com/specification|source_description=Vendor specification}}"
+    },
+    {
+      "description": "An unverified source claim.",
+      "id": "unverified",
+      "invocation": "{{Claim status|status=unverified|text=Tentative field meaning}}"
+    }
+  ],
   "format": "inline",
   "implementation": {
-    "body_wikitext": "<templatestyles src=\"Module:Message/styles.css\" /><span class=\"claim-status claim-status-{{#switch:{{lc:{{{status|}}}}}|verified=verified|unverified=unverified|#default=unknown}}\">{{#if:{{{text|}}}|<span class=\"claim-status-text\">{{{text}}}</span>|<span class=\"error\">Error: claim text required</span>}} <sup class=\"claim-status-marker plainlinks\">{{#switch:{{lc:{{{status|}}}}}|verified={{#if:{{{source_url|}}}|[{{{source_url}}} verified]|verified}}{{#if:{{{source_description|}}}|<span class=\"claim-status-source\">; source: {{{source_description}}}</span>}}|unverified=unverified|#default=unknown status}}</sup></span>",
-    "template_dependencies": [],
-    "module_dependencies": ["Module:Message/styles.css"]
+    "body_wikitext": "\u003ctemplatestyles src=\"Module:Message/styles.css\" /\u003e\u003cspan class=\"claim-status claim-status-{{#switch:{{lc:{{{status|}}}}}|verified=verified|unverified=unverified|#default=unknown}}\"\u003e{{#if:{{{text|}}}|\u003cspan class=\"claim-status-text\"\u003e{{{text}}}\u003c/span\u003e|\u003cspan class=\"error\"\u003eError: claim text required\u003c/span\u003e}} \u003csup class=\"claim-status-marker plainlinks\"\u003e{{#switch:{{lc:{{{status|}}}}}|verified={{#if:{{{source_url|}}}|[{{{source_url}}} verified]|verified}}{{#if:{{{source_description|}}}|\u003cspan class=\"claim-status-source\"\u003e; source: {{{source_description}}}\u003c/span\u003e}}|unverified=unverified|#default=unknown status}}\u003c/sup\u003e\u003c/span\u003e",
+    "module_dependencies": [
+      "Module:Message/styles.css"
+    ],
+    "template_dependencies": []
   },
   "parameters": [
     {
-      "name": "status",
-      "label": "Status",
       "description": "Verification state asserted by the archived source.",
-      "type": "string",
+      "label": "Status",
+      "name": "status",
       "required": true,
-      "suggested_values": ["verified", "unverified"]
+      "suggested_values": [
+        "verified",
+        "unverified"
+      ],
+      "type": "string"
     },
     {
-      "name": "text",
-      "label": "Text",
       "description": "Source-authored claim text.",
-      "type": "content",
-      "required": true
+      "label": "Text",
+      "name": "text",
+      "required": true,
+      "type": "content"
     },
     {
-      "name": "source_url",
-      "label": "Source URL",
       "description": "Optional source URL supplied by the archived page.",
+      "label": "Source URL",
+      "name": "source_url",
       "type": "url"
     },
     {
-      "name": "source_description",
-      "label": "Source description",
       "description": "Optional source description supplied by the archived page.",
+      "label": "Source description",
+      "name": "source_description",
       "type": "string"
     }
   ],
-  "documentation_wikitext": "{{SHORTDESC:Mark the verification state of a preserved claim}}\nUse this template only to retain a verification state asserted by the source. Do not infer verification from archive capture success.",
-  "examples": [
-    {
-      "id": "verified-source",
-      "invocation": "{{Claim status|status=verified|text=File format version 1|source_url=https://example.com/specification|source_description=Vendor specification}}",
-      "description": "A verified claim with its source link and description."
-    },
-    {
-      "id": "unverified",
-      "invocation": "{{Claim status|status=unverified|text=Tentative field meaning}}",
-      "description": "An unverified source claim."
-    }
-  ],
-  "documentation_footer_wikitext": "[[Category:Formatting templates]]",
   "render_fixtures": [
     {
+      "expected_scope_count": 1,
+      "forbid_literal_wikilinks": true,
       "id": "verified-source",
       "invocation": "{{Claim status|status=verified|text=File format version 1|source_url=https://example.com/specification|source_description=Vendor specification}}",
-      "scope_class": "claim-status",
-      "expected_scope_count": 1,
       "require_interactive_link": true,
-      "required_href_substrings": ["example.com/specification"],
-      "forbid_literal_wikilinks": true
+      "required_href_substrings": [
+        "example.com/specification"
+      ],
+      "scope_class": "claim-status"
     },
     {
+      "expected_scope_count": 1,
+      "forbid_literal_wikilinks": true,
       "id": "unverified",
       "invocation": "{{Claim status|status=unverified|text=Tentative field meaning}}",
-      "scope_class": "claim-status",
-      "expected_scope_count": 1,
-      "forbid_literal_wikilinks": true
+      "scope_class": "claim-status"
     }
-  ]
+  ],
+  "schema_version": "template_engineering_contract_v1",
+  "template_title": "Template:Claim status"
 }

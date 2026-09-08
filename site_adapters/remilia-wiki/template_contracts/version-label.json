@@ -1,61 +1,65 @@
 {
-  "schema_version": "template_engineering_contract_v1",
-  "template_title": "Template:Version label",
-  "description": "Formats a source-neutral software release name, build identifier, and optional pre-rendered icon.",
+  "description": "Format a source-neutral software release name, build identifier, and optional pre-rendered icon.",
+  "documentation_footer_wikitext": "[[Category:Formatting templates]]",
+  "documentation_wikitext": "\n__NOTOC__\nFormat a source-neutral software release name, build identifier, and optional pre-rendered icon.\n\n== Usage ==\n\u003csyntaxhighlight lang=\"wikitext\"\u003e\n{{Version label|name=Example|build=123|icon_content={{Abbr|V|Version}}}}\n\u003c/syntaxhighlight\u003e\n\nOmit optional parameters that do not apply. The parameter reference below lists supported names and aliases.\n\n",
+  "examples": [
+    {
+      "description": "A named software release with an exact build.",
+      "id": "named-build",
+      "invocation": "{{Version label|name=Wrath of the Lich King|build=3.3.5.12340}}"
+    }
+  ],
   "format": "inline",
   "implementation": {
-    "body_wikitext": "<span class=\"version-label\">{{#if:{{{icon_content|}}}|<span class=\"version-label-icon\">{{{icon_content}}}</span>&nbsp;}}{{#if:{{{name|}}}|{{{name}}}{{#if:{{{build|}}}|&#32;({{{build}}})}}|{{#if:{{{build|}}}|{{{build}}}|<span class=\"error\">Error: version name or build required</span>}}}}</span>",
-    "template_dependencies": [],
-    "module_dependencies": []
+    "body_wikitext": "\u003cspan class=\"version-label\"\u003e{{#if:{{{icon_content|}}}|\u003cspan class=\"version-label-icon\"\u003e{{{icon_content}}}\u003c/span\u003e\u0026nbsp;}}{{#if:{{{name|}}}|{{{name}}}{{#if:{{{build|}}}|\u0026#32;({{{build}}})}}|{{#if:{{{build|}}}|{{{build}}}|\u003cspan class=\"error\"\u003eError: version name or build required\u003c/span\u003e}}}}\u003c/span\u003e",
+    "module_dependencies": [],
+    "template_dependencies": []
   },
   "parameters": [
     {
-      "name": "name",
-      "label": "Version name",
       "description": "Human-readable release or expansion name.",
-      "type": "string",
-      "suggested": true
+      "label": "Version name",
+      "name": "name",
+      "suggested": true,
+      "type": "string"
     },
     {
-      "name": "build",
-      "label": "Build",
       "description": "Exact build or version identifier.",
-      "type": "string",
-      "suggested": true
+      "label": "Build",
+      "name": "build",
+      "suggested": true,
+      "type": "string"
     },
     {
-      "name": "icon_content",
-      "label": "Icon content",
       "description": "Optional pre-rendered icon content, such as Template:Preservation image.",
+      "label": "Icon content",
+      "name": "icon_content",
       "type": "content"
     }
   ],
-  "documentation_wikitext": "{{SHORTDESC:Format a software version name, build, and optional preserved icon}}\nSupply a release name, build identifier, or both. The optional icon_content parameter accepts pre-rendered content such as Template:Preservation image without depending on a source wiki's native files, templates, or CSS.",
-  "examples": [
-    {
-      "id": "named-build",
-      "invocation": "{{Version label|name=Wrath of the Lich King|build=3.3.5.12340}}",
-      "description": "A named software release with an exact build."
-    }
-  ],
-  "documentation_footer_wikitext": "[[Category:Formatting templates]]",
   "render_fixtures": [
     {
+      "expected_scope_count": 1,
+      "forbid_literal_wikilinks": true,
       "id": "named-build",
       "invocation": "{{Version label|name=Wrath of the Lich King|build=3.3.5.12340}}",
-      "scope_class": "version-label",
-      "expected_scope_count": 1,
-      "forbid_literal_wikilinks": true
+      "scope_class": "version-label"
     },
     {
-      "id": "preserved-icon",
-      "invocation": "{{Version label|name=Wrath of the Lich King|icon_content={{Preservation image|site=wowdev|sha256=4c970718a44a639fe191f486a21f432a335cc9906f817ddc211847336c84d5b1|filename=Wrath-Logo-Small.png|alt=Wrath}}}}",
-      "scope_class": "version-label",
       "expected_scope_count": 1,
+      "forbid_literal_wikilinks": true,
+      "id": "preserved-icon",
+      "invocation": "{{Version label|name=Wrath of the Lich King|icon_content={{Image|site=wowdev|sha256=4c970718a44a639fe191f486a21f432a335cc9906f817ddc211847336c84d5b1|filename=Wrath-Logo-Small.png|alt=Wrath}}}}",
       "require_interactive_link": true,
-      "required_href_substrings": ["Special:Archive/wowdev/File:Wrath-Logo-Small.png"],
-      "required_link_classes": ["mw-preservation-archive-image-link"],
-      "forbid_literal_wikilinks": true
+      "required_href_substrings": [
+        "Special:Archive/wowdev/File:Wrath-Logo-Small.png"
+      ],
+      "required_link_classes": [
+        "mw-preservation-archive-image-link"
+      ],
+      "scope_class": "version-label"
     }
-  ]
+  ],
+  "schema_version": "template_engineering_contract_v1",
+  "template_title": "Template:Version label"
 }

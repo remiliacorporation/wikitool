@@ -1,81 +1,87 @@
 {
-  "schema_version": "template_engineering_contract_v1",
-  "template_title": "Template:Ambox",
-  "description": "Displays a source-neutral article message box without importing a source wiki's template vocabulary.",
+  "description": "Display an article-level notice. Use Section notice for a notice confined to one section.",
+  "documentation_footer_wikitext": "[[Category:Message templates]]",
+  "documentation_wikitext": "\n__NOTOC__\nDisplay an article-level notice. Use Section notice for a notice confined to one section.\n\n== Usage ==\n\u003csyntaxhighlight lang=\"wikitext\"\u003e\n{{Ambox|text=Example notice.|image_content=[[Milady Maker|Icon link]]|small=no|plainlinks=no}}\n\u003c/syntaxhighlight\u003e\n\nOmit optional parameters that do not apply. The parameter reference below lists supported names and aliases.\n\n",
+  "examples": [
+    {
+      "description": "A neutral source-authored notice.",
+      "id": "notice",
+      "invocation": "{{Ambox\n| type = notice\n| text = This source-authored notice is preserved.\n}}"
+    }
+  ],
   "format": "block",
   "implementation": {
-    "body_wikitext": "<templatestyles src=\"Module:Message/styles.css\" />{{#invoke:Message|ambox}}",
-    "template_dependencies": [],
-    "module_dependencies": ["Module:Message", "Module:Message/styles.css"]
+    "body_wikitext": "\u003ctemplatestyles src=\"Module:Message/styles.css\" /\u003e{{#invoke:Message|ambox}}",
+    "module_dependencies": [
+      "Module:Message",
+      "Module:Message/styles.css"
+    ],
+    "template_dependencies": []
   },
   "parameters": [
     {
-      "name": "type",
+      "description": "Kind of subject or work, using the article's terminology.",
       "label": "Type",
-      "description": "Visual message category.",
-      "type": "string",
-      "default": "notice",
-      "suggested_values": ["notice", "warning", "serious", "content", "style", "delete", "protection"]
-    },
-    {
-      "name": "text",
-      "label": "Text",
-      "description": "Source-authored message content.",
-      "type": "content",
-      "required": true
-    },
-    {
-      "name": "image",
-      "label": "Image",
-      "description": "Optional native file name without the File: prefix; set to none to hide.",
-      "type": "wiki-file-name"
-    },
-    {
-      "name": "image_content",
-      "label": "Image content",
-      "description": "Pre-rendered image content such as Template:Preservation image; takes precedence over image.",
+      "name": "type",
       "type": "content"
     },
     {
-      "name": "imagesize",
-      "label": "Image size",
-      "description": "Display size for a native image.",
-      "type": "string",
-      "default": "40px"
+      "aliases": [
+        "1"
+      ],
+      "description": "Content to display; accepts wikitext and nested templates unless described otherwise.",
+      "label": "Text",
+      "name": "text",
+      "suggested": true,
+      "type": "content"
     },
     {
-      "name": "small",
+      "description": "Native wiki image filename, without File: or surrounding brackets.",
+      "label": "Image",
+      "name": "image",
+      "type": "wiki-file-name"
+    },
+    {
+      "description": "Rendered media content, such as Preservation image; takes precedence over the native image.",
+      "label": "Image content",
+      "name": "image_content",
+      "type": "content"
+    },
+    {
+      "description": "Native notice image size, for example 40px.",
+      "label": "Imagesize",
+      "name": "imagesize",
+      "type": "string"
+    },
+    {
+      "description": "Use yes for the compact notice variant.",
       "label": "Small",
-      "description": "Render the compact form when set to yes.",
+      "name": "small",
       "type": "boolean"
     },
     {
+      "description": "Use no to retain ordinary external-link decoration; defaults to yes.",
+      "label": "Plainlinks",
       "name": "plainlinks",
-      "label": "Plain links",
-      "description": "Set to no to preserve ordinary external-link styling.",
-      "type": "boolean",
-      "default": "yes"
+      "type": "boolean"
     }
   ],
-  "documentation_wikitext": "{{SHORTDESC:Article message box template}}\nUse this source-neutral template for article notices, maintenance messages, and preserved source messages. Preserve source-authored text; do not invent a message merely to decorate an article.",
-  "examples": [
-    {
-      "id": "notice",
-      "invocation": "{{Ambox\n| type = notice\n| text = This source-authored notice is preserved.\n}}",
-      "description": "A neutral source-authored notice."
-    }
-  ],
-  "documentation_footer_wikitext": "[[Category:Message templates]]",
   "render_fixtures": [
     {
-      "id": "notice",
-      "invocation": "{{Ambox|type=notice|text=This source-authored notice is preserved.|image_content={{Preservation image|site=wowdev|sha256=aa04f80e07ee1bb98e754fd021fb47058ad5b029e7cdd678207147f034876401|filename=WoWEdit TopToolbar 1.jpg}}}}",
-      "scope_class": "mbox",
       "expected_scope_count": 1,
+      "forbid_literal_wikilinks": true,
+      "id": "notice",
+      "invocation": "{{Ambox|type=notice|text=This source-authored notice is preserved.|image_content={{Image|site=wowdev|sha256=aa04f80e07ee1bb98e754fd021fb47058ad5b029e7cdd678207147f034876401|filename=WoWEdit TopToolbar 1.jpg}}}}",
       "require_interactive_link": true,
-      "required_href_substrings": ["Special:ArchiveFile/wowdev/aa04f80e07ee1bb98e754fd021fb47058ad5b029e7cdd678207147f034876401/WoWEdit_TopToolbar_1.jpg"],
-      "required_link_classes": ["mw-preservation-archive-image-link"],
-      "forbid_literal_wikilinks": true
+      "required_href_substrings": [
+        "Special:ArchiveFile/wowdev/aa04f80e07ee1bb98e754fd021fb47058ad5b029e7cdd678207147f034876401/WoWEdit_TopToolbar_1.jpg"
+      ],
+      "required_link_classes": [
+        "mw-preservation-archive-image-link"
+      ],
+      "scope_class": "mbox"
     }
-  ]
+  ],
+  "schema_version": "template_engineering_contract_v1",
+  "template_title": "Template:Ambox"
 }

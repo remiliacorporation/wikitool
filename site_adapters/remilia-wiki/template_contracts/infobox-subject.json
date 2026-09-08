@@ -1,275 +1,511 @@
 {
-  "schema_version": "template_engineering_contract_v1",
-  "template_title": "Template:Infobox subject",
-  "description": "Provides a compact fallback infobox for subjects that do not fit a specialized Remilia infobox.",
+  "description": "Fallback infobox for a subject that has no suitable specialized infobox. Reuse the existing ten semantic rows before introducing a new template.",
+  "documentation_footer_wikitext": "[[Category:Infobox templates]]",
+  "documentation_wikitext": "\n__NOTOC__\nFallback infobox for a subject that has no suitable specialized infobox. Reuse the existing ten semantic rows before introducing a new template.\n\n== Usage ==\n\u003csyntaxhighlight lang=\"wikitext\"\u003e\n{{Infobox subject|name=Example|header1=Section|subheader2=Subsection|label3=Label|data3=Value|disclosure4=Details|data4=[[Milady Maker|Content]]|below=Footer}}\n\u003c/syntaxhighlight\u003e\n\nUse a specialized infobox when it fits the subject. Values accept wikitext, including links, lists and inline citations; image fields take a native filename and alt fields take plain text. Empty rows are omitted. Use only information appropriate for a concise, sourced summary.\n\nTen numbered rows support headers, subheaders, label/data pairs and collapsible disclosures. For each row, header takes precedence over subheader, then disclosure and ordinary data. Use image_content for a rendered component. The presentation and accent fields select the existing visual variants.\n\n",
+  "examples": [
+    {
+      "description": "A miscellaneous subject expressed through stable fields and one labeled custom row.",
+      "id": "generic-subject",
+      "invocation": "{{Infobox subject\n| name = Example tool\n| type = Software tool\n| date = 2024\n| status = Active\n| label1 = Platform\n| data1 = Web\n| website = [https://example.org Official website]\n}}"
+    }
+  ],
   "format": "block",
   "implementation": {
-    "body_wikitext": "<templatestyles src=\"Module:Infobox/styles.css\" />{{#invoke:Infobox|subject}}",
-    "template_dependencies": [],
-    "module_dependencies": ["Module:Infobox", "Module:Infobox/styles.css"]
+    "body_wikitext": "\u003ctemplatestyles src=\"Module:Infobox/styles.css\" /\u003e{{#invoke:Infobox|subject}}",
+    "module_dependencies": [
+      "Module:Infobox",
+      "Module:Infobox/styles.css"
+    ],
+    "template_dependencies": []
   },
   "parameters": [
     {
-      "name": "name",
+      "description": "Display name; defaults to the current page title.",
       "label": "Name",
-      "description": "Heading displayed at the top of the infobox; defaults to the page title.",
-      "type": "string",
-      "suggested": true
+      "name": "name",
+      "suggested": true,
+      "type": "content"
     },
     {
-      "name": "image",
+      "description": "Native wiki image filename, without File: or surrounding brackets.",
       "label": "Image",
-      "description": "Native wiki file name displayed in the image row; omit the File: prefix.",
+      "name": "image",
       "type": "wiki-file-name"
     },
     {
-      "name": "image_content",
-      "label": "Image content",
-      "description": "Pre-rendered wikitext for the image row, such as Template:Preservation image; takes precedence over image.",
-      "type": "content"
-    },
-    {
-      "name": "image_size",
+      "description": "Image display size including its unit, for example 220px.",
       "label": "Image size",
-      "description": "Display size for a native image; ignored when image_content is used.",
-      "type": "string",
-      "default": "250px"
+      "name": "image_size",
+      "type": "string"
     },
     {
-      "name": "caption",
+      "description": "Caption below the primary image; accepts wikitext and references.",
       "label": "Caption",
-      "description": "Concise caption displayed below the image row.",
-      "type": "string"
+      "name": "caption",
+      "type": "content"
     },
     {
+      "description": "Plain text describing the image for readers who cannot see it.",
+      "label": "Alt",
       "name": "alt",
-      "label": "Alternative text",
-      "description": "Meaningful alternative text for a native image; ignored when image_content is used.",
       "type": "string"
     },
     {
-      "name": "type",
-      "label": "Type",
-      "description": "Concise noun phrase identifying what kind of subject this is.",
-      "type": "string",
-      "suggested": true
+      "description": "Rendered media content, such as Preservation image; takes precedence over the native image.",
+      "label": "Image content",
+      "name": "image_content",
+      "type": "content"
     },
     {
-      "name": "date",
-      "label": "Date",
-      "description": "Relevant creation, launch, or occurrence date, with precision no greater than the evidence supports.",
-      "type": "string"
-    },
-    {
-      "name": "location",
-      "label": "Location",
-      "description": "Relevant physical or virtual location.",
-      "type": "string"
-    },
-    {
-      "name": "status",
-      "label": "Status",
-      "description": "Current concise status, such as active, inactive, or completed.",
-      "type": "string"
-    },
-    {
-      "name": "related",
-      "label": "Related",
-      "description": "A small set of directly related wiki subjects, normally expressed as wikilinks.",
-      "type": "string"
-    },
-    {
-      "name": "website",
-      "label": "Website",
-      "description": "Canonical official website, formatted as an external link.",
-      "type": "string"
-    },
-    {
-      "name": "count",
-      "label": "Count",
-      "description": "Number of items or members when a generic count is materially useful.",
-      "type": "number"
-    },
-    {
-      "name": "rarity",
-      "label": "Rarity",
-      "description": "Legacy rarity or edition-class shortcut; prefer a specialized infobox or a clearly labeled custom row.",
-      "type": "string",
-      "deprecated": true
-    },
-    {
-      "name": "below",
+      "description": "Additional content at the bottom of the infobox; accepts other templates and references.",
       "label": "Below",
-      "description": "Source-authored or supplemental content spanning the full infobox width.",
+      "name": "below",
       "type": "content"
     },
     {
-      "name": "presentation",
+      "description": "Kind of subject or work, using the article's terminology.",
+      "label": "Type",
+      "name": "type",
+      "type": "content"
+    },
+    {
+      "description": "Date or date range as displayed in the article.",
+      "label": "Date",
+      "name": "date",
+      "type": "content"
+    },
+    {
+      "description": "Location described in the article.",
+      "label": "Location",
+      "name": "location",
+      "type": "content"
+    },
+    {
+      "description": "Status described in the article.",
+      "label": "Status",
+      "name": "status",
+      "type": "content"
+    },
+    {
+      "description": "Related subjects; accepts links or a list template.",
+      "label": "Related",
+      "name": "related",
+      "type": "content"
+    },
+    {
+      "description": "Official website URL or a formatted external link.",
+      "label": "Website",
+      "name": "website",
+      "type": "content"
+    },
+    {
+      "description": "Count of items or tokens; retain the unit in the surrounding label when needed.",
+      "label": "Count",
+      "name": "count",
+      "type": "content"
+    },
+    {
+      "description": "Displayed rarity; retained for compatibility with existing trait data.",
+      "label": "Rarity",
+      "name": "rarity",
+      "type": "content"
+    },
+    {
+      "description": "Infobox presentation: standard or storybook.",
       "label": "Presentation",
-      "description": "Bounded visual presentation preset; unsupported values fail visibly.",
-      "type": "string",
-      "default": "standard",
-      "suggested_values": ["standard", "storybook"]
+      "name": "presentation",
+      "type": "string"
     },
     {
-      "name": "accent",
+      "description": "Bounded accent: neutral, amber, blue, green, rose or violet.",
       "label": "Accent",
-      "description": "Bounded presentation accent token; unsupported values fail visibly.",
-      "type": "string",
-      "default": "neutral",
-      "suggested_values": ["neutral", "amber", "blue", "green", "rose", "violet"]
+      "name": "accent",
+      "type": "string"
     },
     {
+      "description": "Header for row 1. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Header1",
+      "name": "header1",
+      "type": "content"
+    },
+    {
+      "description": "Subheader for row 1. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Subheader1",
+      "name": "subheader1",
+      "type": "content"
+    },
+    {
+      "description": "Label for row 1. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Label1",
       "name": "label1",
-      "label": "Label 1",
-      "description": "Label for custom row 1; the row renders only when data1 is also supplied.",
-      "type": "string"
+      "type": "content"
     },
     {
+      "description": "Data for row 1. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Data1",
       "name": "data1",
-      "label": "Data 1",
-      "description": "Wikitext value for custom row 1; the row renders only when label1 is also supplied.",
       "type": "content"
     },
     {
+      "description": "Rendered icon before row 1's label.",
+      "label": "Label icon1",
+      "name": "label_icon1",
+      "type": "content"
+    },
+    {
+      "description": "Summary for collapsible row 1; its data is shown when expanded.",
+      "label": "Disclosure1",
+      "name": "disclosure1",
+      "type": "content"
+    },
+    {
+      "description": "Header for row 2. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Header2",
+      "name": "header2",
+      "type": "content"
+    },
+    {
+      "description": "Subheader for row 2. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Subheader2",
+      "name": "subheader2",
+      "type": "content"
+    },
+    {
+      "description": "Label for row 2. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Label2",
       "name": "label2",
-      "label": "Label 2",
-      "description": "Label for custom row 2; the row renders only when data2 is also supplied.",
-      "type": "string"
+      "type": "content"
     },
     {
+      "description": "Data for row 2. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Data2",
       "name": "data2",
-      "label": "Data 2",
-      "description": "Wikitext value for custom row 2; the row renders only when label2 is also supplied.",
       "type": "content"
     },
     {
+      "description": "Rendered icon before row 2's label.",
+      "label": "Label icon2",
+      "name": "label_icon2",
+      "type": "content"
+    },
+    {
+      "description": "Summary for collapsible row 2; its data is shown when expanded.",
+      "label": "Disclosure2",
+      "name": "disclosure2",
+      "type": "content"
+    },
+    {
+      "description": "Header for row 3. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Header3",
+      "name": "header3",
+      "type": "content"
+    },
+    {
+      "description": "Subheader for row 3. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Subheader3",
+      "name": "subheader3",
+      "type": "content"
+    },
+    {
+      "description": "Label for row 3. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Label3",
       "name": "label3",
-      "label": "Label 3",
-      "description": "Label for custom row 3; the row renders only when data3 is also supplied.",
-      "type": "string"
+      "type": "content"
     },
     {
+      "description": "Data for row 3. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Data3",
       "name": "data3",
-      "label": "Data 3",
-      "description": "Wikitext value for custom row 3; the row renders only when label3 is also supplied.",
       "type": "content"
     },
     {
+      "description": "Rendered icon before row 3's label.",
+      "label": "Label icon3",
+      "name": "label_icon3",
+      "type": "content"
+    },
+    {
+      "description": "Summary for collapsible row 3; its data is shown when expanded.",
+      "label": "Disclosure3",
+      "name": "disclosure3",
+      "type": "content"
+    },
+    {
+      "description": "Header for row 4. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Header4",
+      "name": "header4",
+      "type": "content"
+    },
+    {
+      "description": "Subheader for row 4. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Subheader4",
+      "name": "subheader4",
+      "type": "content"
+    },
+    {
+      "description": "Label for row 4. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Label4",
       "name": "label4",
-      "label": "Label 4",
-      "description": "Label for custom row 4; the row renders only when data4 is also supplied.",
-      "type": "string"
+      "type": "content"
     },
     {
+      "description": "Data for row 4. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Data4",
       "name": "data4",
-      "label": "Data 4",
-      "description": "Wikitext value for custom row 4; the row renders only when label4 is also supplied.",
       "type": "content"
     },
     {
+      "description": "Rendered icon before row 4's label.",
+      "label": "Label icon4",
+      "name": "label_icon4",
+      "type": "content"
+    },
+    {
+      "description": "Summary for collapsible row 4; its data is shown when expanded.",
+      "label": "Disclosure4",
+      "name": "disclosure4",
+      "type": "content"
+    },
+    {
+      "description": "Header for row 5. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Header5",
+      "name": "header5",
+      "type": "content"
+    },
+    {
+      "description": "Subheader for row 5. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Subheader5",
+      "name": "subheader5",
+      "type": "content"
+    },
+    {
+      "description": "Label for row 5. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Label5",
       "name": "label5",
-      "label": "Label 5",
-      "description": "Label for custom row 5; the row renders only when data5 is also supplied.",
-      "type": "string"
+      "type": "content"
     },
     {
+      "description": "Data for row 5. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Data5",
       "name": "data5",
-      "label": "Data 5",
-      "description": "Wikitext value for custom row 5; the row renders only when label5 is also supplied.",
       "type": "content"
     },
     {
+      "description": "Rendered icon before row 5's label.",
+      "label": "Label icon5",
+      "name": "label_icon5",
+      "type": "content"
+    },
+    {
+      "description": "Summary for collapsible row 5; its data is shown when expanded.",
+      "label": "Disclosure5",
+      "name": "disclosure5",
+      "type": "content"
+    },
+    {
+      "description": "Header for row 6. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Header6",
+      "name": "header6",
+      "type": "content"
+    },
+    {
+      "description": "Subheader for row 6. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Subheader6",
+      "name": "subheader6",
+      "type": "content"
+    },
+    {
+      "description": "Label for row 6. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Label6",
       "name": "label6",
-      "label": "Label 6",
-      "description": "Label for custom row 6; the row renders only when data6 is also supplied.",
-      "type": "string"
+      "type": "content"
     },
     {
+      "description": "Data for row 6. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Data6",
       "name": "data6",
-      "label": "Data 6",
-      "description": "Wikitext value for custom row 6; the row renders only when label6 is also supplied.",
       "type": "content"
     },
     {
+      "description": "Rendered icon before row 6's label.",
+      "label": "Label icon6",
+      "name": "label_icon6",
+      "type": "content"
+    },
+    {
+      "description": "Summary for collapsible row 6; its data is shown when expanded.",
+      "label": "Disclosure6",
+      "name": "disclosure6",
+      "type": "content"
+    },
+    {
+      "description": "Header for row 7. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Header7",
+      "name": "header7",
+      "type": "content"
+    },
+    {
+      "description": "Subheader for row 7. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Subheader7",
+      "name": "subheader7",
+      "type": "content"
+    },
+    {
+      "description": "Label for row 7. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Label7",
       "name": "label7",
-      "label": "Label 7",
-      "description": "Label for custom row 7; the row renders only when data7 is also supplied.",
-      "type": "string"
+      "type": "content"
     },
     {
+      "description": "Data for row 7. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Data7",
       "name": "data7",
-      "label": "Data 7",
-      "description": "Wikitext value for custom row 7; the row renders only when label7 is also supplied.",
       "type": "content"
     },
     {
+      "description": "Rendered icon before row 7's label.",
+      "label": "Label icon7",
+      "name": "label_icon7",
+      "type": "content"
+    },
+    {
+      "description": "Summary for collapsible row 7; its data is shown when expanded.",
+      "label": "Disclosure7",
+      "name": "disclosure7",
+      "type": "content"
+    },
+    {
+      "description": "Header for row 8. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Header8",
+      "name": "header8",
+      "type": "content"
+    },
+    {
+      "description": "Subheader for row 8. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Subheader8",
+      "name": "subheader8",
+      "type": "content"
+    },
+    {
+      "description": "Label for row 8. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Label8",
       "name": "label8",
-      "label": "Label 8",
-      "description": "Label for custom row 8; the row renders only when data8 is also supplied.",
-      "type": "string"
+      "type": "content"
     },
     {
+      "description": "Data for row 8. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Data8",
       "name": "data8",
-      "label": "Data 8",
-      "description": "Wikitext value for custom row 8; the row renders only when label8 is also supplied.",
       "type": "content"
     },
     {
+      "description": "Rendered icon before row 8's label.",
+      "label": "Label icon8",
+      "name": "label_icon8",
+      "type": "content"
+    },
+    {
+      "description": "Summary for collapsible row 8; its data is shown when expanded.",
+      "label": "Disclosure8",
+      "name": "disclosure8",
+      "type": "content"
+    },
+    {
+      "description": "Header for row 9. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Header9",
+      "name": "header9",
+      "type": "content"
+    },
+    {
+      "description": "Subheader for row 9. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Subheader9",
+      "name": "subheader9",
+      "type": "content"
+    },
+    {
+      "description": "Label for row 9. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Label9",
       "name": "label9",
-      "label": "Label 9",
-      "description": "Label for custom row 9; the row renders only when data9 is also supplied.",
-      "type": "string"
+      "type": "content"
     },
     {
+      "description": "Data for row 9. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Data9",
       "name": "data9",
-      "label": "Data 9",
-      "description": "Wikitext value for custom row 9; the row renders only when label9 is also supplied.",
       "type": "content"
     },
     {
+      "description": "Rendered icon before row 9's label.",
+      "label": "Label icon9",
+      "name": "label_icon9",
+      "type": "content"
+    },
+    {
+      "description": "Summary for collapsible row 9; its data is shown when expanded.",
+      "label": "Disclosure9",
+      "name": "disclosure9",
+      "type": "content"
+    },
+    {
+      "description": "Header for row 10. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Header10",
+      "name": "header10",
+      "type": "content"
+    },
+    {
+      "description": "Subheader for row 10. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Subheader10",
+      "name": "subheader10",
+      "type": "content"
+    },
+    {
+      "description": "Label for row 10. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Label10",
       "name": "label10",
-      "label": "Label 10",
-      "description": "Label for custom row 10; the row renders only when data10 is also supplied.",
-      "type": "string"
+      "type": "content"
     },
     {
+      "description": "Data for row 10. Header takes precedence over subheader and data; omit unused rows.",
+      "label": "Data10",
       "name": "data10",
-      "label": "Data 10",
-      "description": "Wikitext value for custom row 10; the row renders only when label10 is also supplied.",
+      "type": "content"
+    },
+    {
+      "description": "Rendered icon before row 10's label.",
+      "label": "Label icon10",
+      "name": "label_icon10",
+      "type": "content"
+    },
+    {
+      "description": "Summary for collapsible row 10; its data is shown when expanded.",
+      "label": "Disclosure10",
+      "name": "disclosure10",
       "type": "content"
     }
   ],
-  "documentation_wikitext": "{{SHORTDESC:Generic fallback infobox}}\nUse this template only when the subject does not fit a specialized Remilia infobox. Prefer stable named fields; use paired custom rows for additional concise facts instead of creating source-site-specific parameters. Presentation and accent are bounded Remilia-owned tokens for archive casts; they never accept source CSS or arbitrary style values.",
-  "examples": [
-    {
-      "id": "generic-subject",
-      "invocation": "{{Infobox subject\n| name = Example tool\n| type = Software tool\n| date = 2024\n| status = Active\n| label1 = Platform\n| data1 = Web\n| website = [https://example.org Official website]\n}}",
-      "description": "A miscellaneous subject expressed through stable fields and one labeled custom row."
-    }
-  ],
-  "documentation_footer_wikitext": "[[Category:Infobox templates]]",
   "render_fixtures": [
     {
+      "expected_scope_count": 1,
+      "forbid_literal_wikilinks": true,
       "id": "generic-subject",
       "invocation": "{{Infobox subject|name=Example tool|type=Software tool|date=2024|status=Active|label1=Platform|data1=Web}}",
-      "scope_class": "infobox",
-      "expected_scope_count": 1,
-      "forbid_literal_wikilinks": true
+      "scope_class": "infobox"
     },
     {
+      "expected_scope_count": 1,
+      "forbid_literal_wikilinks": true,
       "id": "source-authored-below",
       "invocation": "{{Infobox subject|name=Example tool|below=Source-authored supplemental note.}}",
-      "scope_class": "infobox-below",
-      "expected_scope_count": 1,
-      "forbid_literal_wikilinks": true
+      "scope_class": "infobox-below"
     },
     {
+      "expected_scope_count": 1,
+      "forbid_literal_wikilinks": true,
       "id": "storybook-subject",
       "invocation": "{{Infobox subject|name=Example character|type=Character|presentation=storybook|accent=amber|label1=Role|data1=Protagonist}}",
-      "scope_class": "infobox-presentation-storybook",
-      "expected_scope_count": 1,
-      "forbid_literal_wikilinks": true
+      "scope_class": "infobox-presentation-storybook"
     }
-  ]
+  ],
+  "schema_version": "template_engineering_contract_v1",
+  "template_title": "Template:Infobox subject"
 }

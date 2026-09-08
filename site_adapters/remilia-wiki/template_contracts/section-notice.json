@@ -1,50 +1,63 @@
 {
-  "schema_version": "template_engineering_contract_v1",
-  "template_title": "Template:Section notice",
-  "description": "Displays source-authored information that applies to one section without article-maintenance chrome.",
+  "description": "Display a source-authored notice that applies to one section.",
+  "documentation_footer_wikitext": "[[Category:Message templates]]",
+  "documentation_wikitext": "\n__NOTOC__\nDisplay a source-authored notice that applies to one section.\n\n== Usage ==\n\u003csyntaxhighlight lang=\"wikitext\"\u003e\n{{Section notice|kind=version|text=Applies to this version.}}\n\u003c/syntaxhighlight\u003e\n\nOmit optional parameters that do not apply. The parameter reference below lists supported names and aliases.\n\n",
+  "examples": [
+    {
+      "description": "A source-authored version scope for one section.",
+      "id": "version-scope",
+      "invocation": "{{Section notice|kind=version|text=This section applies only to versions 3.3.5 and later.}}"
+    }
+  ],
   "format": "block",
   "implementation": {
-    "body_wikitext": "<templatestyles src=\"Module:Message/styles.css\" /><div class=\"section-notice section-notice-{{#switch:{{lc:{{{kind|note}}}}}|outdated=outdated|version=version|note=note|#default=note}}\" role=\"note\">{{#if:{{{text|}}}|{{{text}}}|<span class=\"error\">Error: section notice text required</span>}}</div>",
-    "template_dependencies": [],
-    "module_dependencies": ["Module:Message/styles.css"]
+    "body_wikitext": "\u003ctemplatestyles src=\"Module:Message/styles.css\" /\u003e\u003cdiv class=\"section-notice section-notice-{{#switch:{{lc:{{{kind|note}}}}}|outdated=outdated|version=version|note=note|#default=note}}\" role=\"note\"\u003e{{#if:{{{text|}}}|{{{text}}}|\u003cspan class=\"error\"\u003eError: section notice text required\u003c/span\u003e}}\u003c/div\u003e",
+    "module_dependencies": [
+      "Module:Message/styles.css"
+    ],
+    "template_dependencies": []
   },
   "parameters": [
     {
-      "name": "kind",
-      "label": "Kind",
-      "description": "Semantic notice kind.",
-      "type": "string",
       "default": "note",
-      "suggested_values": ["note", "outdated", "version"]
+      "description": "Semantic notice kind.",
+      "label": "Kind",
+      "name": "kind",
+      "suggested_values": [
+        "note",
+        "outdated",
+        "version"
+      ],
+      "type": "string"
     },
     {
-      "name": "text",
-      "label": "Text",
       "description": "Source-authored section notice content.",
-      "type": "content",
-      "required": true
+      "label": "Text",
+      "name": "text",
+      "required": true,
+      "type": "content"
     }
   ],
-  "documentation_wikitext": "{{SHORTDESC:Section-scoped notice template}}\nUse this template for source-authored information that applies to one section. Preserve the source message; do not use it for archive status or compiler diagnostics.",
-  "examples": [
-    {
-      "id": "version-scope",
-      "invocation": "{{Section notice|kind=version|text=This section applies only to versions 3.3.5 and later.}}",
-      "description": "A source-authored version scope for one section."
-    }
-  ],
-  "documentation_footer_wikitext": "[[Category:Message templates]]",
   "render_fixtures": [
     {
-      "id": "version-scope",
-      "invocation": "{{Section notice|kind=version|text=This section applies only to versions 3.3.5 and later.}}",
-      "scope_class": "section-notice",
+      "dom_assertions": [
+        {
+          "attributes": {
+            "role": "note"
+          },
+          "max_count": 1,
+          "selector": ".section-notice",
+          "text_contains": "This section applies only to versions 3.3.5 and later."
+        }
+      ],
       "expected_scope_count": 1,
       "forbid_literal_wikilinks": true,
       "forbid_nested_interactive": true,
-      "dom_assertions": [
-        {"selector": ".section-notice", "max_count": 1, "attributes": {"role": "note"}, "text_contains": "This section applies only to versions 3.3.5 and later."}
-      ]
+      "id": "version-scope",
+      "invocation": "{{Section notice|kind=version|text=This section applies only to versions 3.3.5 and later.}}",
+      "scope_class": "section-notice"
     }
-  ]
+  ],
+  "schema_version": "template_engineering_contract_v1",
+  "template_title": "Template:Section notice"
 }

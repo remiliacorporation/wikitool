@@ -1,0 +1,210 @@
+{
+  "description": "Display video using a wiki file or verified archive sources.",
+  "documentation_footer_wikitext": "[[Category:Formatting templates]]",
+  "documentation_wikitext": "\nDisplay video using a wiki file or verified archive sources.\n\n== Usage ==\n\u003csyntaxhighlight lang=\"wikitext\"\u003e\n{{Video|file=Milady ape.mp4|label=Milady ape|width=400}}\n\u003c/syntaxhighlight\u003e\n\nFor an uploaded file, supply \u003ccode\u003efile\u003c/code\u003e (or positional parameter 1). MediaWiki supplies the file link and its native image or media presentation. Use ordinary \u003ccode\u003e\u003cnowiki\u003e[[File:...]]\u003c/nowiki\u003e\u003c/code\u003e syntax when a reusable template is unnecessary.\n\nFor a source held in an archive, omit \u003ccode\u003efile\u003c/code\u003e and supply the archive identity parameters below. Source filenames and SHA-256 values must match the archive's retained records; imports should fill these fields from verified source bindings. The storage backend does not change the template's purpose.\n\nPlayback requires reader interaction. Uploaded files use TimedMediaHandler. Ordered archive sources must occupy consecutive slots.\n\nLoop and muted apply to both source types. Source-poster options apply to archive sources; uploaded videos use thumbtime. The archive video backend must be installed before importing those sources.\n\n",
+  "examples": [
+    {
+      "description": "A video held by the native wiki file repository.",
+      "id": "wiki-file",
+      "invocation": "{{Video|file=Milady ape.mp4|label=Milady ape|width=400}}"
+    }
+  ],
+  "format": "block",
+  "implementation": {
+    "body_wikitext": "{{#invoke:Media|video}}",
+    "module_dependencies": [
+      "Module:Media"
+    ],
+    "template_dependencies": []
+  },
+  "parameters": [
+    {
+      "aliases": [
+        "1"
+      ],
+      "description": "Uploaded media filename, with or without File:. Use this or archive sources.",
+      "label": "Wiki file",
+      "name": "file",
+      "type": "wiki-file-name"
+    },
+    {
+      "description": "Archive site. Used with archive sources.",
+      "label": "Archive site",
+      "name": "site",
+      "type": "string"
+    },
+    {
+      "description": "Short descriptive label for the player, also displayed as its caption.",
+      "label": "Accessible label",
+      "name": "label",
+      "required": true,
+      "type": "string"
+    },
+    {
+      "description": "Maximum display width in whole pixels, from 1 to 16384.",
+      "label": "Display width",
+      "name": "width",
+      "type": "number"
+    },
+    {
+      "description": "Maximum display height in whole pixels, from 1 to 16384.",
+      "label": "Display height",
+      "name": "height",
+      "type": "number"
+    },
+    {
+      "description": "Boolean: yes/true/1 enables; no/false/0 disables. Playback still requires reader interaction.",
+      "label": "Loop",
+      "name": "loop",
+      "type": "boolean"
+    },
+    {
+      "description": "Boolean: yes/true/1 enables; no/false/0 disables. Playback still requires reader interaction.",
+      "label": "Muted",
+      "name": "muted",
+      "type": "boolean"
+    },
+    {
+      "description": "Poster SHA-256. Used with archive sources.",
+      "label": "Poster SHA-256",
+      "name": "poster_sha256",
+      "type": "string"
+    },
+    {
+      "description": "Poster source filename. Used with archive sources.",
+      "label": "Poster source filename",
+      "name": "poster_filename",
+      "type": "wiki-file-name"
+    },
+    {
+      "description": "Source 1 SHA-256. Used with archive sources.",
+      "label": "Source 1 SHA-256",
+      "name": "source1_sha256",
+      "type": "string"
+    },
+    {
+      "description": "Source 1 type. Used with archive sources.",
+      "label": "Source 1 type",
+      "name": "source1_type",
+      "suggested_values": [
+        "mp4",
+        "webm"
+      ],
+      "type": "string"
+    },
+    {
+      "description": "Source 1 filename. Used with archive sources.",
+      "label": "Source 1 filename",
+      "name": "source1_filename",
+      "type": "wiki-file-name"
+    },
+    {
+      "description": "Source 2 SHA-256. Used with archive sources.",
+      "label": "Source 2 SHA-256",
+      "name": "source2_sha256",
+      "type": "string"
+    },
+    {
+      "description": "Source 2 type. Used with archive sources.",
+      "label": "Source 2 type",
+      "name": "source2_type",
+      "suggested_values": [
+        "mp4",
+        "webm"
+      ],
+      "type": "string"
+    },
+    {
+      "description": "Source 2 filename. Used with archive sources.",
+      "label": "Source 2 filename",
+      "name": "source2_filename",
+      "type": "wiki-file-name"
+    },
+    {
+      "description": "Source 3 SHA-256. Used with archive sources.",
+      "label": "Source 3 SHA-256",
+      "name": "source3_sha256",
+      "type": "string"
+    },
+    {
+      "description": "Source 3 type. Used with archive sources.",
+      "label": "Source 3 type",
+      "name": "source3_type",
+      "suggested_values": [
+        "mp4",
+        "webm"
+      ],
+      "type": "string"
+    },
+    {
+      "description": "Source 3 filename. Used with archive sources.",
+      "label": "Source 3 filename",
+      "name": "source3_filename",
+      "type": "wiki-file-name"
+    },
+    {
+      "description": "Source 4 SHA-256. Used with archive sources.",
+      "label": "Source 4 SHA-256",
+      "name": "source4_sha256",
+      "type": "string"
+    },
+    {
+      "description": "Source 4 type. Used with archive sources.",
+      "label": "Source 4 type",
+      "name": "source4_type",
+      "suggested_values": [
+        "mp4",
+        "webm"
+      ],
+      "type": "string"
+    },
+    {
+      "description": "Source 4 filename. Used with archive sources.",
+      "label": "Source 4 filename",
+      "name": "source4_filename",
+      "type": "wiki-file-name"
+    },
+    {
+      "description": "Wiki files only: time in seconds or HH:MM:SS, passed to TimedMediaHandler.",
+      "label": "Start",
+      "name": "start",
+      "type": "string"
+    },
+    {
+      "description": "Wiki files only: time in seconds or HH:MM:SS, passed to TimedMediaHandler.",
+      "label": "End",
+      "name": "end",
+      "type": "string"
+    },
+    {
+      "description": "Wiki files only: time in seconds or HH:MM:SS, passed to TimedMediaHandler.",
+      "label": "Thumbtime",
+      "name": "thumbtime",
+      "type": "string"
+    }
+  ],
+  "render_fixtures": [
+    {
+      "dom_assertions": [
+        {
+          "attributes": {
+            "aria-label": "Milady ape"
+          },
+          "selector": ".remilia-media-video"
+        },
+        {
+          "selector": "video[controls]",
+          "max_count": 1
+        },
+        {
+          "selector": "video source[type='video/mp4']",
+          "max_count": 1
+        }
+      ],
+      "id": "wiki-file",
+      "invocation": "{{Video|file=Milady ape.mp4|label=Milady ape|width=400}}"
+    }
+  ],
+  "schema_version": "template_engineering_contract_v1",
+  "template_title": "Template:Video"
+}

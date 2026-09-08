@@ -1,0 +1,155 @@
+{
+  "description": "Display an image using a wiki file or verified archive sources.",
+  "documentation_footer_wikitext": "[[Category:Formatting templates]]",
+  "documentation_wikitext": "\nDisplay an image using a wiki file or verified archive sources.\n\n== Usage ==\n\u003csyntaxhighlight lang=\"wikitext\"\u003e\n{{Image|file=Milady.jpg|frame=thumb|alt=Milady avatar|caption=Milady avatar}}\n\u003c/syntaxhighlight\u003e\n\nFor an uploaded file, supply \u003ccode\u003efile\u003c/code\u003e (or positional parameter 1). MediaWiki supplies the file link and its native image or media presentation. Use ordinary \u003ccode\u003e\u003cnowiki\u003e[[File:...]]\u003c/nowiki\u003e\u003c/code\u003e syntax when a reusable template is unnecessary.\n\nFor a source held in an archive, omit \u003ccode\u003efile\u003c/code\u003e and supply the archive identity parameters below. Source filenames and SHA-256 values must match the archive's retained records; imports should fill these fields from verified source bindings. The storage backend does not change the template's purpose.\n\n",
+  "examples": [
+    {
+      "description": "An archived thumbnail with native alignment, parsed caption wikitext, filename-derived alt text, and a bounded display width.",
+      "id": "native-thumbnail",
+      "invocation": "{{Image\n| site = example-site\n| sha256 = 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n| filename = Diagram sample.png\n| frame = thumb\n| align = left\n| caption = Diagram with an ''emphasized'' caption.\n| width = 320\n}}"
+    }
+  ],
+  "format": "block",
+  "implementation": {
+    "body_wikitext": "{{#invoke:Media|image}}",
+    "module_dependencies": [
+      "Module:Media"
+    ],
+    "template_dependencies": []
+  },
+  "parameters": [
+    {
+      "aliases": [
+        "1"
+      ],
+      "description": "Uploaded media filename, with or without File:. Use this or archive sources.",
+      "label": "Wiki file",
+      "name": "file",
+      "suggested": true,
+      "type": "wiki-file-name"
+    },
+    {
+      "description": "Published PreservationArchive site slug.",
+      "label": "Archive site",
+      "name": "site",
+      "type": "string"
+    },
+    {
+      "description": "Exact lowercase SHA-256 of the archived image object.",
+      "label": "Object SHA-256",
+      "name": "sha256",
+      "type": "string"
+    },
+    {
+      "description": "Exact source-record filename for this occurrence; verified against the archived object and used for filename-derived alternative text.",
+      "label": "Source filename",
+      "name": "filename",
+      "type": "wiki-file-name"
+    },
+    {
+      "default": "none",
+      "description": "MediaWiki file presentation mode.",
+      "label": "Frame mode",
+      "name": "frame",
+      "suggested_values": [
+        "none",
+        "thumb",
+        "frame",
+        "frameless"
+      ],
+      "type": "string"
+    },
+    {
+      "description": "Optional MediaWiki horizontal alignment. Any explicit value uses block presentation; none requests an un-floated block, while omission keeps an unframed image inline.",
+      "label": "Alignment",
+      "name": "align",
+      "suggested_values": [
+        "left",
+        "right",
+        "center",
+        "none"
+      ],
+      "type": "string"
+    },
+    {
+      "description": "Optional wikitext caption. Block or framed presentation displays it; inline presentation uses its plain text as the file-link title and fallback alternative text.",
+      "label": "Caption",
+      "name": "caption",
+      "type": "content"
+    },
+    {
+      "description": "Alternative text. Omission or an empty non-decorative value derives accessible text from the filename.",
+      "label": "Alternative text",
+      "name": "alt",
+      "type": "string"
+    },
+    {
+      "default": "no",
+      "description": "Set to yes only for an evidenced decorative image and leave alt empty.",
+      "label": "Decorative",
+      "name": "decorative",
+      "type": "boolean"
+    },
+    {
+      "description": "Maximum display width in whole pixels, from 1 to 16384.",
+      "label": "Width",
+      "name": "width",
+      "type": "number"
+    },
+    {
+      "description": "Maximum display height in whole pixels, from 1 to 16384.",
+      "label": "Height",
+      "name": "height",
+      "type": "number"
+    }
+  ],
+  "render_fixtures": [
+    {
+      "expected_scope_count": 1,
+      "forbid_literal_wikilinks": true,
+      "id": "native-thumbnail-caption",
+      "invocation": "{{Image|site=wowdev|sha256=5ff8629e1d152716b341822d9f9b1aff98da2dc4c83e476d7701be25039f03d3|filename=WoWEditTextureTools2 VertexColor.jpg|frame=thumb|align=left|caption=VertexColor.|width=150}}",
+      "require_interactive_link": true,
+      "required_href_substrings": [
+        "Special:Archive/wowdev/File:WoWEditTextureTools2_VertexColor.jpg"
+      ],
+      "required_link_classes": [
+        "mw-file-description",
+        "mw-preservation-archive-image-link"
+      ],
+      "scope_class": "mw-halign-left"
+    },
+    {
+      "expected_scope_count": 1,
+      "forbid_literal_wikilinks": true,
+      "id": "native-frameless-left",
+      "invocation": "{{Image|site=wowdev|sha256=063996178b0df4e7f9b45a80de032d688daf51620e180f114302523258227f55|filename=AlastorPfp.png|frame=frameless|align=left}}",
+      "require_interactive_link": true,
+      "required_href_substrings": [
+        "Special:Archive/wowdev/File:AlastorPfp.png"
+      ],
+      "required_link_classes": [
+        "mw-file-description",
+        "mw-preservation-archive-image-link"
+      ],
+      "scope_class": "mw-halign-left"
+    },
+    {
+      "expected_scope_count": 1,
+      "forbid_literal_wikilinks": true,
+      "id": "native-inline-file",
+      "invocation": "{{Image|site=wowdev|sha256=aa04f80e07ee1bb98e754fd021fb47058ad5b029e7cdd678207147f034876401|filename=WoWEdit TopToolbar 1.jpg}}",
+      "require_interactive_link": true,
+      "required_href_substrings": [
+        "Special:Archive/wowdev/File:WoWEdit_TopToolbar_1.jpg"
+      ],
+      "required_link_classes": [
+        "mw-file-description",
+        "mw-preservation-archive-image-link"
+      ],
+      "scope_class": "mw-default-size"
+    }
+  ],
+  "schema_version": "template_engineering_contract_v1",
+  "template_title": "Template:Image"
+}

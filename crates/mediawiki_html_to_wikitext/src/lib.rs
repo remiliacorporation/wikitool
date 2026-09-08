@@ -1907,10 +1907,9 @@ impl Renderer<'_> {
             match child.value() {
                 Node::Text(text) => fallback.push_str(&escape_text(text.text.as_ref())),
                 Node::Element(_) => {
-                    if let Some(child) = ElementRef::wrap(child) {
-                        if child.value().name() != "source" {
-                            fallback.push_str(&self.render_element(child)?);
-                        }
+                    if let Some(child) = ElementRef::wrap(child)
+                        && child.value().name() != "source" {
+                        fallback.push_str(&self.render_element(child)?);
                     }
                 }
                 _ => {}
@@ -2989,15 +2988,15 @@ mod tests {
     fn timed_profiles() -> (SourceProfile, TargetProfile) {
         let (source, mut target) = profiled_policies();
         target.media_policy.non_image_media_policy = NonImageMediaPolicy::TemplateTimedMedia;
-        target.media_policy.audio_template = Some("Template:Preservation audio".into());
+        target.media_policy.audio_template = Some("Template:Audio".into());
         target.media_policy.video = Some(VideoPolicy {
-            template: "Template:Preservation video".into(),
+            template: "Template:Video".into(),
             max_sources: 4,
         });
         for (name, extra) in [
-            ("Preservation audio", vec!["transcript"]),
+            ("Audio", vec!["transcript"]),
             (
-                "Preservation video",
+                "Video",
                 vec![
                     "width",
                     "height",
@@ -3095,7 +3094,7 @@ mod tests {
         let output = compile_video_fixture(html, &occurrences).expect("retained video compiles");
         let text = &output.transformed.wikitext;
         assert!(
-            text.contains("{{Preservation video|site=fixture|label=A &#124; B"),
+            text.contains("{{Video|site=fixture|label=A &#124; B"),
             "{text}"
         );
         assert!(text.contains("|width=640|height=360|loop=1|muted=1|poster_sha256="));
@@ -3129,7 +3128,7 @@ mod tests {
             r#"<track kind="subtitles" src="/media/clip.vtt"></video>"#,
         );
         assert!(
-            compile_video_fixture(&captions, &[occurrence.clone()])
+            compile_video_fixture(&captions, std::slice::from_ref(&occurrence))
                 .err()
                 .expect("unadmitted captions must fail")
                 .to_string()
@@ -3191,8 +3190,8 @@ mod tests {
                 preserve_fragments: true,
             },
             MediaPolicy {
-                image_template: "Preservation image".to_string(),
-                audio_template: Some("Preservation audio".to_string()),
+                image_template: "Image".to_string(),
+                audio_template: Some("Audio".to_string()),
                 video: None,
                 max_audio_sources: 4,
                 empty_alt_policy: EmptyAltPolicy::Decorative,
@@ -3279,7 +3278,7 @@ mod tests {
         assert!(
             output
                 .wikitext
-                .contains("{{Preservation image|site=source|sha256=")
+                .contains("{{Image|site=source|sha256=")
         );
         assert!(
             output
@@ -3354,7 +3353,7 @@ mod tests {
                 preserve_fragments: true,
             },
             media_policy: MediaPolicy {
-                image_template: "Template:Preservation image".to_string(),
+                image_template: "Template:Image".to_string(),
                 audio_template: None,
                 video: None,
                 max_audio_sources: 4,
@@ -3376,7 +3375,7 @@ mod tests {
             authoring_policy: AuthoringPolicy {
                 allowed_templates: vec![
                     AllowedTemplate {
-                        title: "Template:Preservation image".to_string(),
+                        title: "Template:Image".to_string(),
                         parameters: BTreeSet::from([
                             "site".to_string(),
                             "sha256".to_string(),
@@ -3600,7 +3599,7 @@ mod tests {
             output
                 .transformed
                 .wikitext
-                .contains("{{Ambox\n| image_content = {{Preservation image|site=fixture|sha256=")
+                .contains("{{Ambox\n| image_content = {{Image|site=fixture|sha256=")
         );
         assert!(
             output

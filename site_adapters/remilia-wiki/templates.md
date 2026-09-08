@@ -16,7 +16,7 @@ one fits.
 
 Article-level source maintenance boxes map to `Template:Ambox` only after the source profile admits
 their observed table class and shape; section-scoped source notices use `Template:Section notice`.
-Use `image_content` for a source-neutral preservation image; `image` is reserved for a native wiki
+Use `image_content` for a native Image invocation; `image` is reserved for a native wiki
 file name. Preserve the source message text and leave its visual subtype at the target default
 unless captured semantics justify a more specific value.
 
@@ -27,10 +27,7 @@ dependency parity before scaffolding, inspect the preview plan, and execute the 
 fixtures against a representative MediaWiki runtime before accepting a template change. Parameter
 renames require explicit migration mappings; Wikitool does not rewrite transclusions implicitly.
 
-Preservation templates accept content-addressed archive identities and remain source-neutral.
-`Template:Preservation image` and `Template:Preservation audio` can render objects from any
-published PreservationArchive site generation. They must not embed TCRF-specific labels, routes,
-or template assumptions.
+`Template:Image`, `Template:Audio` and `Template:Video` are the canonical media interfaces. They accept wiki files or verified identities from any installed PreservationArchive site. Storage does not define a separate template family. Source converters must emit these native names; existing Preservation image/audio names are compatibility redirects. Use ordinary File syntax when a template adds no value. `Template:Unsupported content` makes an unconverted item visible without pretending to render it.
 
 Repeated source semantics should use the native target vocabulary when the mapping is exact.
 `Template:Section notice` represents section-scoped source messages without an asymmetric accent
