@@ -6,7 +6,7 @@ tests; lint, generated-reference checks, and native release checks retain their 
 
 ## CI regressions
 
-Run `wikitest suite wikitool-regressions --require-all`. Linux and Windows CI run its 11 isolated
+Run `wikitest suite wikitool-regressions --require-all`. Linux and Windows CI run its 12 isolated
 scenarios and require all 69 declared capability slices. It reuses the scenario definitions below,
 excluding HTML conversion, companion inspection, and the broader read-only MediaWiki campaign.
 Those additional scenarios remain in the comprehensive suite. No scenario definitions are copied

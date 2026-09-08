@@ -12,7 +12,8 @@
     {"capability": "template-projection", "steps": ["compile-profiled-html"]},
     {"capability": "source-fidelity", "steps": ["compile-profiled-html"]},
     {"capability": "capture-provenance", "steps": ["compile-profiled-html", "reject-stale-capture-receipt"]},
-    {"capability": "css-javascript-evidence", "steps": ["compile-profiled-html"]}
+    {"capability": "css-javascript-evidence", "steps": ["compile-profiled-html"]},
+    {"capability": "native-video-projection", "steps": ["compile-retained-video"]}
   ],
   "steps": [
     {
@@ -169,6 +170,115 @@
         ],
         "files": [
           {"kind": "missing", "path": ".wikitool/imports/Stale_Fixture_subject.wiki"}
+        ]
+      }
+    },
+    {
+      "action": "copy",
+      "id": "install-video-target-profile-json",
+      "source": "fixtures/video-target-profile.json",
+      "target": "profiles/video-target.json",
+      "sha256": "7ae94473c8f98e73e833e0f048a47062c56fa5f93ab2cca0fc921153ffac45ce"
+    },
+    {
+      "action": "copy",
+      "id": "install-video-html",
+      "source": "fixtures/video.html",
+      "target": "evidence/video.html",
+      "sha256": "335da85b3ee4388e61bf3e167d73c52164658647321846847f0df628791d4fdb"
+    },
+    {
+      "action": "copy",
+      "id": "install-video-capture-receipt-json",
+      "source": "fixtures/video-capture-receipt.json",
+      "target": "evidence/video-capture.json",
+      "sha256": "6caf15752f96a9371afa3e8b2912fc682f7760c987e6a453c0320b36fe27ead2"
+    },
+    {
+      "action": "copy",
+      "id": "install-video-media-inventory-json",
+      "source": "fixtures/video-media-inventory.json",
+      "target": "evidence/video-media.json",
+      "sha256": "1f432f27195c0adac6d444159a6e3b58e07dba35afd6417114fd9d57f11d4655"
+    },
+    {
+      "action": "command",
+      "id": "compile-retained-video",
+      "argv": [
+        "import",
+        "html-to-wikitext",
+        "evidence/video.html",
+        "--source-profile",
+        "profiles/source.json",
+        "--capture-receipt",
+        "evidence/video-capture.json",
+        "--target-profile",
+        "profiles/video-target.json",
+        "--canonical-title",
+        "Fixture subject",
+        "--canonical-url",
+        "https://fixture.example/wiki/Fixture_subject",
+        "--source-key",
+        "fixture",
+        "--media-scope",
+        "fixture",
+        "--media-inventory",
+        "evidence/video-media.json",
+        "--output",
+        ".wikitool/imports/Video.wiki",
+        "--format",
+        "json"
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout": [
+          {
+            "kind": "json_pointer_equals",
+            "pointer": "/status",
+            "value": "compiled"
+          },
+          {
+            "kind": "json_pointer_equals",
+            "pointer": "/coverage/archived_video_elements",
+            "value": 1
+          },
+          {
+            "kind": "json_pointer_equals",
+            "pointer": "/coverage/archived_video_locators",
+            "value": 3
+          },
+          {
+            "kind": "json_pointer_equals",
+            "pointer": "/media_occurrences_consumed",
+            "value": 3
+          }
+        ],
+        "files": [
+          {
+            "kind": "contains",
+            "path": ".wikitool/imports/Video.wiki",
+            "value": "{{Archive video|site=fixture|label=Unused scene"
+          },
+          {
+            "kind": "contains",
+            "path": ".wikitool/imports/Video.wiki",
+            "value": "|width=320|height=240|loop=1|muted=1|poster_sha256="
+          },
+          {
+            "kind": "contains",
+            "path": ".wikitool/imports/Video.wiki",
+            "value": "|source1_type=mp4|source1_filename=Scene.mp4"
+          },
+          {
+            "kind": "contains",
+            "path": ".wikitool/imports/Video.wiki",
+            "value": "|source2_type=webm|source2_filename=Scene.webm"
+          },
+          {
+            "kind": "contains",
+            "path": ".wikitool/imports/Video.wiki",
+            "value": "Original scene description."
+          }
         ]
       }
     }

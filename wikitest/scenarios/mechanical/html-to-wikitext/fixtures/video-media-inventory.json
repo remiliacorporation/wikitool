@@ -1,0 +1,57 @@
+{
+  "schema": "mediawiki.media-reference-inventory.v2",
+  "images": [],
+  "media_occurrences": [
+    {
+      "ordinal": 0,
+      "media_kind": "image",
+      "owner_element": "video",
+      "owner_ordinal": 0,
+      "element": "video",
+      "attribute": "poster",
+      "candidate_index": null,
+      "descriptor": null,
+      "source_url": "https://fixture.example/media/Poster.png",
+      "source_name": "Poster.png",
+      "alt": null,
+      "width": null,
+      "height": null,
+      "content_type": "image/png",
+      "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    {
+      "ordinal": 1,
+      "media_kind": "video",
+      "owner_element": "video",
+      "owner_ordinal": 0,
+      "element": "source",
+      "attribute": "src",
+      "candidate_index": 0,
+      "descriptor": "video/mp4",
+      "source_url": "https://fixture.example/media/Scene.mp4",
+      "source_name": "Scene.mp4",
+      "alt": null,
+      "width": null,
+      "height": null,
+      "content_type": "video/mp4",
+      "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+    },
+    {
+      "ordinal": 2,
+      "media_kind": "video",
+      "owner_element": "video",
+      "owner_ordinal": 0,
+      "element": "source",
+      "attribute": "src",
+      "candidate_index": 1,
+      "descriptor": "video/webm",
+      "source_url": "https://fixture.example/media/Scene.webm",
+      "source_name": "Scene.webm",
+      "alt": null,
+      "width": null,
+      "height": null,
+      "content_type": "video/webm",
+      "sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+    }
+  ]
+}

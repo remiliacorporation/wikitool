@@ -203,6 +203,8 @@ pub struct MediaPolicy {
     pub image_template: String,
     #[serde(default)]
     pub audio_template: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video: Option<VideoPolicy>,
     pub max_audio_sources: usize,
     pub empty_alt_policy: EmptyAltPolicy,
     pub emit_dimensions: bool,
@@ -222,6 +224,14 @@ pub enum NonImageMediaPolicy {
     Reject,
     ExternalLinks,
     TemplateAudio,
+    TemplateTimedMedia,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct VideoPolicy {
+    pub template: String,
+    pub max_sources: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -286,6 +296,10 @@ pub struct Coverage {
     pub external_media_locators: usize,
     pub archived_audio_elements: usize,
     pub archived_audio_locators: usize,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub archived_video_elements: usize,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub archived_video_locators: usize,
     pub native_infoboxes: usize,
     pub discarded_script_elements: usize,
     pub discarded_style_elements: usize,
@@ -675,7 +689,10 @@ fn validate_target_template_contract(target: &TargetProfile) -> Result<()> {
             "allowed media template is missing parameter {parameter}"
         );
     }
-    if target.media_policy.non_image_media_policy == NonImageMediaPolicy::TemplateAudio {
+    if matches!(
+        target.media_policy.non_image_media_policy,
+        NonImageMediaPolicy::TemplateAudio | NonImageMediaPolicy::TemplateTimedMedia
+    ) {
         let audio_template = target
             .media_policy
             .audio_template
@@ -705,6 +722,44 @@ fn validate_target_template_contract(target: &TargetProfile) -> Result<()> {
                 audio.parameters.contains(parameter),
                 "allowed audio template is missing parameter {parameter}"
             );
+        }
+    }
+    if target.media_policy.non_image_media_policy == NonImageMediaPolicy::TemplateTimedMedia {
+        let video = target
+            .media_policy
+            .video
+            .as_ref()
+            .context("template_timed_media requires video policy")?;
+        ensure!(
+            (1..=4).contains(&video.max_sources),
+            "video max_sources must be between 1 and 4"
+        );
+        validate_template_name(&video.template)?;
+        let allowed = allowed_template(target, &video.template)
+            .context("media video template is absent from allowed_templates")?;
+        for parameter in [
+            "site",
+            "label",
+            "width",
+            "height",
+            "loop",
+            "muted",
+            "poster_sha256",
+            "poster_filename",
+        ] {
+            ensure!(
+                allowed.parameters.contains(parameter),
+                "allowed video template is missing parameter {parameter}"
+            );
+        }
+        for index in 1..=video.max_sources {
+            for suffix in ["sha256", "type", "filename"] {
+                let parameter = format!("source{index}_{suffix}");
+                ensure!(
+                    allowed.parameters.contains(&parameter),
+                    "allowed video template is missing parameter {parameter}"
+                );
+            }
         }
     }
     if let Some(infobox) = &target.infobox {
@@ -1031,6 +1086,7 @@ fn convert_with_content_policy(
         image_owner_ordinal: 0,
         picture_owner_ordinal: 0,
         audio_owner_ordinal: 0,
+        video_owner_ordinal: 0,
         drop_selectors,
         drop_hidden: content_policy
             .map(|policy| policy.drop_hidden)
@@ -1078,6 +1134,7 @@ struct Renderer<'a> {
     image_owner_ordinal: usize,
     picture_owner_ordinal: usize,
     audio_owner_ordinal: usize,
+    video_owner_ordinal: usize,
     drop_selectors: Vec<Selector>,
     drop_hidden: bool,
     drop_embedded_app_elements: bool,
@@ -1182,15 +1239,29 @@ impl Renderer<'_> {
                 let ordinal = self.audio_owner_ordinal;
                 self.audio_owner_ordinal += 1;
                 if self.input.media_occurrences.is_some()
-                    && self.input.media_policy.non_image_media_policy
-                        == NonImageMediaPolicy::TemplateAudio
+                    && matches!(
+                        self.input.media_policy.non_image_media_policy,
+                        NonImageMediaPolicy::TemplateAudio
+                            | NonImageMediaPolicy::TemplateTimedMedia
+                    )
                 {
                     self.render_template_audio(element, ordinal)
                 } else {
                     self.render_external_media(element)
                 }
             }
-            "video" => self.render_external_media(element),
+            "video" => {
+                let ordinal = self.video_owner_ordinal;
+                self.video_owner_ordinal += 1;
+                if self.input.media_occurrences.is_some()
+                    && self.input.media_policy.non_image_media_policy
+                        == NonImageMediaPolicy::TemplateTimedMedia
+                {
+                    self.render_template_video(element, ordinal)
+                } else {
+                    self.render_external_media(element)
+                }
+            }
             "picture" => {
                 let ordinal = self.picture_owner_ordinal;
                 self.picture_owner_ordinal += 1;
@@ -1663,6 +1734,189 @@ impl Renderer<'_> {
         invocation.push_str("}}");
         self.coverage.archived_audio_elements += 1;
         Ok(block(&invocation))
+    }
+
+    fn render_template_video(
+        &mut self,
+        element: ElementRef<'_>,
+        owner_ordinal: usize,
+    ) -> Result<String> {
+        ensure!(
+            element
+                .select(&Selector::parse("track").unwrap())
+                .next()
+                .is_none(),
+            "retained video captions require an admitted track projection"
+        );
+        let policy = self
+            .input
+            .media_policy
+            .video
+            .as_ref()
+            .context("preservation video policy is absent")?
+            .clone();
+        let mut sources = Vec::new();
+        if let Some(src) = element.value().attr("src") {
+            let locator = normalized_http_url(&self.base_url, src)?;
+            let descriptor = media_type_descriptor(element.value().attr("type"));
+            let media = self.consume_v3_media(
+                "video",
+                "video",
+                owner_ordinal,
+                "video",
+                "src",
+                None,
+                descriptor.as_deref(),
+                &locator,
+            )?;
+            sources.push((media, element.value().attr("type")));
+        }
+        let poster = if let Some(src) = element
+            .value()
+            .attr("poster")
+            .filter(|value| !value.is_empty())
+        {
+            let locator = normalized_http_url(&self.base_url, src)?;
+            let media = self.consume_v3_media(
+                "image",
+                "video",
+                owner_ordinal,
+                "video",
+                "poster",
+                None,
+                None,
+                &locator,
+            )?;
+            ensure!(
+                matches!(
+                    media.content_type.as_str(),
+                    "image/png" | "image/jpeg" | "image/webp" | "image/gif"
+                ),
+                "unsupported retained video poster type"
+            );
+            Some(media)
+        } else {
+            None
+        };
+        for (index, source) in element
+            .select(&Selector::parse("source").unwrap())
+            .enumerate()
+        {
+            let locator = normalized_http_url(
+                &self.base_url,
+                source
+                    .value()
+                    .attr("src")
+                    .context("retained video source omitted src")?,
+            )?;
+            let descriptor = media_type_descriptor(source.value().attr("type"));
+            let media = self.consume_v3_media(
+                "video",
+                "video",
+                owner_ordinal,
+                "source",
+                "src",
+                Some(index),
+                descriptor.as_deref(),
+                &locator,
+            )?;
+            sources.push((media, source.value().attr("type")));
+        }
+        ensure!(
+            !sources.is_empty() && sources.len() <= policy.max_sources,
+            "retained video source count is outside the contract"
+        );
+        let label = element
+            .value()
+            .attr("aria-label")
+            .or_else(|| element.value().attr("title"))
+            .filter(|value| !value.trim().is_empty())
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| {
+                sources[0]
+                    .0
+                    .source_name
+                    .rsplit_once('.')
+                    .map(|(stem, _)| stem)
+                    .unwrap_or(&sources[0].0.source_name)
+                    .replace('_', " ")
+            });
+        ensure!(
+            !label.is_empty() && label.chars().count() <= 256,
+            "video label is empty or exceeds 256 characters"
+        );
+        let template = policy
+            .template
+            .strip_prefix("Template:")
+            .unwrap_or(&policy.template);
+        let mut invocation = format!(
+            "{{{{{template}|site={}|label={}",
+            escape_template_value(self.input.media_scope),
+            escape_template_value(&label)
+        );
+        for dimension in ["width", "height"] {
+            if let Some(value) = element.value().attr(dimension) {
+                let pixels: u32 = value.parse().context("video dimension is not an integer")?;
+                ensure!(
+                    (1..=16384).contains(&pixels),
+                    "video dimension is outside the contract"
+                );
+                invocation.push_str(&format!("|{dimension}={pixels}"));
+            }
+        }
+        for flag in ["loop", "muted"] {
+            if element.value().attr(flag).is_some() {
+                invocation.push_str(&format!("|{flag}=1"));
+            }
+        }
+        if let Some(media) = poster {
+            invocation.push_str(&format!(
+                "|poster_sha256={}|poster_filename={}",
+                media.sha256,
+                escape_template_value(&media.source_name)
+            ));
+            self.used_media.insert(media.source_url);
+            self.coverage.archived_video_locators += 1;
+        }
+        let mut source_digests = BTreeSet::new();
+        for (index, (media, declared)) in sources.iter().enumerate() {
+            ensure!(
+                source_digests.insert(&media.sha256),
+                "retained video repeats the same source object"
+            );
+            ensure!(
+                Url::parse(&media.source_url)?.fragment().is_none(),
+                "video time fragments require an admitted clip projection"
+            );
+            let source_type = video_source_type(*declared, &media.content_type)?;
+            invocation.push_str(&format!(
+                "|source{}_sha256={}|source{}_type={source_type}|source{}_filename={}",
+                index + 1,
+                media.sha256,
+                index + 1,
+                index + 1,
+                escape_template_value(&media.source_name)
+            ));
+            self.used_media.insert(media.source_url.clone());
+            self.coverage.archived_video_locators += 1;
+        }
+        invocation.push_str("}}");
+        self.coverage.archived_video_elements += 1;
+        let mut fallback = String::new();
+        for child in element.children() {
+            match child.value() {
+                Node::Text(text) => fallback.push_str(&escape_text(text.text.as_ref())),
+                Node::Element(_) => {
+                    if let Some(child) = ElementRef::wrap(child) {
+                        if child.value().name() != "source" {
+                            fallback.push_str(&self.render_element(child)?);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(block(&invocation) + &block(&fallback))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2666,6 +2920,36 @@ fn audio_source_type(declared: Option<&str>, captured: &str) -> Result<&'static 
     Ok(captured_type)
 }
 
+fn video_source_type(declared: Option<&str>, captured: &str) -> Result<&'static str> {
+    let captured = captured
+        .split(';')
+        .next()
+        .unwrap_or(captured)
+        .trim()
+        .to_ascii_lowercase();
+    let kind = match captured.as_str() {
+        "video/mp4" => "mp4",
+        "video/webm" => "webm",
+        _ => bail!("unsupported captured video content type {captured}"),
+    };
+    if let Some(declared) = declared {
+        ensure!(
+            declared
+                .split(';')
+                .next()
+                .unwrap_or(declared)
+                .trim()
+                .eq_ignore_ascii_case(&captured),
+            "video declared type differs from captured content type"
+        );
+    }
+    Ok(kind)
+}
+
+fn is_zero(value: &usize) -> bool {
+    *value == 0
+}
+
 fn source_audio_label(sources: &[(MediaReference, Option<&str>)]) -> Result<String> {
     let filename = sources
         .iter()
@@ -2701,6 +2985,182 @@ fn media_type_descriptor(value: Option<&str>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn timed_profiles() -> (SourceProfile, TargetProfile) {
+        let (source, mut target) = profiled_policies();
+        target.media_policy.non_image_media_policy = NonImageMediaPolicy::TemplateTimedMedia;
+        target.media_policy.audio_template = Some("Template:Preservation audio".into());
+        target.media_policy.video = Some(VideoPolicy {
+            template: "Template:Preservation video".into(),
+            max_sources: 4,
+        });
+        for (name, extra) in [
+            ("Preservation audio", vec!["transcript"]),
+            (
+                "Preservation video",
+                vec![
+                    "width",
+                    "height",
+                    "loop",
+                    "muted",
+                    "poster_sha256",
+                    "poster_filename",
+                ],
+            ),
+        ] {
+            let mut parameters = BTreeSet::from(["site".to_owned(), "label".to_owned()]);
+            parameters.extend(extra.into_iter().map(str::to_owned));
+            for index in 1..=4 {
+                for suffix in ["sha256", "type", "filename"] {
+                    parameters.insert(format!("source{index}_{suffix}"));
+                }
+            }
+            target
+                .authoring_policy
+                .allowed_templates
+                .push(AllowedTemplate {
+                    title: format!("Template:{name}"),
+                    parameters,
+                });
+        }
+        (source, target)
+    }
+
+    fn video_occurrence(
+        index: usize,
+        name: &str,
+        mime: &str,
+        element: &str,
+        attribute: &str,
+        candidate: Option<usize>,
+    ) -> MediaReference {
+        MediaReference {
+            ordinal: Some(index),
+            media_kind: Some(
+                if attribute == "poster" {
+                    "image"
+                } else {
+                    "video"
+                }
+                .into(),
+            ),
+            owner_element: Some("video".into()),
+            owner_ordinal: Some(0),
+            element: Some(element.into()),
+            attribute: Some(attribute.into()),
+            candidate_index: candidate,
+            descriptor: if attribute == "poster" {
+                None
+            } else {
+                Some(mime.into())
+            },
+            source_url: format!("https://source.example/media/{name}"),
+            source_name: name.into(),
+            alt: None,
+            width: None,
+            height: None,
+            content_type: mime.into(),
+            sha256: format!("{index:064x}"),
+        }
+    }
+
+    fn compile_video_fixture(
+        html: &str,
+        occurrences: &[MediaReference],
+    ) -> Result<ProfiledCompileOutput> {
+        let (source, target) = timed_profiles();
+        let receipt = capture_receipt(html, "https://source.example/Example");
+        compile_profiled(ProfiledCompileInput {
+            html,
+            canonical_title: "Example",
+            canonical_url: "https://source.example/Example",
+            source_key: "fixture",
+            media_scope: "fixture",
+            capture_receipt: &receipt,
+            source_profile: &source,
+            target_profile: &target,
+            images: &BTreeMap::new(),
+            media_occurrences: Some(occurrences),
+        })
+    }
+
+    #[test]
+    fn native_video_preserves_source_order_poster_dimensions_and_flags() {
+        let html = r#"<video src="/media/primary.mp4" type="video/mp4" poster="/media/still.png" width="640" height="360" loop muted aria-label="A | B"><source src="/media/fallback.webm" type="video/webm"></video>"#;
+        let occurrences = vec![
+            video_occurrence(0, "primary.mp4", "video/mp4", "video", "src", None),
+            video_occurrence(1, "still.png", "image/png", "video", "poster", None),
+            video_occurrence(2, "fallback.webm", "video/webm", "source", "src", Some(0)),
+        ];
+        let output = compile_video_fixture(html, &occurrences).expect("retained video compiles");
+        let text = &output.transformed.wikitext;
+        assert!(
+            text.contains("{{Preservation video|site=fixture|label=A &#124; B"),
+            "{text}"
+        );
+        assert!(text.contains("|width=640|height=360|loop=1|muted=1|poster_sha256="));
+        assert!(text.contains("|source1_type=mp4|source1_filename=primary.mp4"));
+        assert!(text.contains("|source2_type=webm|source2_filename=fallback.webm"));
+        assert_eq!(output.transformed.media_occurrences_consumed, 3);
+        assert_eq!(output.transformed.coverage.archived_video_elements, 1);
+        assert_eq!(output.transformed.coverage.archived_video_locators, 3);
+        assert_eq!(output.transformed.used_media.len(), 3);
+    }
+
+    #[test]
+    fn native_video_rejects_unbound_reordered_or_type_mismatched_media_and_caption_loss() {
+        let html = r#"<video><source src="/media/clip.mp4" type="video/mp4"></video>"#;
+        let occurrence = video_occurrence(0, "clip.mp4", "video/mp4", "source", "src", Some(0));
+        assert!(compile_video_fixture(html, &[]).is_err());
+        let mut drifted = occurrence.clone();
+        drifted.owner_ordinal = Some(1);
+        assert!(compile_video_fixture(html, &[drifted]).is_err());
+        let mut wrong = occurrence.clone();
+        wrong.content_type = "video/webm".into();
+        assert!(
+            compile_video_fixture(html, &[wrong])
+                .err()
+                .expect("type mismatch must fail")
+                .to_string()
+                .contains("declared type")
+        );
+        let captions = html.replace(
+            "</video>",
+            r#"<track kind="subtitles" src="/media/clip.vtt"></video>"#,
+        );
+        assert!(
+            compile_video_fixture(&captions, &[occurrence.clone()])
+                .err()
+                .expect("unadmitted captions must fail")
+                .to_string()
+                .contains("captions")
+        );
+        let dimensions = html.replace("<video>", "<video width=0>");
+        assert!(compile_video_fixture(&dimensions, &[occurrence]).is_err());
+    }
+
+    #[test]
+    fn native_video_retains_authored_fallback_text() {
+        let html = r#"<video><source src="/media/clip.mp4" type="video/mp4"><p>Captured <b>unused sequence</b>.</p></video>"#;
+        let occurrence = video_occurrence(0, "clip.mp4", "video/mp4", "source", "src", Some(0));
+        let output = compile_video_fixture(html, &[occurrence]).expect("video fallback compiles");
+        assert!(
+            output
+                .transformed
+                .wikitext
+                .contains("Captured '''unused sequence'''.")
+        );
+    }
+
+    #[test]
+    fn legacy_target_profile_bytes_do_not_gain_video_defaults() {
+        let (_, target) = profiled_policies();
+        let json = serde_json::to_value(target).unwrap();
+        assert!(json["media_policy"].get("video").is_none());
+        let json = serde_json::to_value(Coverage::default()).unwrap();
+        assert!(json.get("archived_video_elements").is_none());
+        assert!(json.get("archived_video_locators").is_none());
+    }
     use sha2::{Digest, Sha256};
 
     fn capture_receipt(html: &str, canonical_url: &str) -> HtmlCaptureReceipt {
@@ -2733,6 +3193,7 @@ mod tests {
             MediaPolicy {
                 image_template: "Preservation image".to_string(),
                 audio_template: Some("Preservation audio".to_string()),
+                video: None,
                 max_audio_sources: 4,
                 empty_alt_policy: EmptyAltPolicy::Decorative,
                 emit_dimensions: true,
@@ -2895,6 +3356,7 @@ mod tests {
             media_policy: MediaPolicy {
                 image_template: "Template:Preservation image".to_string(),
                 audio_template: None,
+                video: None,
                 max_audio_sources: 4,
                 empty_alt_policy: EmptyAltPolicy::Decorative,
                 emit_dimensions: true,

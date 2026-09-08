@@ -1209,6 +1209,7 @@ dependencies = [
  "percent-encoding",
  "scraper",
  "serde",
+ "serde_json",
  "sha2",
  "url",
 ]

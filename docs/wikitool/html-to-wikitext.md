@@ -64,3 +64,17 @@ example, can validate private bundle schemas through a producer adapter, supply 
 target profiles, admit a live Wikitool authoring surface, and emit an exact archive transform
 receipt. Producer schemas and archive commands are deliberately absent from the default `wikitool`
 executable; only the normalized profiled compiler is public there.
+
+For retained video, select `media_policy.non_image_media_policy: "template_timed_media"`
+and set `media_policy.video` to an admitted template and `max_sources` (1 through 4).
+This policy also supports the existing configured audio template. Ordered media
+evidence binds a video's own `src`, optional `poster`, and each child `source` to
+their captured object hashes. MP4 and WebM sources preserve fallback order; raster
+posters, pixel dimensions, loop and muted attributes become explicit template
+parameters. Authored fallback text remains in the output. Caption tracks and time
+fragments require a separate admitted projection and currently fail explicitly.
+
+The video template contract has `site`, `label`, `width`, `height`, `loop`, `muted`,
+`poster_sha256`, `poster_filename`, and one `sourceN_sha256`, `sourceN_type`,
+`sourceN_filename` triple per allowed source. Existing target profiles and their
+serialized hashes remain unchanged when video is not configured.

@@ -46,6 +46,7 @@
     "mutation-operator-closure",
     "mutation-reconciliation",
     "no-write-retry",
+    "native-video-projection",
     "orphan-analysis",
     "parser-lsp-config",
     "post-promotion-validation",
@@ -82,6 +83,7 @@
     "mechanical-agent-authoring-workflow",
     "mechanical-knowledge-workspace",
     "mechanical-template-contracts",
+    "mechanical-html-to-wikitext",
     "mechanical-docs-discovery",
     "mechanical-docs-discovery-api-error",
     "mechanical-docs-discovery-missing-evidence"
