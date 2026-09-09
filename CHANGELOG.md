@@ -6,8 +6,21 @@ The release workflow extracts the section for the requested version and fails if
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-09
+
+Automation consuming render checks must accept `render_check_v3`; MediaWiki test fixtures use `wikitest.mediawiki-fixture.v5`. Remilia adapter policy changes invalidate acceptance bound to earlier policy bytes. Durable sync and acceptance stores retain their existing migration rules.
+
+### Added
+
+- `push --progress` emits advisory JSON Lines on stderr during planning and between applied candidates. The final stdout report and durable mutation receipts remain authoritative; a processed candidate can still have a conflict, error, or ambiguous outcome.
+- MediaWiki 1.46 authoring documentation profiles are available, and the Remilia Wiki adapter selects the 1.46 site profile. Profiles select current upstream documentation and observed extensions; they do not pin every upstream document to a historical MediaWiki revision.
+- Render checks accept unpublished wikitext with an exact source hash, scoped DOM assertions, and nested-interactive checks. Server HTML evidence explicitly does not attest to browser layout.
+- Template migration plans inventory current local source bytes and return hash-bound parameter/template patches. Collisions, dynamic expressions, substitution, and overlapping changes require review; a local plan does not establish live retirement readiness.
+- Profiled HTML import supports declared portable infobox layouts and appearance mappings, semantic tabs, and retained video through explicitly configured native templates. Media objects remain bound to their capture inventory; unsupported captions, clip fragments and source types fail visibly.
+
 ### Changed
 
+- Release packs include hash-pinned Contextmink 0.11.0 and Papertiger 0.13.0. Both companions retain their own optional installation and state lifecycle. Contextmink JSON consumers must adopt JSON Pointer result paths and `json-select --at` in place of `--array`.
 - Documentation and skills now select workflows by the requested outcome instead of requiring session-wide refreshes, repeated interviews or publication steps for draft-only work. Template inspection distinguishes compact suggestions from complete local parameters and current live contracts. Remilia category creation is a separate researched taxonomy scope; adopting the updated adapter changes its policy identity and invalidates article acceptance bound to the previous policy.
 - Wikitest owns public CLI integration testing through the portable `wikitool-regressions` suite in Linux and Windows CI. The duplicate Bash/Python harness and separate docs-discovery/profile CLI tests are retired; focused invariant tests and native release/companion checks retain their own authorities. The broader capability and external prose campaigns remain opt-in.
 - MediaWiki fixtures use `wikitest.mediawiki-fixture.v5` with a complete `siteinfo_response`, allowing API-error and missing-evidence controls. The runner binds documentation discovery and fetches to the same observed loopback API.
@@ -15,6 +28,9 @@ The release workflow extracts the section for the requested version and fails if
 
 ### Fixed
 
+- Catalog rows, search indexes, and readiness metadata commit together. A failed rebuild preserves the previous generation instead of leaving new rows with stale readiness. Template catalog refreshes rebuild only their own search index, avoiding repeated article-index work.
+- A full pull can refresh current absence after an explicitly closed ambiguous creation, preserving the local candidate and closure receipt. Scoped reads cannot clear this invalidation.
+- Render checks preserve intentional literal wikitext in code examples while continuing to report parser-error markup.
 - Module documentation subpages no longer appear as executable modules or contribute example functions to the authoring surface. Fresh pulls store standard `/doc` pages as wikitext; existing Lua configuration subpages remain modules.
 - Template briefs count declarations from both TemplateData and wikitext, without double-counting shared names or treating caller-only arguments as declared parameters. Lua-backed templates no longer report zero declarations merely because they forward their arguments through Scribunto.
 - Wikitest rejects unknown fields inside steps and assertions, validates scenario fixture hashes and schemas before execution, and supports zero-request assertions and total method counts. Docs discovery, adapter profile defaults, catalog readiness, database reset, and documentation removal have structured public-CLI regressions.

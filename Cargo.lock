@@ -1202,7 +1202,7 @@ dependencies = [
 
 [[package]]
 name = "mediawiki_html_to_wikitext"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1216,7 +1216,7 @@ dependencies = [
 
 [[package]]
 name = "mediawiki_protocol"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "reqwest",
@@ -1228,7 +1228,7 @@ dependencies = [
 
 [[package]]
 name = "mediawiki_wikitext"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2761,7 +2761,7 @@ dependencies = [
 
 [[package]]
 name = "wikitest"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2779,7 +2779,7 @@ dependencies = [
 
 [[package]]
 name = "wikitool"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2796,7 +2796,7 @@ dependencies = [
 
 [[package]]
 name = "wikitool_core"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2824,7 +2824,7 @@ dependencies = [
 
 [[package]]
 name = "wikitool_publication"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "rusqlite",
@@ -2837,7 +2837,7 @@ dependencies = [
 
 [[package]]
 name = "wikitool_sync"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "mediawiki_protocol",

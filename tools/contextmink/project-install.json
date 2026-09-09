@@ -1,6 +1,6 @@
 {
   "schema": "contextmink.project_install.v2",
-  "contextmink_version": "0.10.0",
+  "contextmink_version": "0.11.0",
   "skill_target": "both",
   "managed_files": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": ".claude/skills/contextmink/SKILL.md",
-      "sha256": "8c945dd7c07503d66106cfb482dd8dfe34207a1f7cb4e8a576c7b5b90d2ab8f2"
+      "sha256": "4500a95f6ee0e759f4d7edf48393e3316febca32275cd5e309029b0d8a58a707"
     }
   ],
   "managed_gitignore_block": true,

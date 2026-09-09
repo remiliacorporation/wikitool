@@ -61,6 +61,17 @@ composition and bounded presentation. The core may report that a citation URL
 matches a configured review rule; it may not declare that source universally reliable or infer a
 prose verdict from the match.
 
+Catalog publication commits content rows, their search indexes and readiness metadata in
+one SQLite transaction. Template catalog publication owns only its authoring search index;
+it does not rebuild article indexes. These generations remain derived state and cannot
+replace durable sync or acceptance authority. Normalized content comparison and hashing
+are owned by `wikitool_sync` and reused by the application core.
+
+Push progress is an optional observer of the existing sync state machine. The CLI writes
+advisory JSON Lines to stderr, while final stdout and mutation receipts retain their own
+contracts. A processed candidate may fail or remain ambiguous. A broken progress stream
+does not interrupt an in-flight write or authorize retrying one.
+
 `crates/mediawiki_html_to_wikitext` is a separate library boundary for deterministic HTML5 DOM
 traversal into conservative MediaWiki primitives. It accepts caller-supplied source interpretation,
 target template policy, and a separately verified media inventory. The source profile declares
