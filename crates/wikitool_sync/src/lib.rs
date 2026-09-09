@@ -7,10 +7,8 @@ use rusqlite::{Connection, params};
 use serde::Serialize;
 use similar::TextDiff;
 
-use crate::support::{
-    compute_sha256, compute_wiki_sync_hash, normalize_path, normalize_wiki_content, parse_redirect,
-    table_exists, unix_timestamp,
-};
+use crate::support::{compute_sha256, normalize_path, table_exists, unix_timestamp};
+pub use crate::support::{compute_wiki_sync_hash, normalize_wiki_content, parse_redirect};
 pub use mediawiki_protocol::{
     DeleteLogEntry, DeleteOutcome, DeleteReceipt, EditConstraint, EditReceipt, NS_CATEGORY,
     NS_MAIN, NS_MEDIAWIKI, NS_MODULE, NS_TEMPLATE, PageTimestampInfo, RemotePage,

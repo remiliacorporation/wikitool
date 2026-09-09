@@ -48,33 +48,8 @@ pub fn compute_sha256(content: &str) -> String {
     output
 }
 
-pub fn normalize_wiki_content(content: &str) -> String {
-    content
-        .replace("\r\n", "\n")
-        .replace('\r', "\n")
-        .trim_end()
-        .to_string()
-}
-
-pub fn compute_wiki_sync_hash(content: &str) -> String {
-    compute_hash(&normalize_wiki_content(content))
-}
-
-pub fn parse_redirect(content: &str) -> (bool, Option<String>) {
-    let trimmed = content.trim();
-    if !trimmed.to_ascii_uppercase().starts_with("#REDIRECT") {
-        return (false, None);
-    }
-    if let Some(start) = trimmed.find("[[")
-        && let Some(end) = trimmed[start + 2..].find("]]")
-    {
-        let target = trimmed[start + 2..start + 2 + end].trim().to_string();
-        if !target.is_empty() {
-            return (true, Some(target));
-        }
-    }
-    (true, None)
-}
+// Synchronization owns MediaWiki content comparison and redirect recognition.
+pub use wikitool_sync::{compute_wiki_sync_hash, normalize_wiki_content, parse_redirect};
 
 pub fn normalize_path(path: impl AsRef<Path>) -> String {
     path.as_ref().to_string_lossy().replace('\\', "/")

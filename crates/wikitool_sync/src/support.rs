@@ -59,6 +59,9 @@ pub fn compute_sha256(content: &str) -> String {
 /// sync-state hashing — never for content-addressed cache keys, which must hash exact
 /// bytes.
 pub fn normalize_wiki_content(content: &str) -> String {
+    if !content.contains('\r') {
+        return content.trim_end().to_owned();
+    }
     content
         .replace("\r\n", "\n")
         .replace('\r', "\n")
@@ -70,12 +73,18 @@ pub fn normalize_wiki_content(content: &str) -> String {
 /// form, so trailing-newline and line-ending differences between a local file and the
 /// saved page do not register as spurious modifications.
 pub fn compute_wiki_sync_hash(content: &str) -> String {
+    if !content.contains('\r') {
+        return compute_hash(content.trim_end());
+    }
     compute_hash(&normalize_wiki_content(content))
 }
 
 pub fn parse_redirect(content: &str) -> (bool, Option<String>) {
     let trimmed = content.trim();
-    if !trimmed.to_ascii_uppercase().starts_with("#REDIRECT") {
+    if !trimmed
+        .get(..9)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("#REDIRECT"))
+    {
         return (false, None);
     }
     if let Some(start) = trimmed.find("[[")
