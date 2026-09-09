@@ -1889,6 +1889,52 @@ fn push_advances_state_only_after_exact_revision_content_is_verified() {
 }
 
 #[test]
+fn push_progress_counts_processed_candidates_without_attesting_success() {
+    for ambiguous in [false, true] {
+        let (_temp, paths, mut api) = modified_alpha_fixture();
+        let mut options = write_push_options("observe batch");
+        options.dry_run = true;
+        let preview = push_to_remote_with_api(&paths, &options, &mut api, None).unwrap();
+        options.dry_run = false;
+        options.apply_plan_id = preview.plan_id;
+        if ambiguous {
+            api.edit_error_after_apply = Some("connection lost".into());
+        }
+        let mut events = Vec::new();
+        let report = super::push_to_remote_with_progress(
+            &paths,
+            &options,
+            &default_target(),
+            &mut api,
+            Some(("bot", "pass")),
+            &ProvenancePublicationPreflight,
+            &mut |event| events.push(event),
+        )
+        .unwrap();
+        assert_eq!(
+            events.iter().map(|event| event.phase).collect::<Vec<_>>(),
+            vec!["planning", "applying", "processed"]
+        );
+        assert_eq!(events[1].current_title.as_deref(), Some("Alpha"));
+        assert_eq!(events[1].completed, 0);
+        assert_eq!(events[2].completed, 1);
+        assert_eq!(events[2].total, Some(1));
+        assert_eq!(
+            api.edited_pages.len(),
+            1,
+            "observation must never replay a write"
+        );
+        assert_eq!(report.success, !ambiguous);
+        if ambiguous {
+            assert_eq!(
+                stored_edit_mutation(&paths, "Alpha").phase,
+                "outcome_ambiguous"
+            );
+        }
+    }
+}
+
+#[test]
 fn push_apply_rejects_stale_content_bound_plan_without_writing() {
     let (_temp, paths, mut api) = modified_alpha_fixture();
     let push_target = default_target();

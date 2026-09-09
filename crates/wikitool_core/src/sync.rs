@@ -132,6 +132,16 @@ pub fn push_to_remote_with_config(
     config: &WikiConfig,
     preflight: &dyn PublicationPreflight,
 ) -> Result<PushReport> {
+    push_to_remote_with_config_and_progress(paths, options, config, preflight, &mut |_| {})
+}
+
+pub fn push_to_remote_with_config_and_progress(
+    paths: &ResolvedPaths,
+    options: &PushOptions,
+    config: &WikiConfig,
+    preflight: &dyn PublicationPreflight,
+    progress: &mut dyn FnMut(wikitool_sync::PushProgress),
+) -> Result<PushReport> {
     let sync_paths = sync_project_paths(paths)?;
     let target = target_from_config(config)?;
     let mut client = client_from_wikitool_config(config)?;
@@ -144,7 +154,7 @@ pub fn push_to_remote_with_config(
             .map_err(|_| anyhow::anyhow!("WIKITOOL_BOT_PASS is required for push"))?;
         Some((username, password))
     };
-    wikitool_sync::push_to_remote_with_api_and_preflight(
+    wikitool_sync::push_to_remote_with_progress(
         &sync_paths,
         options,
         &target,
@@ -153,6 +163,7 @@ pub fn push_to_remote_with_config(
             .as_ref()
             .map(|(user, password)| (user.as_str(), password.as_str())),
         preflight,
+        progress,
     )
 }
 

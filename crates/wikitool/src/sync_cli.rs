@@ -73,6 +73,11 @@ pub(crate) struct PullArgs {
 pub(crate) struct PushArgs {
     #[arg(
         long,
+        help = "Emit advisory JSON Lines progress on stderr; stdout keeps its final report"
+    )]
+    pub(crate) progress: bool,
+    #[arg(
+        long,
         value_name = "TEXT",
         help = "Edit summary for the bound push plan"
     )]

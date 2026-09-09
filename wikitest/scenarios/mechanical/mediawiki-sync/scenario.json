@@ -144,7 +144,7 @@
     {
       "action": "command",
       "id": "apply-force-revision-bound-push",
-      "argv": ["push", "--force", "--all", "--templates", "--summary", "Wikitest revision-bound push", "--apply", "${REVISION_PUSH_PLAN_ID}", "--format", "json"],
+      "argv": ["push", "--force", "--all", "--templates", "--summary", "Wikitest revision-bound push", "--apply", "${REVISION_PUSH_PLAN_ID}", "--format", "json", "--progress"],
       "environment": {
         "WIKITOOL_BOT_USER": "wikitest-bot",
         "WIKITOOL_BOT_PASS": "wikitest-secret"
@@ -155,6 +155,11 @@
           {"kind": "json_pointer_equals", "pointer": "/report/success", "value": true},
           {"kind": "json_pointer_equals", "pointer": "/report/created", "value": 1},
           {"kind": "json_pointer_equals", "pointer": "/report/updated", "value": 1}
+        ],
+        "stderr": [
+          {"kind": "contains", "value": "\"schema\":\"wikitool.push-progress.v1\""},
+          {"kind": "contains", "value": "\"phase\":\"applying\",\"completed\":1,\"total\":2"},
+          {"kind": "contains", "value": "\"phase\":\"processed\",\"completed\":2,\"total\":2"}
         ]
       }
     },

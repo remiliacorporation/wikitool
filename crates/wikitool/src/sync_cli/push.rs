@@ -1,8 +1,11 @@
 use anyhow::{Result, bail};
 use serde::Serialize;
+use std::io::Write;
 use wikitool_core::publication::encyclopedic_preflight;
 use wikitool_core::runtime::{ensure_runtime_ready_for_sync, inspect_runtime};
-use wikitool_core::sync::{PushOptions, PushReport, SyncSelection, push_to_remote_with_config};
+use wikitool_core::sync::{
+    PushOptions, PushReport, SyncSelection, push_to_remote_with_config_and_progress,
+};
 
 use crate::cli_support::{normalize_path, resolve_runtime_with_config};
 use crate::{LOCAL_DB_POLICY_MESSAGE, RuntimeOptions};
@@ -37,7 +40,9 @@ pub(crate) fn run_push(runtime: &RuntimeOptions, args: PushArgs) -> Result<()> {
     let dry_run = args.apply.is_none();
 
     let preflight = encyclopedic_preflight(&paths)?;
-    let report = push_to_remote_with_config(
+    let mut progress_enabled = args.progress;
+    let mut stderr = std::io::stderr().lock();
+    let report = push_to_remote_with_config_and_progress(
         &paths,
         &PushOptions {
             summary: summary.clone(),
@@ -52,6 +57,16 @@ pub(crate) fn run_push(runtime: &RuntimeOptions, args: PushArgs) -> Result<()> {
         },
         &config,
         &preflight,
+        &mut |event| {
+            if progress_enabled {
+                // Advisory output must never interrupt a durable mutation or turn
+                // a closed stderr pipe into a reason to replay a remote write.
+                progress_enabled = serde_json::to_writer(&mut stderr, &event)
+                    .and_then(|()| stderr.write_all(b"\n").map_err(serde_json::Error::io))
+                    .and_then(|()| stderr.flush().map_err(serde_json::Error::io))
+                    .is_ok();
+            }
+        },
     )?;
 
     if args.format.is_json() {

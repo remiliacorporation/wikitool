@@ -47,11 +47,51 @@ pub fn push_to_remote_with_api_and_preflight<A: WikiWriteApi>(
     credentials: Option<(&str, &str)>,
     preflight: &dyn PublicationPreflight,
 ) -> Result<PushReport> {
+    push_to_remote_with_progress(
+        paths,
+        options,
+        target,
+        api,
+        credentials,
+        preflight,
+        &mut |_| {},
+    )
+}
+
+/// Observe a push without adding state or changing its mutation/recovery contract.
+/// Completion counts processed candidates, including refused or ambiguous outcomes;
+/// only the final report and durable receipts establish write success.
+#[derive(Debug, Clone, Serialize)]
+pub struct PushProgress {
+    pub schema: &'static str,
+    pub phase: &'static str,
+    pub completed: usize,
+    pub total: Option<usize>,
+    pub current_title: Option<String>,
+}
+
+pub fn push_to_remote_with_progress<A: WikiWriteApi>(
+    paths: &SyncProjectPaths,
+    options: &PushOptions,
+    target: &SyncTargetIdentity,
+    api: &mut A,
+    credentials: Option<(&str, &str)>,
+    preflight: &dyn PublicationPreflight,
+    progress: &mut dyn FnMut(PushProgress),
+) -> Result<PushReport> {
     if options.summary.trim().is_empty() {
         bail!("push requires a non-empty summary");
     }
     validate_push_intent(options)?;
     target.ensure_matches_api(api.target_api_url())?;
+
+    progress(PushProgress {
+        schema: "wikitool.push-progress.v1",
+        phase: "planning",
+        completed: 0,
+        total: None,
+        current_title: None,
+    });
 
     let Some(mut context) = collect_sync_planning_context(
         paths,
@@ -205,7 +245,14 @@ pub fn push_to_remote_with_api_and_preflight<A: WikiWriteApi>(
         .ok_or_else(|| anyhow::anyhow!("push credentials are required for write mode"))?;
     api.login(username, password)?;
 
-    for change in &context.changes {
+    for (completed, change) in context.changes.iter().enumerate() {
+        progress(PushProgress {
+            schema: "wikitool.push-progress.v1",
+            phase: "applying",
+            completed,
+            total: Some(context.changes.len()),
+            current_title: Some(change.title.clone()),
+        });
         if change.remote_conflict && !options.force {
             report.conflicts.push(change.title.clone());
             report.pages.push(
@@ -1014,6 +1061,13 @@ pub fn push_to_remote_with_api_and_preflight<A: WikiWriteApi>(
 
     report.request_count = api.request_count();
     report.success = report.errors.is_empty() && report.conflicts.is_empty();
+    progress(PushProgress {
+        schema: "wikitool.push-progress.v1",
+        phase: "processed",
+        completed: context.changes.len(),
+        total: Some(context.changes.len()),
+        current_title: None,
+    });
     Ok(report)
 }
 

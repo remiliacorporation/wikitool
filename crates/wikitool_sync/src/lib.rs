@@ -44,7 +44,7 @@ pub use mutations::{
 };
 pub use planning::{collect_changed_article_paths, plan_sync_changes, plan_sync_changes_with_api};
 pub use pull::pull_from_remote_with_api;
-pub use push::push_to_remote_with_api_and_preflight;
+pub use push::{PushProgress, push_to_remote_with_api_and_preflight, push_to_remote_with_progress};
 pub use remote::{
     RemoteDeleteError, apply_remote_delete_with_api, plan_remote_delete_with_api,
     reconcile_delete_mutation_with_api,

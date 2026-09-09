@@ -143,14 +143,15 @@ Push local changes to the live wiki
 Usage: wikitool push [OPTIONS] --summary <TEXT>
 
 Options:
+      --progress             Emit advisory JSON Lines progress on stderr; stdout keeps its final report
       --project-root <PATH>
+      --data-dir <PATH>
       --summary <TEXT>       Edit summary for the bound push plan
       --apply <PLAN_ID>      Apply the exact plan ID returned by a current preview; without this option the command only previews
-      --data-dir <PATH>
       --config <PATH>
+      --diagnostics          Print resolved runtime diagnostics
       --force                Force push even when remote timestamps diverge
       --delete               Propagate local deletions to remote wiki pages
-      --diagnostics          Print resolved runtime diagnostics
       --templates            Include template/module/mediawiki namespaces
       --categories           Limit push to Category namespace pages
       --all                  Explicitly include every eligible current change (cannot be combined with title/path selection)
