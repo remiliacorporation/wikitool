@@ -12,7 +12,7 @@ use crate::catalog::templates::{
 };
 use crate::content_store::parsing::{
     estimate_tokens, normalize_spaces, normalize_template_parameter_key, open_indexed_connection,
-    rebuild_fts_index, serialize_string_list,
+    rebuild_authoring_fts_index, serialize_string_list,
 };
 use crate::filesystem::{ScanOptions, scan_files};
 use crate::runtime::ResolvedPaths;

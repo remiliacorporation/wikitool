@@ -413,7 +413,7 @@ pub(crate) fn fts_table_exists(connection: &Connection, table_name: &str) -> boo
     table_exists(connection, table_name).unwrap_or(false)
 }
 
-pub(crate) fn rebuild_fts_index(connection: &Connection) -> Result<()> {
+pub(crate) fn rebuild_content_fts_index(connection: &Connection) -> Result<()> {
     if fts_table_exists(connection, "indexed_pages_fts") {
         connection
             .execute_batch("INSERT INTO indexed_pages_fts(indexed_pages_fts) VALUES('rebuild')")
@@ -447,6 +447,10 @@ pub(crate) fn rebuild_fts_index(connection: &Connection) -> Result<()> {
             )
             .context("failed to rebuild indexed_page_term_profiles_fts")?;
     }
+    Ok(())
+}
+
+pub(crate) fn rebuild_authoring_fts_index(connection: &Connection) -> Result<()> {
     if fts_table_exists(connection, "authoring_contracts_fts") {
         connection
             .execute_batch(

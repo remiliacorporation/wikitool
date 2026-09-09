@@ -47,10 +47,10 @@ pub(super) fn store_template_catalog(
             )
         })?;
     store_authoring_contract_index(&transaction, catalog)?;
+    rebuild_authoring_fts_index(&transaction)?;
     transaction
         .commit()
         .context("failed to commit template catalog transaction")?;
-    rebuild_fts_index(&connection)?;
 
     Ok(())
 }

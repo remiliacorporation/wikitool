@@ -618,14 +618,11 @@ pub fn rebuild_index(paths: &ResolvedPaths, options: &ScanOptions) -> Result<Reb
     drop(link_statement);
     drop(page_statement);
 
-    transaction
-        .commit()
-        .context("failed to commit index rebuild transaction")?;
-
-    // Rebuild FTS5 index if the virtual table exists from schema bootstrap.
-    rebuild_fts_index(&connection)?;
+    // Rows, search and readiness describe one generation. Publishing any one
+    // before the others can leave a failed build looking current on the next run.
+    rebuild_content_fts_index(&transaction)?;
     record_content_index_artifact(
-        &connection,
+        &transaction,
         inserted_rows,
         &json!({
             "inserted_rows": inserted_rows,
@@ -638,6 +635,9 @@ pub fn rebuild_index(paths: &ResolvedPaths, options: &ScanOptions) -> Result<Reb
         })
         .to_string(),
     )?;
+    transaction
+        .commit()
+        .context("failed to commit index rebuild transaction")?;
 
     Ok(RebuildReport {
         db_path: normalize_path(&paths.db_path),
