@@ -548,6 +548,22 @@ const AUTHORING_EXTENSION_SEEDS: &[&str] = &[
 
 pub(super) const DOCS_PROFILES: &[DocsProfileDefinition] = &[
     DocsProfileDefinition {
+        id: "mw-1.46-authoring",
+        label: "MediaWiki 1.46 authoring reference",
+        source_version: "1.46",
+        include_installed_extensions_by_default: false,
+        page_seeds: AUTHORING_PAGE_SEEDS,
+        extension_seeds: AUTHORING_EXTENSION_SEEDS,
+    },
+    DocsProfileDefinition {
+        id: "mw-1.46-site-authoring",
+        label: "MediaWiki 1.46 site authoring reference",
+        source_version: "1.46",
+        include_installed_extensions_by_default: true,
+        page_seeds: AUTHORING_PAGE_SEEDS,
+        extension_seeds: AUTHORING_EXTENSION_SEEDS,
+    },
+    DocsProfileDefinition {
         id: "mw-1.44-authoring",
         label: "MediaWiki 1.44 authoring reference",
         source_version: "1.44",
