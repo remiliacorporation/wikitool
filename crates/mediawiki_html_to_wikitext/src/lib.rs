@@ -1908,7 +1908,8 @@ impl Renderer<'_> {
                 Node::Text(text) => fallback.push_str(&escape_text(text.text.as_ref())),
                 Node::Element(_) => {
                     if let Some(child) = ElementRef::wrap(child)
-                        && child.value().name() != "source" {
+                        && child.value().name() != "source"
+                    {
                         fallback.push_str(&self.render_element(child)?);
                     }
                 }
@@ -3275,11 +3276,7 @@ mod tests {
         })
         .expect("convert captured image");
 
-        assert!(
-            output
-                .wikitext
-                .contains("{{Image|site=source|sha256=")
-        );
+        assert!(output.wikitext.contains("{{Image|site=source|sha256="));
         assert!(
             output
                 .wikitext
