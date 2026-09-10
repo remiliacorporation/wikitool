@@ -2365,8 +2365,6 @@ impl Renderer<'_> {
             return false;
         }
         let mut title_rows = 0_usize;
-        let mut estimated_fields = 0_usize;
-        let mut trailing_break_allowance = 0_usize;
         for row in element.select(&row_selector).filter(|row| {
             row.ancestors()
                 .filter_map(ElementRef::wrap)
@@ -2403,20 +2401,11 @@ impl Renderer<'_> {
                 }
                 continue;
             }
-            let image_selector = Selector::parse("img").expect("static img selector");
-            if cells[0].select(&image_selector).next().is_some()
-                && cells[0].text().all(|text| text.trim().is_empty())
-            {
-                continue;
-            }
-            let br_selector = Selector::parse("br").expect("static br selector");
-            let paragraph_selector = Selector::parse("p").expect("static paragraph selector");
-            let breaks = cells[0].select(&br_selector).count();
-            let paragraphs = cells[0].select(&paragraph_selector).count().max(1);
-            estimated_fields += breaks + paragraphs;
-            trailing_break_allowance += paragraphs;
         }
-        title_rows == 1 && estimated_fields <= policy.max_custom_fields + trailing_break_allowance
+        // Line breaks also delimit notes and navigation, not just labelled
+        // fields. Count actual fields while rendering and preserve overflow in
+        // the target's explicit continuation area.
+        title_rows == 1
     }
 
     fn render_profiled_infobox(
@@ -2486,7 +2475,15 @@ impl Renderer<'_> {
                             && !label.trim().is_empty()
                             && !data.trim().is_empty()
                         {
-                            fields.push((label.trim().to_string(), data.trim().to_string()));
+                            if fields.len() < policy.max_custom_fields
+                                && unlabeled_fields.is_empty()
+                            {
+                                fields.push((label.trim().to_string(), data.trim().to_string()));
+                            } else {
+                                // Keep the continuation in source order, including
+                                // labelled rows following explanatory material.
+                                unlabeled_fields.push(line.to_string());
+                            }
                         } else {
                             unlabeled_fields.push(line.to_string());
                         }
@@ -2985,6 +2982,49 @@ fn media_type_descriptor(value: Option<&str>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn table_infobox_preserves_notes_and_overflow_without_field_estimates() {
+        let (source, target) = profiled_policies();
+        for body in [
+            "<b>First</b>: one<br><b>Second</b>: two<br><b>Third</b>: three<br>Note A<br>Note B<br>Note C<br>Note D",
+            "<b>First</b>: one<br>Note A<br><b>Second</b>: two<br>Note B<br>Note C<br>Note D",
+        ] {
+            let html = format!(
+                "<table class='breakout'><tr class='breakouttitle'><th>Game</th></tr><tr><td>{body}</td></tr></table>"
+            );
+            let receipt = capture_receipt(&html, "https://source.example/Example");
+            let output = compile_profiled(ProfiledCompileInput {
+                html: &html,
+                canonical_title: "Example",
+                canonical_url: "https://source.example/Example",
+                source_key: "fixture",
+                media_scope: "fixture",
+                capture_receipt: &receipt,
+                source_profile: &source,
+                target_profile: &target,
+                images: &BTreeMap::new(),
+                media_occurrences: None,
+            })
+            .unwrap()
+            .transformed;
+            assert_eq!(output.coverage.native_infoboxes, 1);
+            assert!(output.wikitext.contains("{{Infobox subject"));
+            assert!(output.wikitext.contains("| label1 = First"));
+            assert!(output.wikitext.contains("| below = "));
+            assert!(output.wikitext.contains("Note D"));
+            if body.contains("Third") {
+                assert!(output.wikitext.contains("'''Third''': three<br>Note A"));
+                assert!(!output.wikitext.contains("label3"));
+            } else {
+                assert!(
+                    output
+                        .wikitext
+                        .contains("Note A<br>'''Second''': two<br>Note B")
+                );
+            }
+        }
+    }
 
     fn timed_profiles() -> (SourceProfile, TargetProfile) {
         let (source, mut target) = profiled_policies();

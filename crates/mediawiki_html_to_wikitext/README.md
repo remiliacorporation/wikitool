@@ -17,6 +17,12 @@ parameter vocabulary. Unlabeled infobox content uses an explicit target content 
 than a fabricated label, and unlabeled audio derives its accessible label from captured source
 filenames rather than generating article prose.
 
+For single-cell labelled infoboxes, actual labelled entries fill the target's
+numbered fields. Notes, navigation and field overflow use its explicit continuation
+parameter in source order. Line breaks are not treated as an estimate of field
+count. A target without a continuation parameter refuses that content rather than
+dropping it or inventing numbered fields beyond the declared interface.
+
 Generic webpage adaptation is semantic, not visual replication. A source profile may select one
 meaningful content root, discard source-specific chrome or animation regions with explicit CSS
 selectors, remove hidden duplicates, and drop embedded app elements. Every profiled compile requires
