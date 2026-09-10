@@ -1167,6 +1167,17 @@ impl Renderer<'_> {
             return Ok(String::new());
         }
         let name = element.value().name();
+        // Inline source anchors include Cite's forward and return destinations.
+        // List item anchors are handled in render_list, which visits their children directly.
+        if matches!(name, "span" | "sup" | "a") && element.value().attr("id").is_some() {
+            let anchor = source_anchor(element)?;
+            let body = if name == "a" {
+                self.render_link(element)?
+            } else {
+                self.render_children(element)?
+            };
+            return Ok(format!("{anchor}{body}"));
+        }
         match name {
             "html" | "body" | "main" | "article" | "section" | "div" | "span" | "figure"
             | "figcaption" | "details" | "summary" | "time" | "small" | "sub" | "sup" | "abbr"
@@ -2011,7 +2022,7 @@ impl Renderer<'_> {
                 continue;
             }
             self.coverage.list_items += 1;
-            let mut body = String::new();
+            let mut body = source_anchor(item)?;
             let mut nested = Vec::new();
             for item_child in item.children() {
                 match item_child.value() {
@@ -2767,6 +2778,18 @@ fn collapse_whitespace(value: &str) -> String {
     output
 }
 
+fn source_anchor(element: ElementRef<'_>) -> Result<String> {
+    let Some(id) = element.value().attr("id").filter(|id| !id.is_empty()) else {
+        return Ok(String::new());
+    };
+    ensure!(
+        !id.chars().any(char::is_whitespace),
+        "source anchor contains whitespace"
+    );
+    let id = escape_text(id).replace('"', "&quot;");
+    Ok(format!("<span id=\"{id}\"></span>"))
+}
+
 fn escape_text(value: &str) -> String {
     let collapsed = collapse_whitespace(value);
     let mut output = String::with_capacity(collapsed.len());
@@ -3240,6 +3263,49 @@ mod tests {
                 non_image_media_policy: NonImageMediaPolicy::TemplateAudio,
             },
         )
+    }
+
+    #[test]
+    fn retains_citation_destinations_and_return_anchors() {
+        let (link_policy, media_policy) = policies();
+        let images = BTreeMap::new();
+        let output = convert(HtmlToWikitextInput {
+            html: "<p>Fact<sup id=\"cite_ref-a_1-0\"><a href=\"#cite_note-a-1\">[1]</a></sup></p><ol><li id=\"cite_note-a-1\"><a href=\"#cite_ref-a_1-0\">Back</a> Source</li></ol><span id=\"a&amp;&quot;{{x}}\"></span>",
+            canonical_title: "Example",
+            canonical_url: "https://source.example/wiki/Example",
+            media_scope: "source",
+            link_policy: &link_policy,
+            media_policy: &media_policy,
+            infobox_policy: None,
+            message_box_policy: None,
+            images: &images,
+            media_occurrences: None,
+        }).expect("convert citations");
+        assert!(
+            output
+                .wikitext
+                .contains("<span id=\"cite_ref-a_1-0\"></span>")
+        );
+        assert!(
+            output
+                .wikitext
+                .contains("# <span id=\"cite_note-a-1\"></span>")
+        );
+        assert!(
+            output
+                .wikitext
+                .contains("[[Special:Archive/source/Example#cite_note-a-1|")
+        );
+        assert!(
+            output
+                .wikitext
+                .contains("[[Special:Archive/source/Example#cite_ref-a_1-0|Back]]")
+        );
+        assert!(
+            output
+                .wikitext
+                .contains("id=\"a&amp;&quot;&#123;&#123;x&#125;&#125;\"")
+        );
     }
 
     #[test]
