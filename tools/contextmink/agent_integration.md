@@ -75,6 +75,10 @@ more output than the transcript should carry.
   `capture --script -- <script> ...` for a no-shebang Bash script. Truncated
   captures keep both the head and the tail of each separately bounded stream;
   they do not invent stdout/stderr chronology.
+  Capture is not an archive: retain producer output in files on the first run
+  when full bytes may matter. After a cap, inspect existing artifacts; rerun only
+  when replay is safe and authorized. The Windows `executable` observation names
+  the spawned image, which may be an interpreter, not later descendant images.
 - Configured excludes keep broad scans quiet. Pass an explicit file or
   subdirectory when an excluded tree is the target. Use `--with-excluded` to
   include files matched by contextmink exclude globs, and `--with-git-ignored`
@@ -100,6 +104,11 @@ more output than the transcript should carry.
   shorthand). Pass `json-find` match paths directly to `json-select --at`;
   combine `--at /result --keys` to discover a nested object. JSONL pointers
   begin with the zero-based non-empty record index, such as `/12/result`.
+  For objects keyed by record ID, `json-select --at /OBJECT --entries --fields
+  FIELD` projects children with exact keys and reusable pointers. Without
+  `--entries`, an object remains one row. Missing and null fields are distinct.
+  Budget batched calls together: per-command caps do not bound their combined
+  tool response.
 - Direct commands are fine when output is already known to be small or
   structurally bounded: `git status --short`, `git diff --stat`, a focused
   test command, a domain tool that emits compact records, or one exact file

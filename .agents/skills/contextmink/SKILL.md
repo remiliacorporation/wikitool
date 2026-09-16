@@ -58,6 +58,8 @@ the query first. Raising the file limit cannot recover omitted per-file lines.
 For a capped slice, `remaining_range` identifies the omitted part of the
 requested window; pass it to `slice FILE --range ...` without raising caps.
 These are live reads, not a snapshot: recheck relevant regions after edits.
+Budget the combined output of batched calls; each command's cap applies only
+to that command, not to the surrounding tool response.
 
 For structured or command output, use the owned projection instead of opening
 the full artifact:
@@ -77,6 +79,17 @@ JSON fields are literal keys or JSON Pointers (`/result/total`); use `--at`
 to enter nested objects or arrays. A displayed `<array:N items>` or
 `<object:N keys>` is a summary, not its contents. Narrow with `--at` before
 requesting those contents. Follow a producer's own pagination when available.
+For an object keyed by record IDs, use `json-select FILE --at /OBJECT --entries
+--fields FIELD` to project its children while retaining exact keys and reusable
+pointers. An object is otherwise one row. Missing fields and explicit nulls are
+distinct; inspect the reported missing/null fields before interpreting a value.
+
+Capture executes the child once; it is not an archive. If full output may matter,
+retain producer stdout/stderr in files from the first run and inspect those files.
+After a cap, omitted bytes cannot be recovered from the receipt. Do not repeat a
+mutation or costly command merely to obtain more output; inspect existing artifacts
+or establish that replay is safe and authorized. On Windows, `executable` reports
+the observed process image (which may be an interpreter), not a later child image.
 
 ## Interpret evidence honestly
 

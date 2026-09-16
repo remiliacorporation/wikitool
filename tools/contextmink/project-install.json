@@ -9,11 +9,11 @@
     },
     {
       "path": "tools/contextmink/agent_integration.md",
-      "sha256": "57b54dec64759a755a19999a5726f98ee43f9f52a8b2daa4cf820e986e5aa8b7"
+      "sha256": "b955a85f95e37758cfcf19fc5b6b39fc9808cc59672ea404ee308e46d2ef02db"
     },
     {
       "path": ".agents/skills/contextmink/SKILL.md",
-      "sha256": "8c945dd7c07503d66106cfb482dd8dfe34207a1f7cb4e8a576c7b5b90d2ab8f2"
+      "sha256": "ec9ceecb0ec8d91d5a6f967484b76a23f4ec36e83eb49485a553f22bc27c19cf"
     },
     {
       "path": ".agents/skills/contextmink/agents/openai.yaml",
