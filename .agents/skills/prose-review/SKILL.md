@@ -30,6 +30,20 @@ placement. Check category scope and browsing value under the site's policy, not
 just whether the label could be technically true. Mechanical Wikitool checks
 supply syntax and local-state observations; they cannot overrule an editorial defect.
 
+Match depth to the candidate: check every material claim in a short article or
+a bounded revision; for a long article, check every sensitive, lead and
+infobox claim and a disclosed sample of the rest. For a live page, export it
+with `export PAGE_URL --format wikitext` and record the revision ID. Fetch
+cited sources with `source fetch URL`; an unreachable source leaves its claim
+unverified.
+
+Write the review as a file the author and the deciding human can read, for
+example `.wikitool/reviews/TITLE.md`, containing: the candidate identity (path
+or page and revision, content hash when available), sources checked and not
+reachable, coverage and sampling, findings ordered by severity with location,
+evidence and the smallest repair, and the disposition. That file is the review
+record; it is not a human acceptance decision.
+
 Give findings with location, supporting evidence and the smallest useful repair:
 - P0: acute privacy, fabrication, safety or destructive-operation risk; stop.
 - P1: material source, sensitive-claim, plagiarism or misleading-framing failure; block.

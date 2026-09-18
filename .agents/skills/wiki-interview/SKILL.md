@@ -11,6 +11,16 @@ from the project root. The runtime and skills are already in place.
 Produce a useful, neutral intake record when the article needs human knowledge.
 Read supplied material and reuse established scope before asking questions.
 An adequate brief, source-only research or routine edit does not need an interview.
+Before `interview init`, check the live wiki with
+`source wiki-search TERM --what nearmatch` and read any existing page on the
+subject; choose `--intent` and `--source-article` from what exists, because the
+ledger's intent cannot be changed afterwards.
+
+Only the person's own words are testimony. Record answers verbatim under human
+notes with who said them and when; never write answers the person did not give,
+and label any placeholder or reconstruction as not testimony. `interview
+validate` and `interview audit` check structure and staleness only; they cannot
+detect fabricated testimony.
 
 Follow the consequential gaps in the person's account: identity, chronology,
 firsthand versus secondhand knowledge, source locations, disputed relationships

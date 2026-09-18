@@ -128,7 +128,8 @@ by Git. Their source identities and archive checksums live in `config/`; release
 builds compose the verified upstream packages without maintaining copied installer
 code or contracts in Wikitool. Harness permissions are local settings.
 
-Wikitest is source-resident and absent from end-user archives. Mechanical fixtures
+The Wikitest binary and its fixtures are source-resident; releases ship only
+the testing guide for reference. Mechanical fixtures
 can prove exact CLI and state transitions; prepared prose packets do not prove
 editorial quality. External author/reviewer work and its limits are recorded
 separately. Self-contained hash receipts prove consistency, not authenticity.

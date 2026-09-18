@@ -3,14 +3,21 @@
 Verify the configured API endpoint and intended scope. Durable sync identity
 belongs to that endpoint. When deliberately changing targets, preserve the old
 store and establish a fresh baseline; do not reuse production identity locally.
+`init` writes a new target without an adapter unless `--adapter-path` names one,
+so site policy becomes generic, and it keeps the default `article_path`; check
+`config show` and correct the path when the wiki serves pages under `/wiki/$1`.
 Global planning requires a successful explicit `pull --full --all`; scoped or
-legacy-migrated rows do not establish coverage.
+legacy-migrated rows do not establish coverage, and `status`, `diff`, `review`
+and push preview refuse until that baseline exists.
 
 Before a push, inspect scoped status, diff, and review. Preview the exact titles
 and summary, inspect the returned plan, then apply that plan ID with identical
 scope, summary, and policy flags when the user's authorization covers the write.
 Do not request a second human permission merely because the CLI has two phases.
 The tool rejects drift; investigate a rejection instead of silently replanning.
+A preview that reports a missing acceptance authorization is asking for the
+human decision recorded by `article accept`, not for credentials; credentials
+come from `WIKITOOL_BOT_USER` and `WIKITOOL_BOT_PASS` and are checked at apply.
 
 Delete also previews first. Inspect endpoint, title, observed revision, reason,
 local effect, and plan ID before applying the exact plan.

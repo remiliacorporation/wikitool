@@ -12,6 +12,15 @@ Deliver the requested article or revision from inspected sources. Preserve the
 subject, exclusions and intended scope; do not replace an adequate brief with
 an interview or a useful draft with an unrelated workflow.
 
+Before drafting a new article, check the live wiki for the subject and its
+near-duplicates with `source wiki-search TERM --what nearmatch`; `article scout`
+reads only the local index and reports `likely_missing` for a page that exists.
+Write an off-wiki draft to `.wikitool/drafts/TITLE.wiki`, named as the page
+title, and pass `--title` to `article lint` and `review --draft-path`. Content
+under `wiki_content/` is the synced mirror, not a drafting area. When an
+interview ledger exists, read it and its open items before writing; ledger
+text under human notes is testimony to attribute, not sourced fact.
+
 Establish support for material claims before asserting them. Keep sources,
 human testimony, interpretation and unresolved claims distinct. Use the site's
 adapter guidance and inspect local templates when integration matters; retrieval

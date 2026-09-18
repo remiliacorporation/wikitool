@@ -48,9 +48,15 @@ Never invent acceptance. Inspect scoped mutation plans and apply only within the
 user's authorization. Reconcile ambiguous receipts before retrying a remote write.
 
 Contextmink and Papertiger ship as complete upstream packages. Use their bundled
-skills and commands directly. Preserve existing planner authority; choose new
+skills and commands directly; where a companion skill refers to an installed
+command or binding above an empty slot, the executable under `tools/<name>/bin/`
+is that command. Preserve existing planner authority; choose new
 history explicitly only when the task needs it. Wikitool never seeds a planner
-database, sync baseline or acceptance decision.
+database, sync baseline or acceptance decision. A fresh project has no planner
+authority until `papertiger init` creates one in the project.
+
+On Windows Git Bash, set `MSYS_NO_PATHCONV=1` for arguments that begin with `/`,
+such as JSON pointers, so the shell does not rewrite them as paths.
 
 ## Source development
 

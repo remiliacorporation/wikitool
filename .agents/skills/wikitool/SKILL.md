@@ -13,10 +13,26 @@ Use the smallest operation that answers the task. CLI help owns flags. Run from
 the project directory or pass `--project-root`. Check `config show` when target identity is unknown
 or before a write. Keep credentials out of reports.
 
+To read one live page, use `export PAGE_URL --format wikitext` or
+`source fetch PAGE_URL --format wikitext`; `pull` selects categories, templates
+or everything, never a single title. To check whether a page exists, use
+`source wiki-search TERM --what nearmatch`; some wikis reject `--what title`.
+Exported files carry a metadata header; `article lint` reads only paths under
+`wiki_content/`, `templates/` or `.wikitool/`, so copy a candidate to
+`.wikitool/drafts/TITLE.wiki` and pass `--title`.
+
 For template parameters, start with `templates show NAME --format json --view brief` and follow
 its full-view command when all parameters are needed. This is local catalog
-evidence. For current remote contracts, use `source mediawiki-templates URL`
-with the exact template and freshness options from help. Inspect coverage limits.
+evidence and needs `pull --templates` then `templates catalog build` once in a
+fresh project. For current remote contracts without a mirror, use
+`source mediawiki-templates PAGE_URL --template NAME` with the freshness options
+from help. Inspect coverage limits.
+
+`status`, `diff`, `review` and `push` preview all require the global baseline
+from one successful `pull --full --all`; a scoped pull reports
+`global_baseline_established: false` and does not unlock them. Read-only
+retrieval never needs the baseline. Whole-mirror `validate` reports the live
+wiki's existing red links and orphans; scope it with `--title` for a change.
 
 Before editing, inspect relevant local changes; include template-scoped status
 for template work. Refresh catalogs or capabilities only when missing or stale

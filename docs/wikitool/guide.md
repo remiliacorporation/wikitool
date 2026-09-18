@@ -8,8 +8,10 @@ flags; this guide explains when operations are useful and what their results mea
 
 | Task | Start here | Expand when needed |
 |---|---|---|
-| Inspect local changes | `status`, `diff`, scoped by title/path | Include `--templates` for templates and modules |
-| Read a template interface | `templates show NAME --format json --view brief` | Follow the emitted full-view command for all parameters; `templates examples` for usage |
+| Read one live page or check that it exists | `export PAGE_URL --format wikitext`, `source wiki-search TERM --what nearmatch` | `pull` selects categories, templates or everything, not a single title; a wiki may reject `--what title` |
+| Inspect local changes | `status`, `diff`, scoped by title/path | Both need the global baseline from `pull --full --all`; include `--templates` for templates and modules |
+| Check a whole mirror | `validate --title TITLE` for a change | Unscoped `validate` reports the live wiki's existing red links, orphans and uncategorized pages and exits nonzero |
+| Read a template interface | `templates show NAME --format json --view brief` | Needs `pull --templates` then `templates catalog build` once; follow the emitted full-view command for all parameters; `templates examples` for usage |
 | Research an article's wiki integration | `article scout TOPIC --view brief` | Follow specific retrieval drilldowns; observations are not approved prose or taxonomy |
 | Draft from adequate sources | `wiki-writing` skill | Interview only for missing human knowledge; independent prose review for a completed substantial draft |
 | Review article prose | `prose-review` skill | Inspect exact sources; mechanical `review` is a different operation |
