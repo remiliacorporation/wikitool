@@ -4,4 +4,5 @@ exclude_globs = [
   "target/**",
   "**/target/**",
   "dist/**",
+  "trash/**",
 ]

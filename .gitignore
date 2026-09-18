@@ -20,6 +20,7 @@ coverage/
 # Build
 dist/
 target/
+/trash/local/
 
 # Local companion packages are upstream release outputs, not Wikitool source.
 /tools/contextmink/
