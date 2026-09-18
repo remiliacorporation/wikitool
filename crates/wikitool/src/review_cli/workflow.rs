@@ -141,7 +141,7 @@ pub(super) fn run_review(runtime: &RuntimeOptions, args: ReviewArgs) -> Result<(
 
     let mut hard_failures = Vec::new();
     if !status_plan.sync_ledger_ready {
-        hard_failures.push("sync ledger is missing; run `wikitool pull --full`".to_string());
+        hard_failures.push("sync ledger is missing; run `wikitool pull --full --all`".to_string());
     }
     if !changed_article_lint.sync_ledger_ready {
         hard_failures.push("changed article lint could not resolve the sync ledger".to_string());
@@ -162,12 +162,7 @@ pub(super) fn run_review(runtime: &RuntimeOptions, args: ReviewArgs) -> Result<(
         hard_failures.push("validation index is missing; run `wikitool catalog build`".to_string());
     }
     if !push_preview.success {
-        hard_failures.push(
-            push_preview
-                .error
-                .clone()
-                .unwrap_or_else(|| "push preview reported conflicts or errors".to_string()),
-        );
+        hard_failures.push(describe_push_preview_failure(&push_preview));
     }
     if let Some(brief) = &interview_brief
         && brief.status == InterviewValidationStatus::Invalid
@@ -219,5 +214,35 @@ pub(super) fn run_review(runtime: &RuntimeOptions, args: ReviewArgs) -> Result<(
             "review failed with {} hard failure(s)",
             report.hard_failures.len()
         )
+    }
+}
+
+/// Name the concrete preview failure so the brief report and exit message
+/// carry the cause (for example a missing acceptance decision) instead of
+/// only the full-view `push_preview.report` payload.
+pub(super) fn describe_push_preview_failure(preview: &ReviewPushPreview) -> String {
+    if let Some(error) = &preview.error {
+        return error.clone();
+    }
+    let Some(report) = &preview.report else {
+        return "push preview reported conflicts or errors".to_string();
+    };
+    let mut details = Vec::new();
+    for conflict in report.conflicts.iter().take(3) {
+        details.push(format!("conflict: {conflict}"));
+    }
+    for error in report.errors.iter().take(3) {
+        details.push(format!("error: {error}"));
+    }
+    let hidden = report.conflicts.len().saturating_sub(3) + report.errors.len().saturating_sub(3);
+    if hidden > 0 {
+        details.push(format!(
+            "{hidden} more in `--view full` push_preview.report"
+        ));
+    }
+    if details.is_empty() {
+        "push preview reported conflicts or errors".to_string()
+    } else {
+        format!("push preview failed; {}", details.join("; "))
     }
 }

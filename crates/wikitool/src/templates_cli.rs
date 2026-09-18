@@ -310,6 +310,11 @@ fn run_templates_show(runtime: &RuntimeOptions, args: TemplatesShowArgs) -> Resu
             bail!("template catalog is missing; run `wikitool templates catalog build`")
         }
         TemplateCatalogEntryLookup::TemplateMissing { template_title } => {
+            if catalog.entries.is_empty() {
+                bail!(
+                    "template catalog entry not found: {template_title}; the local template catalog has no entries. Pull template sources with `wikitool pull --templates`, then run `wikitool templates catalog build`. For the current live contract without a local mirror, use `wikitool source mediawiki-templates <PAGE_URL> --template {template_title}`"
+                )
+            }
             bail!("template catalog entry not found: {template_title}")
         }
     };
@@ -349,6 +354,11 @@ fn run_templates_examples(runtime: &RuntimeOptions, args: TemplatesExamplesArgs)
             bail!("template catalog is missing; run `wikitool templates catalog build`")
         }
         TemplateCatalogEntryLookup::TemplateMissing { template_title } => {
+            if catalog.entries.is_empty() {
+                bail!(
+                    "template catalog entry not found: {template_title}; the local template catalog has no entries. Pull template sources with `wikitool pull --templates`, then run `wikitool templates catalog build`. For the current live contract without a local mirror, use `wikitool source mediawiki-templates <PAGE_URL> --template {template_title}`"
+                )
+            }
             bail!("template catalog entry not found: {template_title}")
         }
     };

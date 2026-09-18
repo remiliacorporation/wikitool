@@ -273,3 +273,39 @@ fn review_next_steps_preserve_interview_brief_path() {
             .any(|pair| pair == ["--brief-path", brief_path])
     );
 }
+
+#[test]
+fn review_push_preview_failure_names_report_errors() {
+    use super::workflow::describe_push_preview_failure;
+    use wikitool_core::sync::PushReport;
+
+    let report = PushReport {
+        success: false,
+        dry_run: true,
+        target_api_url: "https://wiki.example.org/api.php".to_string(),
+        plan_id: None,
+        pushed: 0,
+        created: 0,
+        updated: 0,
+        deleted: 0,
+        unchanged: 0,
+        conflicts: Vec::new(),
+        errors: vec![
+            "transactional acceptance authorization is missing for wiki_content/Main/Alpha.wiki; run `wikitool article accept`".to_string(),
+        ],
+        pages: Vec::new(),
+        mutation_effects: Vec::new(),
+        request_count: 0,
+    };
+    let preview = ReviewPushPreview {
+        attempted: true,
+        success: false,
+        report: Some(report),
+        error: None,
+        skipped_reason: None,
+    };
+
+    let failure = describe_push_preview_failure(&preview);
+    assert!(failure.contains("acceptance authorization is missing"));
+    assert!(failure.contains("article accept"));
+}
