@@ -200,9 +200,10 @@ pub(super) fn lint_malformed_headings(
         if trimmed.starts_with('|') {
             continue;
         }
-        if (trimmed.starts_with('=') || trimmed.ends_with('='))
-            && parse_heading_line(trimmed).is_none()
-        {
+        if !looks_like_heading_attempt(trimmed) {
+            continue;
+        }
+        if parse_heading_line(trimmed).is_none() {
             matches.push(IssueMatch {
                 issue: ArticleLintIssue {
                     rule_id: "structure.malformed_heading".to_string(),
@@ -219,6 +220,21 @@ pub(super) fn lint_malformed_headings(
             });
         }
     }
+}
+
+/// A line is a heading attempt when it opens with `=`, or when it closes with
+/// `=` without any template, tag, link or table markup that would make the
+/// trailing `=` a parameter assignment (for example `{{Reflist|refs=`).
+fn looks_like_heading_attempt(trimmed: &str) -> bool {
+    if trimmed.starts_with('=') {
+        return true;
+    }
+    if !trimmed.ends_with('=') {
+        return false;
+    }
+    !["{{", "}}", "{|", "[[", "<", "|"]
+        .iter()
+        .any(|marker| trimmed.contains(marker))
 }
 
 fn is_tabber_separator_line(trimmed: &str) -> bool {
