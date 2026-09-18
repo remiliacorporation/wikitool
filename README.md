@@ -126,7 +126,7 @@ not an unrelated runtime rebuild.
 Companion packages and their generated skills are local release outputs, ignored
 by Git. Their source identities and archive checksums live in `config/`; release
 builds compose the verified upstream packages without maintaining copied installer
-code or contracts in Wikitool.
+code or contracts in Wikitool. Harness permissions are local settings.
 
 Wikitest is source-resident and absent from end-user archives. Mechanical fixtures
 can prove exact CLI and state transitions; prepared prose packets do not prove
