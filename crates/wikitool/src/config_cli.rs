@@ -129,6 +129,7 @@ fn build_config_show(paths: &ResolvedPaths, config: &WikiConfig) -> Result<Confi
             warnings: status.warnings,
         },
         notes: vec![
+            "when project config is absent, extracted releases use tools/wikitool/default-config.toml; an existing config replaces these defaults in full",
             "project config is the durable wiki target; WIKITOOL_* env vars are temporary overrides",
             "only the selected project root's .env is loaded; ancestor .env files are ignored and existing process variables take precedence",
             "bare WIKI_* env vars are not read; target overrides are WIKITOOL_WIKI_URL, WIKITOOL_WIKI_API_URL, WIKITOOL_USER_AGENT, and WIKITOOL_ARTICLE_PATH",

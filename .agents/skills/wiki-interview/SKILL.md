@@ -5,6 +5,9 @@ description: Capture missing human knowledge, source leads and exclusions for a 
 
 # Wiki interview
 
+For CLI operations in an extracted release, use `tools/wikitool/bin/wikitool[.exe]`
+from the project root. The runtime and skills are already in place.
+
 Produce a useful, neutral intake record when the article needs human knowledge.
 Read supplied material and reuse established scope before asking questions.
 An adequate brief, source-only research or routine edit does not need an interview.

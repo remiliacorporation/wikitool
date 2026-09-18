@@ -61,10 +61,11 @@ on a source checkout's documentation paths. Frozen author and review packets
 retain their closed input boundaries through explicit references.
 
 Validate skill distributions with `release build-skills` in a maintainer build
-and `skills inspect`. Exercise `skills setup-project --skill-target both` in
-a disposable project when changing packaging or references. Packaging success
+and `skills inspect`. Exercise the extracted release with
+`scripts/verify_project_overlay.sh` when changing packaging or references. Packaging success
 establishes artifact integrity; it does not demonstrate improved agent judgment.
 
-The project directory must already exist. Retain install receipts and verify
-both harness copies against the distribution; source-checkout routes and installed
-full packages are different delivery modes.
+The extracted archive is the agent project. Root `AGENTS.md` owns task routing
+and authority boundaries, `CLAUDE.md` routes there, and both harness discovery
+directories already contain complete skill packages. Start work directly;
+skill installation is not a prerequisite.

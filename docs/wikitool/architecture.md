@@ -281,9 +281,13 @@ and passes any held-out oracle.
 
 ## Release boundary
 
-Release archives contain a deterministic target-neutral `skills/` distribution and a versioned built-in
-adapter catalog with generic and Remilia Wiki templates. Catalog presence is inert: only a
-project-relative `[adapter].path` selects policy, and no bundled adapter supplies an endpoint.
+Release archives are complete agent projects with root instructions and operator
+documentation, native binaries under `tools/`, and complete skills in both harness
+discovery directories. `tools/wikitool/` owns the deterministic
+skill distribution, adapter catalog and Remilia default configuration. A project
+config replaces these defaults in full; extraction ships no mutable project state.
+The default configuration selects the endpoint and adapter together. Optional `init`
+can select another wiki with generic policy, or an explicit project-relative adapter.
 Receipt inspection replays deterministic observations and capability-to-step bindings. It reports
 the self-contained artifact set as unanchored rather than claiming authenticity; release evidence
 needs an independently published immutable digest or signature.

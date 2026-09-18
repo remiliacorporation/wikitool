@@ -6,26 +6,26 @@ fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
 
 bundle="$fixture/wikitool-test-macos-arm64"
-mkdir -p \
-  "$bundle/contextmink" \
-  "$bundle/papertiger" \
+mkdir -p "$bundle/tools/wikitool/bin" \
+  "$bundle/tools/contextmink/bin" \
+  "$bundle/tools/papertiger/bin" \
   "$bundle/docs/wikitool" \
-  "$bundle/skills/wikitool"
-printf 'fixture\n' > "$bundle/wikitool"
-printf 'fixture\n' > "$bundle/contextmink/contextmink"
-printf 'fixture\n' > "$bundle/papertiger/papertiger"
-printf 'fixture\n' > "$bundle/papertiger/papertiger-mise"
+  "$bundle/tools/wikitool/skills/wikitool"
+printf 'fixture\n' > "$bundle/tools/wikitool/bin/wikitool"
+printf 'fixture\n' > "$bundle/tools/contextmink/bin/contextmink"
+printf 'fixture\n' > "$bundle/tools/papertiger/bin/papertiger"
+printf 'fixture\n' > "$bundle/tools/papertiger/bin/papertiger-mise"
 cp "$repo_root/docs/wikitool/macos-gatekeeper.md" "$bundle/docs/wikitool/macos-gatekeeper.md"
 cp "$repo_root/.agents/skills/wikitool/SKILL.md" \
-  "$bundle/skills/wikitool/SKILL.md"
+  "$bundle/tools/wikitool/skills/wikitool/SKILL.md"
 
 bash "$repo_root/scripts/declare_unsigned_macos.sh" --bundle-dir "$bundle" >/dev/null
 
-trust="$bundle/macos-release-trust.json"
+trust="$bundle/tools/wikitool/macos-release-trust.json"
 grep -q '"schema": "wikitool.macos-release-trust.v1"' "$trust"
 grep -q '"status": "unsigned_github_release"' "$trust"
 grep -q '"gatekeeper": "explicit_checksum_bound_quarantine_exception_required"' "$trust"
-grep -q '"executables": \["wikitool", "contextmink/contextmink", "papertiger/papertiger", "papertiger/papertiger-mise"\]' "$trust"
+grep -q '"executables": \["tools/wikitool/bin/wikitool", "tools/contextmink/bin/contextmink", "tools/papertiger/bin/papertiger", "tools/papertiger/bin/papertiger-mise"\]' "$trust"
 grep -q '"instructions": "docs/wikitool/macos-gatekeeper.md"' "$trust"
 
 if bash "$repo_root/scripts/declare_unsigned_macos.sh" --bundle-dir "$bundle" >/dev/null 2>&1; then
@@ -33,7 +33,7 @@ if bash "$repo_root/scripts/declare_unsigned_macos.sh" --bundle-dir "$bundle" >/
   exit 1
 fi
 
-rm "$bundle/papertiger/papertiger"
+rm "$bundle/tools/papertiger/bin/papertiger"
 rm "$trust"
 if bash "$repo_root/scripts/declare_unsigned_macos.sh" --bundle-dir "$bundle" >/dev/null 2>&1; then
   echo "unsigned trust declaration accepted a bundle without Papertiger" >&2

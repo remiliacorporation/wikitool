@@ -1,9 +1,9 @@
 # Wikitool Documentation
 
-- [Operator guide](guide.md): choose a task, initialize needed state, publish or recover.
+- [Operator guide](guide.md): choose a task, work with sources and content, publish or recover.
 - [Architecture](architecture.md): code ownership, durable identity and evidence boundaries.
 - [Generated reference](reference.md): command flags; not a workflow to execute in order.
-- [Skill integration](skill-integration.md): select, install and evaluate agent guidance.
+- [Skill integration](skill-integration.md): select and evaluate the included agent guidance.
 - [Site adapters](site-adapters.md): explicit local policy and category governance.
 - [Template engineering](template-engineering.md): interface changes, migrations, category and render evidence.
 - [Source access](source-access.md): human-solved challenges and scoped sessions.

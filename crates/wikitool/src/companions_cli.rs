@@ -16,7 +16,7 @@ pub(crate) struct CompanionsArgs {
     #[arg(
         long,
         value_name = "PATH",
-        help = "Inspect this release-companions.json instead of the file beside the executable"
+        help = "Inspect this release-companions.json instead of the file in tools/wikitool/"
     )]
     manifest: Option<PathBuf>,
     #[arg(
@@ -83,6 +83,8 @@ pub(crate) fn run_companions(args: CompanionsArgs) -> Result<()> {
             .context("failed to resolve the Wikitool executable path")?
             .parent()
             .context("Wikitool executable path has no parent directory")?
+            .parent()
+            .context("Wikitool bin directory has no parent")?
             .join("release-companions.json"),
     };
     let diagnostics = inspect_companions(&manifest_path)?;
@@ -134,9 +136,11 @@ fn inspect_companions(manifest_path: &Path) -> Result<CompanionDiagnostics> {
         .with_context(|| format!("failed to read {}", normalize_path(manifest_path)))?;
     let manifest: ReleaseCompanionManifest = serde_json::from_str(&text)
         .with_context(|| format!("invalid JSON in {}", normalize_path(manifest_path)))?;
-    if manifest.schema != COMPANION_MANIFEST_SCHEMA {
+    if manifest.schema != COMPANION_MANIFEST_SCHEMA
+        && manifest.schema != "wikitool.release-companions.v2"
+    {
         bail!(
-            "companion manifest schema is {:?}, expected {:?}",
+            "companion manifest schema is {:?}, expected {} or wikitool.release-companions.v2",
             manifest.schema,
             COMPANION_MANIFEST_SCHEMA
         );
@@ -145,6 +149,13 @@ fn inspect_companions(manifest_path: &Path) -> Result<CompanionDiagnostics> {
     let root = manifest_path
         .parent()
         .context("companion manifest path has no parent directory")?;
+    let root = if manifest.schema == "wikitool.release-companions.v2" {
+        root.parent()
+            .and_then(Path::parent)
+            .context("overlay manifest must be under tools/wikitool")?
+    } else {
+        root
+    };
     let mut ids = BTreeSet::new();
     let mut companions = Vec::with_capacity(manifest.companions.len());
     for declaration in manifest.companions {

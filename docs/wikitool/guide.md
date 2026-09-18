@@ -27,8 +27,14 @@ limits and returned source identity. It does not update or authorize the target 
 
 ## Initialize only when needed
 
-Run from the intended wiki project, or pass `--project-root`. A source checkout
-is not automatically the wiki runtime.
+Extracted releases already contain discoverable skills and native tools at
+`tools/wikitool/bin/wikitool[.exe]`. No setup or init is needed for the default
+Remilia Wiki target. Existing `.wikitool/config.toml` takes precedence over
+`tools/wikitool/default-config.toml`; missing runtime directories are created on
+first use. `init` remains useful for explicitly selecting a different wiki.
+
+Work from the extracted project directory, or pass `--project-root` when invoking
+the client from elsewhere.
 
 ```bash
 wikitool init --wiki-url https://wiki.example.org/ --api-url https://wiki.example.org/api.php

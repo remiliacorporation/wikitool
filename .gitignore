@@ -21,9 +21,15 @@ coverage/
 dist/
 target/
 
-# Local Contextmink project installation (owned by contextmink setup-project)
-tools/contextmink/
-scripts/contextmink
+# Local companion packages are upstream release outputs, not Wikitool source.
+/tools/contextmink/
+/tools/papertiger/
+/.agents/skills/contextmink/
+/.agents/skills/contextmink-bridge/
+/.agents/skills/papertiger/
+/.claude/skills/contextmink/
+/.claude/skills/contextmink-bridge/
+/.claude/skills/papertiger/
 
 # OS
 .DS_Store
@@ -37,6 +43,3 @@ Thumbs.db
 # Logs
 *.log
 .claude/settings.local.json
-
-# contextmink project-local release binaries
-/tools/contextmink/bin/

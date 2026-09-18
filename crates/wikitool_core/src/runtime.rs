@@ -155,11 +155,15 @@ pub fn inspect_runtime(paths: &ResolvedPaths) -> Result<RuntimeStatus> {
             "templates/ is missing; template-aware commands will run in degraded mode".to_string(),
         );
     }
-    if !wiki_content_exists {
+    let overlay = paths
+        .project_root
+        .join("tools/wikitool/default-config.toml")
+        .is_file();
+    if !wiki_content_exists && !overlay {
         warnings
             .push("wiki_content/ is missing; run `wikitool init` before sync commands".to_string());
     }
-    if !state_dir_exists {
+    if !state_dir_exists && !overlay {
         warnings
             .push(".wikitool/ is missing; run `wikitool init` before sync commands".to_string());
     }
@@ -180,6 +184,24 @@ pub fn inspect_runtime(paths: &ResolvedPaths) -> Result<RuntimeStatus> {
 
 pub fn ensure_runtime_ready_for_sync(paths: &ResolvedPaths, status: &RuntimeStatus) -> Result<()> {
     if !status.wiki_content_exists || !status.state_dir_exists {
+        if paths
+            .project_root
+            .join("tools/wikitool/default-config.toml")
+            .is_file()
+        {
+            // The overlay is already configured. Create only missing local
+            // directories; never replace configuration or durable stores.
+            init_layout(
+                paths,
+                &InitOptions {
+                    include_templates: true,
+                    materialize_config: false,
+                    materialize_parser_config: false,
+                    force: false,
+                },
+            )?;
+            return Ok(());
+        }
         bail!(
             "Runtime layout is not initialized for sync.\nMissing required paths:\n  - {}\n  - {}\nRun: wikitool init --project-root {} --templates",
             if status.wiki_content_exists {
@@ -414,7 +436,11 @@ where
 }
 
 fn is_runtime_root_candidate(candidate: &Path) -> bool {
-    candidate.join(".wikitool").exists() || candidate.join("wiki_content").exists()
+    candidate.join(".wikitool").exists()
+        || candidate.join("wiki_content").exists()
+        || candidate
+            .join("tools/wikitool/default-config.toml")
+            .is_file()
 }
 
 fn candidate_roots(cwd: &Path, executable_dir: Option<&Path>) -> Vec<PathBuf> {
@@ -669,5 +695,30 @@ mod tests {
         );
 
         assert_eq!(resolved, release_root);
+    }
+    #[test]
+    fn overlay_runs_without_setup_and_preserves_durable_state() {
+        let project = tempdir().unwrap();
+        let owned = project.path().join("tools/wikitool");
+        fs::create_dir_all(&owned).unwrap();
+        fs::write(owned.join("default-config.toml"), "[wiki]\n").unwrap();
+        let nested = project.path().join("nested");
+        fs::create_dir_all(&nested).unwrap();
+        let context = ResolutionContext {
+            cwd: nested,
+            executable_dir: None,
+        };
+        let paths =
+            resolve_paths_with_lookup(&context, &PathOverrides::default(), |_| None).unwrap();
+        assert_eq!(paths.project_root, project.path());
+        fs::create_dir_all(paths.sync_store_path().parent().unwrap()).unwrap();
+        fs::write(paths.sync_store_path(), b"existing durable bytes").unwrap();
+        ensure_runtime_ready_for_sync(&paths, &inspect_runtime(&paths).unwrap()).unwrap();
+        assert!(paths.wiki_content_dir.is_dir());
+        assert!(!paths.config_path.exists());
+        assert_eq!(
+            fs::read(paths.sync_store_path()).unwrap(),
+            b"existing durable bytes"
+        );
     }
 }

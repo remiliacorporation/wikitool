@@ -1,11 +1,12 @@
 # Site adapters
 
-A site adapter is an explicit project-relative TOML file. Release archives include generic and
-Remilia Wiki templates under `site_adapters/`, but catalog presence does not activate one. Copy a
-template into the project, then validate and select it during initialization:
+A site adapter is a project-relative TOML file. Release overlays include generic and
+Remilia Wiki adapters under `tools/wikitool/site_adapters/`. The fresh-release default
+configuration selects Remilia Wiki and its adapter together. An existing project config
+replaces that configuration in full. To customize a bundled adapter, copy it and select it:
 
 ```bash
-cp -R /path/to/unpacked-wikitool/site_adapters/remilia-wiki site-adapter
+cp -R tools/wikitool/site_adapters/remilia-wiki site-adapter
 wikitool init --adapter-path site-adapter/site-adapter.toml
 ```
 
@@ -20,7 +21,8 @@ The configured path must be project-relative, and its canonical target must rema
 project root. Absolute paths, `..` escapes, and symlinks to external policy trees are rejected so
 snapshots and isolated evaluations cannot depend on mutable files outside the project.
 
-Without this section Wikitool uses the embedded `mediawiki-generic` adapter. It does not search executable ancestors or silently inherit a branded policy.
+Without this section in an existing project config, Wikitool uses the embedded
+`mediawiki-generic` adapter. Only an absent project config inherits the release defaults.
 
 ## Machine policy
 
@@ -55,11 +57,10 @@ never parses it as executable policy.
 
 Source-review rules are routing signals, not universal bans. Their reasons should tell the review skill what to inspect. Semantic exceptions stay in review findings rather than being hidden in substring logic.
 
-Release packaging always places the versioned built-in catalog under `site_adapters/generic/` and
-`site_adapters/remilia-wiki/`. An optional host bundle goes under `site_adapters/project/` after
-validating the policy and copying only its declared resources. Presence in a release archive does
-not activate any adapter: the installed project must place the selected adapter at a
-project-relative path and record that path in `.wikitool/config.toml`.
+Release packaging places the adapter catalog under `tools/wikitool/site_adapters/`.
+An optional host bundle goes under its `project/` subdirectory after validating the
+policy and copying only declared resources. This supplement remains opt-in; select
+it with a project-relative path in `.wikitool/config.toml`.
 
 ## Supplemental guidance
 

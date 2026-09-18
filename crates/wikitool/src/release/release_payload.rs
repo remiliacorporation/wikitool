@@ -30,6 +30,10 @@ pub(super) fn stage_release_payload(
     for file in [
         ".env.template",
         "README.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "VERSIONING.md",
+        "CHANGELOG.md",
         "LICENSE",
         "LICENSE-SSL",
         "LICENSE-VPL",
@@ -42,13 +46,24 @@ pub(super) fn stage_release_payload(
     }
 
     let docs = repo_root.join("docs/wikitool");
+    copy_required_file(
+        &repo_root.join("config/release-gitignore"),
+        &output_dir.join(".gitignore"),
+        "project ignore rules",
+    )?;
     require_directory(&docs, "Wikitool documentation")?;
     copy_dir_recursive(&docs, &output_dir.join("docs/wikitool"))?;
 
-    stage_generic_adapter(repo_root, output_dir)?;
-    stage_remilia_adapter(repo_root, output_dir)?;
+    copy_required_file(
+        &repo_root.join("wikitest/TESTING.md"),
+        &output_dir.join("wikitest/TESTING.md"),
+        "source testing guide",
+    )?;
+    let tool_dir = output_dir.join("tools/wikitool");
+    stage_generic_adapter(repo_root, &tool_dir)?;
+    stage_remilia_adapter(repo_root, &tool_dir)?;
     if let Some(host_root) = host_project_root {
-        stage_host_adapter(host_root, output_dir)?;
+        stage_host_adapter(host_root, &tool_dir)?;
     }
     Ok(())
 }
@@ -165,18 +180,18 @@ mod tests {
         assert!(
             output
                 .path()
-                .join("site_adapters/generic/site-adapter.toml")
+                .join("tools/wikitool/site_adapters/generic/site-adapter.toml")
                 .is_file()
         );
         assert!(
             output
                 .path()
-                .join("site_adapters/remilia-wiki/site-adapter.toml")
+                .join("tools/wikitool/site_adapters/remilia-wiki/site-adapter.toml")
                 .is_file()
         );
         assert!(!output.path().join("skills").exists());
-        assert!(!output.path().join("AGENTS.md").exists());
-        assert!(!output.path().join("CLAUDE.md").exists());
+        assert!(output.path().join("AGENTS.md").is_file());
+        assert!(output.path().join("CLAUDE.md").is_file());
         assert!(!output.path().join(".claude").exists());
     }
 

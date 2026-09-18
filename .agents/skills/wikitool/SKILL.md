@@ -5,9 +5,12 @@ description: Use Wikitool for MediaWiki retrieval, templates, mechanical checks 
 
 # Wikitool
 
+In an extracted release, invoke `tools/wikitool/bin/wikitool[.exe]` from the
+project root. Skills and companions are already present; no setup is needed.
+Use `config show` to inspect the shipped default or existing project target.
+
 Use the smallest operation that answers the task. CLI help owns flags. Run from
-the wiki project or pass `--project-root`; the tool's source checkout is not
-automatically the runtime. Check `config show` when target identity is unknown
+the project directory or pass `--project-root`. Check `config show` when target identity is unknown
 or before a write. Keep credentials out of reports.
 
 For template parameters, start with `templates show NAME --format json --view brief` and follow

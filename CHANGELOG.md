@@ -6,6 +6,12 @@ The release workflow extracts the section for the requested version and fails if
 
 ## [Unreleased]
 
+### Changed
+
+- Release archives are complete agent projects with root AGENTS.md, CLAUDE.md, README and operator documentation alongside project-relative `tools/`, `.agents/skills/` and `.claude/skills/` paths. Invoke `tools/wikitool/bin/wikitool[.exe]`; skill setup is no longer required. This replaces the old versioned wrapper directory and root executable layout and requires a minor version bump before publication.
+- Fresh extracted releases default to Remilia Wiki and its adapter. Existing `.wikitool/config.toml` replaces these defaults in full; extraction does not overwrite user configuration, content or databases. Archive upgrades replace shipped project documents; preserve local edits to those documents. Runtime directories are created on first use without seeding sync or acceptance state.
+- Bundled Contextmink 0.14.0 and Papertiger 0.16.0 retain their complete upstream overlay layouts and discoverable skills. Windows also includes the Contextmink bridge executable and skill. Packaging verifies archive pins and binary digests. Creating or migrating planning authority remains an explicit Papertiger operation.
+
 ## [0.10.0] - 2026-09-09
 
 Automation consuming render checks must accept `render_check_v3`; MediaWiki test fixtures use `wikitest.mediawiki-fixture.v5`. Remilia adapter policy changes invalidate acceptance bound to earlier policy bytes. Durable sync and acceptance stores retain their existing migration rules.

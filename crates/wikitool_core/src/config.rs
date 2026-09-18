@@ -288,6 +288,9 @@ fn push_override_warning(
 /// Load and parse a WikiConfig from a TOML file. Returns default if file doesn't exist.
 pub fn load_config(config_path: &Path) -> Result<WikiConfig> {
     if !config_path.exists() {
+        if let Some(defaults) = release_defaults_path(config_path).filter(|path| path.is_file()) {
+            return load_config(&defaults);
+        }
         return Ok(WikiConfig::default());
     }
     let content = fs::read_to_string(config_path)
@@ -295,6 +298,16 @@ pub fn load_config(config_path: &Path) -> Result<WikiConfig> {
     let parsed: WikiConfig = toml::from_str(&content)
         .with_context(|| format!("failed to parse {}", config_path.display()))?;
     Ok(parsed)
+}
+
+/// Only the conventional project configuration inherits the extracted release's
+/// defaults. An explicit alternate config never silently targets another wiki.
+pub fn release_defaults_path(config_path: &Path) -> Option<std::path::PathBuf> {
+    let state = config_path.parent()?;
+    if config_path.file_name()? != "config.toml" || state.file_name()? != ".wikitool" {
+        return None;
+    }
+    Some(state.parent()?.join("tools/wikitool/default-config.toml"))
 }
 
 #[derive(Debug, Clone, Default)]
@@ -567,5 +580,35 @@ folder = "Custom"
             folder: Some("GL".to_string()),
         };
         assert_eq!(ns.folder(), "GL");
+    }
+    #[test]
+    fn release_defaults_preserve_project_and_alternate_configuration() {
+        let project = tempfile::tempdir().unwrap();
+        let owned = project.path().join("tools/wikitool");
+        fs::create_dir_all(&owned).unwrap();
+        fs::write(
+            owned.join("default-config.toml"),
+            include_str!("../../../config/release-defaults.toml"),
+        )
+        .unwrap();
+        let config = project.path().join(".wikitool/config.toml");
+        let defaults = load_config(&config).unwrap();
+        assert_eq!(
+            defaults.wiki.url.as_deref(),
+            Some("https://wiki.remilia.org")
+        );
+        assert!(!config.exists());
+        assert_eq!(
+            load_config(&project.path().join("alternate.toml")).unwrap(),
+            WikiConfig::default()
+        );
+        fs::create_dir_all(config.parent().unwrap()).unwrap();
+        fs::write(&config, "[wiki]\nurl = 'https://other.example'\n").unwrap();
+        let existing = load_config(&config).unwrap();
+        assert_eq!(existing.wiki.url.as_deref(), Some("https://other.example"));
+        assert_eq!(existing.wiki.api_url, None);
+        assert_eq!(existing.adapter.path, None);
+        fs::write(&config, "invalid [").unwrap();
+        assert!(load_config(&config).is_err());
     }
 }

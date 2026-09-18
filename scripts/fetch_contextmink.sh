@@ -3,8 +3,8 @@ set -euo pipefail
 
 # Download a pinned upstream Contextmink release, verify it against
 # repository-owned hashes, and stage its release-pack contents for wikitool's
-# release builder. Contextmink itself owns project installation through
-# `contextmink setup-project`; wikitool does not rebuild or install it.
+# release builder. The complete upstream project overlay is the distribution;
+# Wikitool does not rebuild or rewrite its binaries, skills or contracts.
 
 dest="dist/contextmink-dist"
 platform=""
@@ -133,15 +133,15 @@ stage_platform() {
       ;;
   esac
 
-  local source_root="$extract_root/contextmink-${version}-${selected_platform}"
-  if [[ ! -f "$source_root/manifest.json" ]]; then
-    echo "fetch_contextmink: release archive lacks expected manifest: $source_root/manifest.json" >&2
+  local source_root="$extract_root"
+  if [[ ! -f "$source_root/tools/contextmink/manifest.json" ]]; then
+    echo "fetch_contextmink: release archive lacks expected manifest: $source_root/tools/contextmink/manifest.json" >&2
     exit 65
   fi
-  if ! grep -Fq '"schema": "contextmink.release-manifest.v1"' "$source_root/manifest.json" \
-    || ! grep -Fq '"version": "'"$version"'"' "$source_root/manifest.json" \
-    || ! grep -Fq '"source_commit": "'"$expected_source_commit"'"' "$source_root/manifest.json" \
-    || ! grep -Fq '"platform": "'"$selected_platform"'"' "$source_root/manifest.json"; then
+  if ! grep -Fq '"schema": "contextmink.release-manifest.v2"' "$source_root/tools/contextmink/manifest.json" \
+    || ! grep -Fq '"version": "'"$version"'"' "$source_root/tools/contextmink/manifest.json" \
+    || ! grep -Fq '"source_commit": "'"$expected_source_commit"'"' "$source_root/tools/contextmink/manifest.json" \
+    || ! grep -Fq '"platform": "'"$selected_platform"'"' "$source_root/tools/contextmink/manifest.json"; then
     echo "fetch_contextmink: release manifest does not match ${version}/${selected_platform}" >&2
     exit 65
   fi
@@ -150,7 +150,7 @@ stage_platform() {
   rm -rf "$out"
   mkdir -p "$out"
   cp -R "$source_root/." "$out/"
-  printf '%s  %s\n' "$expected" "$archive" > "$out/archive.sha256"
+  printf '%s  %s\n' "$expected" "$archive" > "$out/tools/contextmink/archive.sha256"
   echo "contextmink ${version} (${selected_platform}) -> $out"
   rm -rf "$temp_root"
   temp_to_cleanup=""

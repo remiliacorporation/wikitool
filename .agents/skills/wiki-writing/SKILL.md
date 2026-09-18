@@ -5,6 +5,9 @@ description: Draft or substantially revise sourced encyclopedic MediaWiki prose.
 
 # Wiki writing
 
+For CLI operations in an extracted release, use `tools/wikitool/bin/wikitool[.exe]`
+from the project root. The runtime and skills are already in place.
+
 Deliver the requested article or revision from inspected sources. Preserve the
 subject, exclusions and intended scope; do not replace an adequate brief with
 an interview or a useful draft with an unrelated workflow.

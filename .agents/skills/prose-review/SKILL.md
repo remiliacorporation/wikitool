@@ -5,6 +5,9 @@ description: Independently review encyclopedic prose against sources, due weight
 
 # Prose review
 
+For CLI operations in an extracted release, use `tools/wikitool/bin/wikitool[.exe]`
+from the project root. The runtime and skills are already in place.
+
 Assess the exact candidate and inspected sources within the requested scope.
 Identify concrete defects and their reader impact; do not turn review-only work
 into unsolicited rewriting or manufacture findings.

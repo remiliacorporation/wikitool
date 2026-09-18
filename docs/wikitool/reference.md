@@ -2548,7 +2548,7 @@ Inspect optional release companions without changing their lifecycle state
 Usage: wikitool companions [OPTIONS]
 
 Options:
-      --manifest <PATH>      Inspect this release-companions.json instead of the file beside the executable
+      --manifest <PATH>      Inspect this release-companions.json instead of the file in tools/wikitool/
       --project-root <PATH>
       --data-dir <PATH>
       --format <FORMAT>      Output format: text|json [default: json] [possible values: text, json]
@@ -2589,7 +2589,7 @@ Arguments:
   [PROJECT]  Also inspect this project's install receipt
 
 Options:
-      --skills-root <PATH>  Skills root (default: skills/ beside the executable)
+      --skills-root <PATH>  Skills root (default: ../skills/ relative to the executable's bin directory)
       --data-dir <PATH>
       --format <FORMAT>     [default: json] [possible values: text, json]
       --config <PATH>
@@ -2608,7 +2608,7 @@ Arguments:
   [PROJECT]
 
 Options:
-      --skills-root <PATH>           Skills root (default: skills/ beside the executable)
+      --skills-root <PATH>           Skills root (default: ../skills/ relative to the executable's bin directory)
       --data-dir <PATH>
       --skill-target <SKILL_TARGET>  [default: auto] [possible values: auto, agents, claude, both]
       --config <PATH>

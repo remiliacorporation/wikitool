@@ -47,7 +47,7 @@ struct SkillsInspectArgs {
     #[arg(
         long,
         value_name = "PATH",
-        help = "Skills root (default: skills/ beside the executable)"
+        help = "Skills root (default: ../skills/ relative to the executable's bin directory)"
     )]
     skills_root: Option<PathBuf>,
     #[arg(
@@ -66,7 +66,7 @@ struct SkillsSetupArgs {
     #[arg(
         long,
         value_name = "PATH",
-        help = "Skills root (default: skills/ beside the executable)"
+        help = "Skills root (default: ../skills/ relative to the executable's bin directory)"
     )]
     skills_root: Option<PathBuf>,
     #[arg(long, value_enum, default_value_t = SkillTarget::Auto)]
@@ -226,7 +226,10 @@ fn resolve_skills_root(explicit: Option<PathBuf>) -> Result<PathBuf> {
     let parent = executable
         .parent()
         .context("Wikitool executable path has no parent directory")?;
-    Ok(parent.join("skills"))
+    Ok(parent
+        .parent()
+        .context("Wikitool bin directory has no parent")?
+        .join("skills"))
 }
 
 fn resolve_requested_project(explicit: Option<PathBuf>, runtime: &RuntimeOptions) -> PathBuf {

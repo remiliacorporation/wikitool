@@ -36,12 +36,12 @@ if [[ -z "$bundle_dir" || ! -d "$bundle_dir" ]]; then
 fi
 
 for required in \
-  "$bundle_dir/wikitool" \
-  "$bundle_dir/contextmink/contextmink" \
-  "$bundle_dir/papertiger/papertiger" \
-  "$bundle_dir/papertiger/papertiger-mise" \
+  "$bundle_dir/tools/wikitool/bin/wikitool" \
+  "$bundle_dir/tools/contextmink/bin/contextmink" \
+  "$bundle_dir/tools/papertiger/bin/papertiger" \
+  "$bundle_dir/tools/papertiger/bin/papertiger-mise" \
   "$bundle_dir/docs/wikitool/macos-gatekeeper.md" \
-  "$bundle_dir/skills/wikitool/SKILL.md"
+  "$bundle_dir/tools/wikitool/skills/wikitool/SKILL.md"
 do
   if [[ ! -f "$required" || -L "$required" ]]; then
     echo "unsigned macOS release prerequisite is missing or a symlink: $required" >&2
@@ -49,7 +49,7 @@ do
   fi
 done
 
-trust_path="$bundle_dir/macos-release-trust.json"
+trust_path="$bundle_dir/tools/wikitool/macos-release-trust.json"
 if [[ -e "$trust_path" || -L "$trust_path" ]]; then
   echo "macOS trust declaration already exists: $trust_path" >&2
   exit 1
@@ -60,7 +60,7 @@ printf '%s\n' \
   '  "schema": "wikitool.macos-release-trust.v1",' \
   '  "status": "unsigned_github_release",' \
   '  "gatekeeper": "explicit_checksum_bound_quarantine_exception_required",' \
-  '  "executables": ["wikitool", "contextmink/contextmink", "papertiger/papertiger", "papertiger/papertiger-mise"],' \
+  '  "executables": ["tools/wikitool/bin/wikitool", "tools/contextmink/bin/contextmink", "tools/papertiger/bin/papertiger", "tools/papertiger/bin/papertiger-mise"],' \
   '  "instructions": "docs/wikitool/macos-gatekeeper.md"' \
   '}' > "$trust_path"
 

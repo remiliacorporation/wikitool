@@ -1,0 +1,7 @@
+# Local credentials and runtime authority belong to this workstation.
+/.env
+/.env.local
+/.wikitool/
+/state/
+.DS_Store
+Thumbs.db

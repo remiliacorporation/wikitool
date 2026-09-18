@@ -8,38 +8,47 @@ The binary contains no LLM. It owns MediaWiki transport, parsing, local catalogs
 and durable editing state. Agents judge source support and prose; an explicitly
 selected site adapter supplies the wiki's conventions.
 
-## Install and configure
+## Extract and use
 
 Download the archive and `SHA256SUMS.txt` from the same release, verify the archive,
-and unpack it. Add `wikitool` to PATH or invoke its exact path (`wikitool.exe`
-on Windows). [Unsigned macOS releases](docs/wikitool/macos-gatekeeper.md) have a
+and extract it into a new directory. Open that directory as your agent project.
+Invoke `tools/wikitool/bin/wikitool`
+(`.exe` on Windows). [Unsigned macOS releases](docs/wikitool/macos-gatekeeper.md) have a
 separate trust procedure.
 
-Release archives contain the executable, a hash-manifested `skills/` distribution,
-`site_adapters/`, operator docs, licenses, and separately versioned optional
-Contextmink and Papertiger packs. Companion setup belongs to those tools; using
-Wikitool does not initialize their state.
+The archive is a complete agent project: root `AGENTS.md`, `CLAUDE.md`, this
+README and operator documentation, Wikitool, complete Contextmink and Papertiger
+packages, and discoverable skills under `.agents/skills/` and `.claude/skills/`.
+No setup command is needed. Wikitool's executable, adapters and hash-manifested
+skill distribution live under `tools/wikitool/`.
 
-Install skills in an existing project directory (create the directory first
-when starting a new project):
+For upgrades, retain your configuration, content and databases. The archive also
+ships project documents; preserve any local changes to those before replacing them.
+
+From the project root:
 
 ```bash
-wikitool skills inspect
-wikitool skills setup-project /path/to/project --skill-target auto
+tools/wikitool/bin/wikitool config show
+tools/wikitool/bin/wikitool skills inspect
+tools/wikitool/bin/wikitool companions
 ```
 
-Setup installs receipt-owned copies and does not edit root instructions.
-`auto` detects supported harness markers; use explicit targets, dry-run,
-inspection and uninstall through `skills --help`.
+The fresh-release default is **Remilia Wiki**, with its bundled site adapter.
+`tools/wikitool/default-config.toml` supplies defaults only while the conventional
+`.wikitool/config.toml` is absent. An existing project configuration replaces the
+defaults in full. Runtime directories are created when first needed; no content,
+credentials, sync baselines, acceptance decisions or planner history are shipped.
+Papertiger still requires an explicit authority choice for genuinely new history.
 
-Run from the wiki project, or pass `--project-root`:
+To select another wiki, write project configuration with the optional `init`
+command (or edit `.wikitool/config.toml`). Run from the project or pass `--project-root`:
 
 ```bash
 wikitool init --wiki-url https://wiki.example.org/ --api-url https://wiki.example.org/api.php
 wikitool config show
 ```
 
-Wikitool has no default target wiki. Read-only source retrieval needs no credentials
+Read-only source retrieval needs no credentials
 or full mirror. Synchronized editing requires an initial `pull --full --all`
 baseline. Build catalogs and refresh capabilities only when the task needs them;
 see the [operator guide](docs/wikitool/guide.md). Preserve existing local edits.
@@ -88,9 +97,9 @@ route; the `wikitool` skill carries the portable procedure.
 
 ## Site policy and state
 
-Without an explicit adapter, Wikitool uses `mediawiki-generic`. Bundled adapters
-are inert examples until selected. Copy the desired bundle into the project and
-use `init --adapter-path site-adapter/site-adapter.toml`. Unknown fields and
+The release defaults select Remilia's adapter. An explicit project config without
+an adapter uses `mediawiki-generic`. Use `init --adapter-path` to select another
+project-relative adapter. Unknown fields and
 paths escaping the project fail closed. [Site adapters](docs/wikitool/site-adapters.md)
 explains typed policy, supplemental prose and packaging.
 
@@ -113,6 +122,11 @@ Use [AGENTS.md](AGENTS.md) for source boundaries and
 [Wikitest testing](wikitest/TESTING.md) for checks matched to the change.
 Skill-only revisions require packaging, reference and realistic routing checks,
 not an unrelated runtime rebuild.
+
+Companion packages and their generated skills are local release outputs, ignored
+by Git. Their source identities and archive checksums live in `config/`; release
+builds compose the verified upstream packages without maintaining copied installer
+code or contracts in Wikitool.
 
 Wikitest is source-resident and absent from end-user archives. Mechanical fixtures
 can prove exact CLI and state transitions; prepared prose packets do not prove

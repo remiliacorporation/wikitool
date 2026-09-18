@@ -1,0 +1,13 @@
+# Defaults for a fresh extracted release. Existing .wikitool/config.toml wins.
+[wiki]
+url = "https://wiki.remilia.org"
+api_url = "https://wiki.remilia.org/api.php"
+article_path = "/$1"
+
+[[wiki.custom_namespaces]]
+name = "Goldenlight"
+id = 3000
+folder = "Goldenlight"
+
+[adapter]
+path = "tools/wikitool/site_adapters/remilia-wiki/site-adapter.toml"

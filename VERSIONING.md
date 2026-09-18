@@ -78,9 +78,7 @@ Experimental / top-level steered:
 Packaged / distributable:
 
 1. Stage the pinned upstream Contextmink and Papertiger packs with `bash scripts/fetch_contextmink.sh --all` and `bash scripts/fetch_papertiger.sh --all`, then use `cargo run --package wikitool --features maintainer -- release build-matrix --contextmink-dist dist/contextmink-dist --papertiger-dist dist/papertiger-dist` from a source checkout to emit per-target zip bundles.
-2. Bundles use the embedded generic adapter by default, include the built-in generic and Remilia
-   Wiki adapter catalog plus the deterministic `skills/` distribution, and compile the packaged binary
-   without the maintainer surface. Catalog presence does not select an adapter.
+2. Each bundle is a complete agent project. Extract into a new directory and work there. Root AGENTS.md, CLAUDE.md, README and documentation ship alongside native tools under tools/ and complete skills in both harness directories. Fresh projects use tools/wikitool/default-config.toml for Remilia Wiki. Existing project configuration wins. Packaged binaries have no maintainer surface.
 3. A project adapter supplement is opt-in via `--host-project-root <PATH>`. It is packaged under
    `site_adapters/project/` and never replaces the public guidance, skills, or built-in catalog.
 
@@ -116,24 +114,13 @@ itself is not a pass and must never be used to bless a release.
    - or run GitHub workflow `.github/workflows/release-artifacts.yml` with `artifact_version=X.Y.Z` for per-platform artifacts
    - every GitHub macOS artifact is explicitly marked unsigned and carries the bounded,
      checksum-first Gatekeeper procedure
-7. Verify each zip contains:
-   - `wikitool` or `wikitool.exe`
-   - `README.md`
-   - `skills/manifest.json`, whose complete file inventory validates with `wikitool skills inspect`
-   - `skills/`, including `wiki-writing`, `prose-review`, `wiki-interview`, and `wikitool`
-   - no source-checkout `AGENTS.md`/`CLAUDE.md`, generated `.claude/` wrappers, or legacy `codex_skills/`
-   - `site_adapters/generic/site-adapter.toml`
-   - `site_adapters/remilia-wiki/site-adapter.toml` and its declared guidance/template contracts
-   - `site_adapters/project/site-adapter.toml` only when `--host-project-root` was supplied
-   - `docs/wikitool/`
-   - `contextmink/` with `contextmink` or `contextmink.exe`
-   - `contextmink/contextmink-bridge.exe` in the Windows bundle only
-   - `contextmink/archive.sha256`, matching the repository-pinned upstream archive receipt
-   - `papertiger/` with both `papertiger` and `papertiger-mise` (`.exe` on Windows), its canonical
-     agent contract, release manifest, licenses, and repository-pinned `archive.sha256` receipt
-   - `release-companions.json`, identifying both external packs as optional and preserving their
-     independent lifecycle ownership
-   - no project install receipt; `.wikitool-skills/project-install.json` is created only by an
-     explicit `wikitool skills setup-project`
+7. Run `bash scripts/verify_project_overlay.sh <archive.zip>` against the actual archive. It must contain:
+   - root `AGENTS.md`, `CLAUDE.md`, `README.md`, operator documentation, release history and licenses
+   - `tools/wikitool/bin/wikitool[.exe]`, `default-config.toml`, adapters and the hash-manifested `skills/` distribution
+   - complete `.agents/skills/` and `.claude/skills/` packages for the four public skills and both companions
+   - unchanged upstream Contextmink and Papertiger overlays, with native binaries under `tools/<name>/bin/`, manifests, licenses, contracts and pinned `archive.sha256` receipts
+   - `tools/wikitool/release-companions.json`, identifying optional companions and their lifecycle owners
+   - no wrapper directory, user configuration, content, database, credentials or fabricated install receipt
+   Verify fresh use without setup, preservation of existing target and authority bytes on re-extraction, and explicit diagnostics when an optional companion is absent.
 8. Verify `SHA256SUMS.txt` matches the uploaded zip assets.
 9. Create tag `X.Y.Z`.

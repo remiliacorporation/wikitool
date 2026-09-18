@@ -197,9 +197,22 @@ fn stage_release_bundle(
 ) -> Result<()> {
     validate_release_output(repo_root, output_dir, "release bundle output")?;
     reset_directory(output_dir)?;
-    copy_file(binary_path, &output_dir.join(bundle_binary_name))?;
-    copy_dir_contents(skills_dir, &output_dir.join("skills"))?;
+    let tool_dir = output_dir.join("tools/wikitool");
+    copy_file(binary_path, &tool_dir.join("bin").join(bundle_binary_name))?;
+    copy_dir_contents(skills_dir, &tool_dir.join("skills"))?;
+    for harness in [".agents", ".claude"] {
+        for id in crate::skills::PUBLIC_SKILL_IDS {
+            copy_dir_contents(
+                &skills_dir.join(id),
+                &output_dir.join(harness).join("skills").join(id),
+            )?;
+        }
+    }
     stage_release_payload(repo_root, output_dir, host_project_root)?;
+    copy_file(
+        &repo_root.join("config/release-defaults.toml"),
+        &tool_dir.join("default-config.toml"),
+    )?;
     Ok(())
 }
 
@@ -406,7 +419,8 @@ fn stage_prebuilt_contextmink_pack(
     let source_commit =
         read_release_source_commit(repo_root, "Contextmink", "config/contextmink.source-commit")?;
     let source = dist.join(platform_slug);
-    let manifest_path = source.join("manifest.json");
+    let owned = source.join("tools/contextmink");
+    let manifest_path = owned.join("manifest.json");
     let manifest_text = fs::read_to_string(&manifest_path).with_context(|| {
         format!(
             "missing prebuilt contextmink bundle for {platform_slug}: {}",
@@ -418,7 +432,7 @@ fn stage_prebuilt_contextmink_pack(
     validate_contextmink_manifest(&manifest, &pin, &source_commit, platform_slug)?;
     validate_release_archive_receipt(
         repo_root,
-        &source,
+        &owned,
         &manifest,
         "Contextmink",
         "config/contextmink-sha256s.txt",
@@ -426,7 +440,7 @@ fn stage_prebuilt_contextmink_pack(
     )?;
     for key in ["binary", "bridge_binary"] {
         if let Some(binary) = manifest.get(key).and_then(serde_json::Value::as_str) {
-            let path = source.join(binary);
+            let path = owned.join(binary);
             if !path.is_file() {
                 bail!(
                     "contextmink manifest names {key} {binary:?} but it is missing: {}",
@@ -435,9 +449,7 @@ fn stage_prebuilt_contextmink_pack(
             }
         }
     }
-    let pack_dir = bundle_dir.join("contextmink");
-    reset_directory(&pack_dir)?;
-    copy_dir_contents(&source, &pack_dir)?;
+    merge_companion_overlay(&source, bundle_dir, "contextmink", &manifest)?;
     Ok(())
 }
 
@@ -485,6 +497,72 @@ fn validate_release_archive_receipt(
     Ok(())
 }
 
+/// Compose upstream-owned overlays without rewriting their skills or allowing
+/// a companion to replace another tool, project policy, or mutable state.
+fn merge_companion_overlay(
+    source: &Path,
+    destination: &Path,
+    product: &str,
+    manifest: &serde_json::Value,
+) -> Result<()> {
+    if manifest.get("layout").and_then(serde_json::Value::as_str) != Some("project-overlay") {
+        bail!("{product} must declare layout=project-overlay");
+    }
+    let hashes = manifest
+        .get("binary_sha256")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| anyhow::anyhow!("{product} manifest lacks binary_sha256"))?;
+    let binaries = if product == "contextmink" {
+        ["binary", "bridge_binary"]
+            .iter()
+            .filter_map(|key| manifest.get(key).and_then(serde_json::Value::as_str))
+            .collect::<Vec<_>>()
+    } else {
+        manifest["binaries"]
+            .as_array()
+            .context("missing binaries")?
+            .iter()
+            .map(|value| value.as_str().context("invalid binary path"))
+            .collect::<Result<Vec<_>>>()?
+    };
+    for binary in binaries {
+        let actual = sha256_file(&source.join("tools").join(product).join(binary))?;
+        if hashes.get(binary).and_then(serde_json::Value::as_str) != Some(actual.as_str()) {
+            bail!("{product} binary digest mismatch: {binary}");
+        }
+    }
+    let mut skills = vec![product];
+    if product == "contextmink" && manifest.get("bridge_binary").is_some() {
+        skills.push("contextmink-bridge");
+    }
+    let mut prefixes = vec![format!("tools/{product}")];
+    let files = collect_relative_file_paths(source)?;
+    for harness in [".agents", ".claude"] {
+        for skill in &skills {
+            let prefix = format!("{harness}/skills/{skill}");
+            if !source.join(&prefix).join("SKILL.md").is_file() {
+                bail!("{product} overlay is missing its {harness} {skill} skill");
+            }
+            prefixes.push(prefix);
+        }
+    }
+    for relative in &files {
+        if !prefixes.iter().any(|prefix| relative.starts_with(prefix)) {
+            bail!(
+                "{product} overlay contains a non-owned path: {}",
+                relative.display()
+            );
+        }
+        if destination.join(relative).exists() {
+            bail!("{product} overlay collides with {}", relative.display());
+        }
+    }
+    for relative in files {
+        copy_file(&source.join(&relative), &destination.join(relative))?;
+    }
+    Ok(())
+}
+
 fn release_archive_hash_from_pins(raw: &str, archive: &str) -> Result<String> {
     let mut found = None;
     for line in raw.lines().map(str::trim).filter(|line| !line.is_empty()) {
@@ -515,9 +593,9 @@ fn validate_contextmink_manifest(
     platform_slug: &str,
 ) -> Result<()> {
     let schema = manifest.get("schema").and_then(serde_json::Value::as_str);
-    if schema != Some("contextmink.release-manifest.v1") {
+    if schema != Some("contextmink.release-manifest.v2") {
         bail!(
-            "contextmink manifest schema is {schema:?}, expected contextmink.release-manifest.v1"
+            "contextmink manifest schema is {schema:?}, expected contextmink.release-manifest.v2"
         );
     }
     let name = manifest.get("name").and_then(serde_json::Value::as_str);
@@ -573,8 +651,8 @@ fn expected_contextmink_pack_layout(
     platform_slug: &str,
 ) -> Result<(&'static str, Option<&'static str>)> {
     match platform_slug {
-        "windows-x86_64" => Ok(("contextmink.exe", Some("contextmink-bridge.exe"))),
-        "linux-x86_64" | "macos-x86_64" | "macos-arm64" => Ok(("contextmink", None)),
+        "windows-x86_64" => Ok(("bin/contextmink.exe", Some("bin/contextmink-bridge.exe"))),
+        "linux-x86_64" | "macos-x86_64" | "macos-arm64" => Ok(("bin/contextmink", None)),
         other => bail!("unsupported contextmink platform slug {other:?}"),
     }
 }
@@ -611,7 +689,8 @@ fn stage_prebuilt_papertiger_pack(
     let source_commit =
         read_release_source_commit(repo_root, "Papertiger", "config/papertiger.source-commit")?;
     let source = dist.join(platform_slug);
-    let manifest_path = source.join("manifest.json");
+    let owned = source.join("tools/papertiger");
+    let manifest_path = owned.join("manifest.json");
     let manifest_text = fs::read_to_string(&manifest_path).with_context(|| {
         format!(
             "missing prebuilt papertiger bundle for {platform_slug}: {}",
@@ -623,7 +702,7 @@ fn stage_prebuilt_papertiger_pack(
     validate_papertiger_manifest(&manifest, &pin, &source_commit, platform_slug)?;
     validate_release_archive_receipt(
         repo_root,
-        &source,
+        &owned,
         &manifest,
         "Papertiger",
         "config/papertiger-sha256s.txt",
@@ -638,7 +717,7 @@ fn stage_prebuilt_papertiger_pack(
         let binary = binary
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("papertiger manifest contains a non-string binary"))?;
-        let path = source.join(binary);
+        let path = owned.join(binary);
         if !path.is_file() {
             bail!(
                 "papertiger manifest names binary {binary:?} but it is missing: {}",
@@ -655,7 +734,7 @@ fn stage_prebuilt_papertiger_pack(
         "LICENSE-SSL",
         "LICENSE-VPL",
     ] {
-        let path = source.join(required);
+        let path = owned.join(required);
         if !path.is_file() {
             bail!(
                 "papertiger release pack is missing required file {required:?}: {}",
@@ -664,9 +743,7 @@ fn stage_prebuilt_papertiger_pack(
         }
     }
 
-    let pack_dir = bundle_dir.join("papertiger");
-    reset_directory(&pack_dir)?;
-    copy_dir_contents(&source, &pack_dir)?;
+    merge_companion_overlay(&source, bundle_dir, "papertiger", &manifest)?;
     Ok(())
 }
 
@@ -677,9 +754,9 @@ fn validate_papertiger_manifest(
     platform_slug: &str,
 ) -> Result<()> {
     let schema = manifest.get("schema").and_then(serde_json::Value::as_str);
-    if schema != Some("papertiger.release-manifest.v1") {
+    if schema != Some("papertiger.release-manifest.v2") {
         bail!(
-            "papertiger manifest schema is {schema:?}, expected \"papertiger.release-manifest.v1\""
+            "papertiger manifest schema is {schema:?}, expected \"papertiger.release-manifest.v2\""
         );
     }
     let name = manifest.get("name").and_then(serde_json::Value::as_str);
@@ -766,9 +843,9 @@ fn papertiger_archive_name(pin: &str, platform_slug: &str) -> Result<String> {
 
 fn expected_papertiger_pack_layout(platform_slug: &str) -> Result<Vec<&'static str>> {
     match platform_slug {
-        "windows-x86_64" => Ok(vec!["papertiger.exe", "papertiger-mise.exe"]),
+        "windows-x86_64" => Ok(vec!["bin/papertiger.exe", "bin/papertiger-mise.exe"]),
         "linux-x86_64" | "macos-x86_64" | "macos-arm64" => {
-            Ok(vec!["papertiger", "papertiger-mise"])
+            Ok(vec!["bin/papertiger", "bin/papertiger-mise"])
         }
         other => bail!("unsupported papertiger platform slug {other:?}"),
     }
@@ -790,15 +867,15 @@ fn write_release_companion_manifest(
     let (contextmink_binary, _) = expected_contextmink_pack_layout(platform_slug)?;
     let papertiger_binaries = expected_papertiger_pack_layout(platform_slug)?;
     let manifest = serde_json::json!({
-        "schema": "wikitool.release-companions.v1",
+        "schema": "wikitool.release-companions.v2",
         "companions": [
             {
                 "id": "contextmink",
                 "version": contextmink_version,
                 "source_commit": contextmink_source_commit,
-                "directory": "contextmink",
-                "binary": format!("contextmink/{contextmink_binary}"),
-                "manifest": "contextmink/manifest.json",
+                "directory": "tools/contextmink",
+                "binary": format!("tools/contextmink/{contextmink_binary}"),
+                "manifest": "tools/contextmink/manifest.json",
                 "required_for_wikitool": false,
                 "project_lifecycle_owner": "contextmink"
             },
@@ -806,24 +883,25 @@ fn write_release_companion_manifest(
                 "id": "papertiger",
                 "version": papertiger_version,
                 "source_commit": papertiger_source_commit,
-                "directory": "papertiger",
-                "planner_binary": format!("papertiger/{}", papertiger_binaries[0]),
-                "mise_binary": format!("papertiger/{}", papertiger_binaries[1]),
-                "manifest": "papertiger/manifest.json",
-                "agent_contract": "papertiger/agent_integration.md",
+                "directory": "tools/papertiger",
+                "planner_binary": format!("tools/papertiger/{}", papertiger_binaries[0]),
+                "mise_binary": format!("tools/papertiger/{}", papertiger_binaries[1]),
+                "manifest": "tools/papertiger/manifest.json",
+                "agent_contract": "tools/papertiger/agent_integration.md",
                 "required_for_wikitool": false,
                 "project_lifecycle_owner": "papertiger",
                 "setup_initializes_task_authority": false
             }
         ]
     });
-    let path = bundle_dir.join("release-companions.json");
+    let path = bundle_dir.join("tools/wikitool/release-companions.json");
+    fs::create_dir_all(path.parent().context("missing manifest parent")?)?;
     fs::write(&path, serde_json::to_string_pretty(&manifest)? + "\n")
         .with_context(|| format!("failed to write {}", normalize_path(&path)))?;
     Ok(())
 }
 
-fn zip_release_bundle(source_dir: &Path, zip_path: &Path, bundle_name: &str) -> Result<()> {
+fn zip_release_bundle(source_dir: &Path, zip_path: &Path, _bundle_name: &str) -> Result<()> {
     if !source_dir.is_dir() {
         bail!("directory not found: {}", normalize_path(source_dir));
     }
@@ -835,17 +913,10 @@ fn zip_release_bundle(source_dir: &Path, zip_path: &Path, bundle_name: &str) -> 
     let zip_file = fs::File::create(zip_path)
         .with_context(|| format!("failed to create {}", normalize_path(zip_path)))?;
     let mut zip_writer = ZipWriter::new(zip_file);
-    let dir_options = FileOptions::default()
-        .compression_method(CompressionMethod::Stored)
-        .unix_permissions(0o755);
-    zip_writer
-        .add_directory(format!("{bundle_name}/"), dir_options)
-        .with_context(|| format!("failed to create zip root in {}", normalize_path(zip_path)))?;
-
     for relative_path in collect_relative_file_paths(source_dir)? {
         let source_path = source_dir.join(&relative_path);
         let normalized_relative = normalize_path(&relative_path);
-        let entry_name = format!("{bundle_name}/{normalized_relative}");
+        let entry_name = normalized_relative;
         let mode = if is_release_binary_entry(&relative_path) {
             0o755
         } else {
@@ -946,6 +1017,12 @@ fn collect_relative_file_paths_recursive(
         let metadata = entry
             .metadata()
             .with_context(|| format!("failed to read metadata {}", normalize_path(&path)))?;
+        if fs::symlink_metadata(&path)?.file_type().is_symlink() {
+            bail!(
+                "release payload must not contain symlinks: {}",
+                path.display()
+            );
+        }
         if metadata.is_dir() {
             collect_relative_file_paths_recursive(root, &path, output)?;
         } else if metadata.is_file() {
@@ -981,6 +1058,102 @@ fn is_release_binary_entry(relative_path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn windows_contextmink_requires_and_preserves_bridge_skills() {
+        let source = tempfile::tempdir().unwrap();
+        let output = tempfile::tempdir().unwrap();
+        let binary = source.path().join("tools/contextmink/bin/contextmink.exe");
+        let bridge = source
+            .path()
+            .join("tools/contextmink/bin/contextmink-bridge.exe");
+        std::fs::create_dir_all(binary.parent().unwrap()).unwrap();
+        std::fs::write(&binary, b"client").unwrap();
+        std::fs::write(&bridge, b"bridge").unwrap();
+        let manifest = serde_json::json!({
+            "layout": "project-overlay",
+            "binary": "bin/contextmink.exe",
+            "bridge_binary": "bin/contextmink-bridge.exe",
+            "binary_sha256": {
+                "bin/contextmink.exe": super::sha256_file(&binary).unwrap(),
+                "bin/contextmink-bridge.exe": super::sha256_file(&bridge).unwrap()
+            }
+        });
+        for harness in [".agents", ".claude"] {
+            for skill in ["contextmink", "contextmink-bridge"] {
+                let path = source
+                    .path()
+                    .join(format!("{harness}/skills/{skill}/SKILL.md"));
+                std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                std::fs::write(path, b"upstream contract").unwrap();
+            }
+        }
+        let required = source
+            .path()
+            .join(".claude/skills/contextmink-bridge/SKILL.md");
+        std::fs::remove_file(&required).unwrap();
+        let error =
+            super::merge_companion_overlay(source.path(), output.path(), "contextmink", &manifest)
+                .unwrap_err();
+        assert!(error.to_string().contains("contextmink-bridge skill"));
+        assert!(!output.path().join("tools").exists());
+        std::fs::write(required, b"upstream contract").unwrap();
+        super::merge_companion_overlay(source.path(), output.path(), "contextmink", &manifest)
+            .unwrap();
+        assert_eq!(
+            std::fs::read(
+                output
+                    .path()
+                    .join(".claude/skills/contextmink-bridge/SKILL.md")
+            )
+            .unwrap(),
+            b"upstream contract"
+        );
+    }
+
+    #[test]
+    fn companion_overlay_rejects_changed_binaries_and_non_owned_files() {
+        let source = tempfile::tempdir().unwrap();
+        let output = tempfile::tempdir().unwrap();
+        let binary = source.path().join("tools/contextmink/bin/contextmink");
+        std::fs::create_dir_all(binary.parent().unwrap()).unwrap();
+        std::fs::write(&binary, b"verified binary").unwrap();
+        for harness in [".agents", ".claude"] {
+            let skill = source
+                .path()
+                .join(harness)
+                .join("skills/contextmink/SKILL.md");
+            std::fs::create_dir_all(skill.parent().unwrap()).unwrap();
+            std::fs::write(skill, b"upstream skill").unwrap();
+        }
+        let manifest = serde_json::json!({
+            "layout": "project-overlay", "binary": "bin/contextmink",
+            "binary_sha256": {"bin/contextmink": super::sha256_file(&binary).unwrap()}
+        });
+        std::fs::write(&binary, b"tampered binary").unwrap();
+        assert!(
+            super::merge_companion_overlay(source.path(), output.path(), "contextmink", &manifest)
+                .is_err()
+        );
+        std::fs::write(&binary, b"verified binary").unwrap();
+        std::fs::write(source.path().join("AGENTS.md"), b"project policy").unwrap();
+        assert!(
+            super::merge_companion_overlay(source.path(), output.path(), "contextmink", &manifest)
+                .is_err()
+        );
+        assert!(!output.path().join("tools").exists());
+        std::fs::remove_file(source.path().join("AGENTS.md")).unwrap();
+        super::merge_companion_overlay(source.path(), output.path(), "contextmink", &manifest)
+            .unwrap();
+        assert_eq!(
+            std::fs::read(output.path().join(".agents/skills/contextmink/SKILL.md")).unwrap(),
+            b"upstream skill"
+        );
+        assert!(
+            super::merge_companion_overlay(source.path(), output.path(), "contextmink", &manifest)
+                .is_err()
+        );
+    }
+
     use super::{
         host_platform_slug, is_release_binary_entry, papertiger_archive_name,
         parse_release_semver_pin, release_archive_hash_from_pins, release_binary_name_for_target,
@@ -1076,13 +1249,13 @@ mod tests {
         assert!(release_archive_hash_from_pins("bad hash line\n", archive).is_err());
         let source_commit = "0123456789abcdef0123456789abcdef01234567";
         let manifest: serde_json::Value = serde_json::json!({
-            "schema": "contextmink.release-manifest.v1",
+            "schema": "contextmink.release-manifest.v2",
             "name": "contextmink",
             "version": "0.3.0",
             "source_commit": source_commit,
             "platform": "windows-x86_64",
-            "binary": "contextmink.exe",
-            "bridge_binary": "contextmink-bridge.exe",
+            "binary": "bin/contextmink.exe",
+            "bridge_binary": "bin/contextmink-bridge.exe",
         });
         assert!(
             validate_contextmink_manifest(&manifest, "0.3.0", source_commit, "windows-x86_64")
@@ -1097,7 +1270,7 @@ mod tests {
                 .is_err()
         );
         let mut wrong_schema = manifest.clone();
-        wrong_schema["schema"] = serde_json::json!("contextmink.release-manifest.v2");
+        wrong_schema["schema"] = serde_json::json!("contextmink.release-manifest.v1");
         assert!(
             validate_contextmink_manifest(&wrong_schema, "0.3.0", source_commit, "windows-x86_64")
                 .is_err()
@@ -1110,25 +1283,25 @@ mod tests {
                 .is_err()
         );
         let linux_manifest: serde_json::Value = serde_json::json!({
-            "schema": "contextmink.release-manifest.v1",
+            "schema": "contextmink.release-manifest.v2",
             "name": "contextmink",
             "version": "0.3.0",
             "source_commit": source_commit,
             "platform": "linux-x86_64",
-            "binary": "contextmink",
+            "binary": "bin/contextmink",
         });
         assert!(
             validate_contextmink_manifest(&linux_manifest, "0.3.0", source_commit, "linux-x86_64")
                 .is_ok()
         );
         let linux_with_bridge: serde_json::Value = serde_json::json!({
-            "schema": "contextmink.release-manifest.v1",
+            "schema": "contextmink.release-manifest.v2",
             "name": "contextmink",
             "version": "0.3.0",
             "source_commit": source_commit,
             "platform": "linux-x86_64",
-            "binary": "contextmink",
-            "bridge_binary": "contextmink-bridge.exe",
+            "binary": "bin/contextmink",
+            "bridge_binary": "bin/contextmink-bridge.exe",
         });
         assert!(
             validate_contextmink_manifest(
@@ -1140,12 +1313,12 @@ mod tests {
             .is_err()
         );
         let windows_without_bridge: serde_json::Value = serde_json::json!({
-            "schema": "contextmink.release-manifest.v1",
+            "schema": "contextmink.release-manifest.v2",
             "name": "contextmink",
             "version": "0.3.0",
             "source_commit": source_commit,
             "platform": "windows-x86_64",
-            "binary": "contextmink.exe",
+            "binary": "bin/contextmink.exe",
         });
         assert!(
             validate_contextmink_manifest(
@@ -1157,12 +1330,12 @@ mod tests {
             .is_err()
         );
         let wrong_binary: serde_json::Value = serde_json::json!({
-            "schema": "contextmink.release-manifest.v1",
+            "schema": "contextmink.release-manifest.v2",
             "name": "contextmink",
             "version": "0.3.0",
             "source_commit": source_commit,
             "platform": "linux-x86_64",
-            "binary": "contextmink.exe",
+            "binary": "bin/contextmink.exe",
         });
         assert!(
             validate_contextmink_manifest(&wrong_binary, "0.3.0", source_commit, "linux-x86_64")
@@ -1175,7 +1348,7 @@ mod tests {
             "contextmink",
             "contextmink-bridge",
             "papertiger",
-            "papertiger-mise",
+            "bin/papertiger-mise",
         ] {
             assert!(is_release_binary_entry(std::path::Path::new(binary)));
         }
@@ -1187,14 +1360,14 @@ mod tests {
     #[test]
     fn papertiger_pin_and_manifest_validation_fail_fast() {
         let manifest: serde_json::Value = serde_json::json!({
-            "schema": "papertiger.release-manifest.v1",
+            "schema": "papertiger.release-manifest.v2",
             "name": "papertiger",
             "version": "0.9.0",
             "source_commit": "3f2a1ef6f40ad01ca9b07d44b28b10d7a3276af0",
             "target": "x86_64-pc-windows-msvc",
             "platform": "windows-x86_64",
             "archive": "papertiger-0.9.0-windows-x86_64.zip",
-            "binaries": ["papertiger.exe", "papertiger-mise.exe"],
+            "binaries": ["bin/papertiger.exe", "bin/papertiger-mise.exe"],
             "planner_setup_installs_mise": false,
         });
         let source_commit = "3f2a1ef6f40ad01ca9b07d44b28b10d7a3276af0";
@@ -1212,7 +1385,7 @@ mod tests {
         );
 
         let mut wrong_schema = manifest.clone();
-        wrong_schema["schema"] = serde_json::json!("papertiger.release-manifest.v2");
+        wrong_schema["schema"] = serde_json::json!("papertiger.release-manifest.v1");
         assert!(
             validate_papertiger_manifest(&wrong_schema, "0.9.0", source_commit, "windows-x86_64")
                 .is_err()
@@ -1264,13 +1437,14 @@ mod tests {
         let output = tempfile::tempdir().expect("companion manifest tempdir");
         write_release_companion_manifest(repo_root.path(), output.path(), "windows-x86_64")
             .expect("write companion manifest");
-        let body = std::fs::read_to_string(output.path().join("release-companions.json"))
-            .expect("read companion manifest");
+        let body =
+            std::fs::read_to_string(output.path().join("tools/wikitool/release-companions.json"))
+                .expect("read companion manifest");
         let manifest: serde_json::Value =
             serde_json::from_str(&body).expect("parse companion JSON");
         assert_eq!(
             manifest["schema"],
-            serde_json::json!("wikitool.release-companions.v1")
+            serde_json::json!("wikitool.release-companions.v2")
         );
         assert_eq!(
             manifest["companions"][0]["required_for_wikitool"],
@@ -1282,7 +1456,7 @@ mod tests {
         );
         assert_eq!(
             manifest["companions"][1]["planner_binary"],
-            serde_json::json!("papertiger/papertiger.exe")
+            serde_json::json!("tools/papertiger/bin/papertiger.exe")
         );
         assert_eq!(
             manifest["companions"][1]["source_commit"],

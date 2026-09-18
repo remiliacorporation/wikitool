@@ -1,12 +1,28 @@
-# Wikitool development
+# Wikitool
 
-This governs the source checkout. `CLAUDE.md` routes here. Public skills live
-in `.agents/skills/`; source `.claude/skills/` files are thin routes.
+Work from this project directory. The release is ready to use: run
+`tools/wikitool/bin/wikitool` (`.exe` on Windows). Remilia Wiki is the default
+target; `config show` reports the effective target and policy. No installation,
+skill-copying or initialization sequence is required. Read the
+[operator guide](docs/wikitool/guide.md) when the task needs it.
+
+`CLAUDE.md` routes here. Select skills by the requested outcome:
+
+- `wikitool`: retrieval, templates, mechanical checks and revision-bound sync.
+- `wiki-writing`: new or substantially revised sourced encyclopedic prose.
+- `prose-review`: independent editorial assessment.
+- `wiki-interview`: missing human knowledge, sources or exclusions.
+- `contextmink`: bounded repository discovery and large reads.
+- `papertiger`: durable planning and resuming recorded work.
+
+Skills and their references are already present in both harness directories.
+A lookup does not need an editorial workflow; an adequate brief does not need
+an interview. Complete authorized drafts without inventing publication scope.
 
 ## Authority
 
-The runtime project is the caller's wiki, not this checkout. Preserve unrelated
-work. Source development and disposable fixtures authorize local iteration;
+The project directory owns its configuration, content and runtime state. Preserve
+unrelated work. Source development and disposable fixtures authorize local iteration;
 they do not authorize live edits, release publication or deployment.
 
 `.wikitool/data/wikitool.db` is derived. Sync revisions and mutation receipts in
@@ -24,6 +40,23 @@ Preserve explicit JSON contracts and bounds. Maintainer commands stay behind the
 `maintainer` feature; default builds are end-user builds.
 
 ## Work and verification
+
+Inspect sources before factual writing. Mechanical checks do not establish truth
+or editorial acceptance. Substantially revised prose needs independent review;
+publication needs the applicable named human's acceptance of the exact bytes.
+Never invent acceptance. Inspect scoped mutation plans and apply only within the
+user's authorization. Reconcile ambiguous receipts before retrying a remote write.
+
+Contextmink and Papertiger ship as complete upstream packages. Use their bundled
+skills and commands directly. Preserve existing planner authority; choose new
+history explicitly only when the task needs it. Wikitool never seeds a planner
+database, sync baseline or acceptance decision.
+
+## Source development
+
+When working on Wikitool's Rust source, build with Cargo and use the resulting
+`target/debug/wikitool` or `target/release/wikitool` (`.exe` on Windows).
+The following checks apply to source changes, not ordinary wiki work.
 
 Choose checks for the changed behavior using [testing](wikitest/TESTING.md).
 The local mechanical fixtures have no production access; run them, repair
@@ -43,8 +76,3 @@ Use [architecture](docs/wikitool/architecture.md) for cross-layer changes,
 and [versioning](VERSIONING.md) for releases. These are conditional references,
 not startup requirements. Complete implementation and affected verification;
 ask only for a missing decision that actually blocks the authorized outcome.
-
-Contextmink and Papertiger own their independent setup, receipts and state.
-Prefer installed project commands; do not vendor their rendered skills or mutate
-a copied worktree database. Wikitool must not initialize companion authority
-or opt a project into it implicitly.

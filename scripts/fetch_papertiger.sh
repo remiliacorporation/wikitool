@@ -132,13 +132,13 @@ stage_platform() {
       ;;
   esac
 
-  local source_root="$extract_root/papertiger-${version}-${selected_platform}"
-  local manifest="$source_root/manifest.json"
+  local source_root="$extract_root"
+  local manifest="$source_root/tools/papertiger/manifest.json"
   if [[ ! -f "$manifest" ]]; then
     echo "fetch_papertiger: release archive lacks expected manifest: $manifest" >&2
     exit 65
   fi
-  if ! grep -Eq '"schema"[[:space:]]*:[[:space:]]*"papertiger.release-manifest.v1"' "$manifest" \
+  if ! grep -Eq '"schema"[[:space:]]*:[[:space:]]*"papertiger.release-manifest.v2"' "$manifest" \
     || ! grep -Eq '"name"[[:space:]]*:[[:space:]]*"papertiger"' "$manifest" \
     || ! grep -Eq '"version"[[:space:]]*:[[:space:]]*"'"$version"'"' "$manifest" \
     || ! grep -Eq '"source_commit"[[:space:]]*:[[:space:]]*"'"$expected_source_commit"'"' "$manifest" \
@@ -155,16 +155,16 @@ stage_platform() {
     mise="papertiger-mise.exe"
   fi
   for required in \
-    "$planner" \
-    "$mise" \
+    "bin/$planner" \
+    "bin/$mise" \
     agent_integration.md \
     README.md \
     CHANGELOG.md \
     LICENSE \
     manifest.json
   do
-    if [[ ! -f "$source_root/$required" || -L "$source_root/$required" ]]; then
-      echo "fetch_papertiger: required release file is missing or a symlink: $source_root/$required" >&2
+    if [[ ! -f "$source_root/tools/papertiger/$required" || -L "$source_root/tools/papertiger/$required" ]]; then
+      echo "fetch_papertiger: required release file is missing or a symlink: $source_root/tools/papertiger/$required" >&2
       exit 65
     fi
   done
@@ -173,7 +173,7 @@ stage_platform() {
   rm -rf "$out"
   mkdir -p "$out"
   cp -R "$source_root/." "$out/"
-  printf '%s  %s\n' "$expected" "$archive" > "$out/archive.sha256"
+  printf '%s  %s\n' "$expected" "$archive" > "$out/tools/papertiger/archive.sha256"
   echo "papertiger ${version} (${selected_platform}) -> $out"
   rm -rf "$temp_root"
   temp_to_cleanup=""
