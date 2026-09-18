@@ -4,13 +4,22 @@ All notable changes to wikitool are documented here. The format follows [Keep a 
 
 The release workflow extracts the section for the requested version and fails if it is missing, so land notes here (staged under Unreleased, then retitled) before dispatching a release. Write one line per paragraph or bullet: GitHub release bodies render every newline as a line break, so hard-wrapped prose comes out ragged.
 
-## [Unreleased]
+## [0.11.0] - 2026-09-18
+
+Extracted archives are now complete agent projects; the old wrapper-directory layout is gone. Existing projects keep their configuration and durable stores when the new archive is extracted over them.
 
 ### Changed
 
 - Release archives are complete agent projects with root AGENTS.md, CLAUDE.md, README and operator documentation alongside project-relative `tools/`, `.agents/skills/` and `.claude/skills/` paths. Invoke `tools/wikitool/bin/wikitool[.exe]`; skill setup is no longer required. This replaces the old versioned wrapper directory and root executable layout and requires a minor version bump before publication.
 - Fresh extracted releases default to Remilia Wiki and its adapter. Existing `.wikitool/config.toml` replaces these defaults in full; extraction does not overwrite user configuration, content or databases. Archive upgrades replace shipped project documents; preserve local edits to those documents. Runtime directories are created on first use without seeding sync or acceptance state.
 - Bundled Contextmink 0.14.0 and Papertiger 0.16.0 retain their complete upstream overlay layouts and discoverable skills. Windows also includes the Contextmink bridge executable and skill. Packaging verifies archive pins and binary digests. Creating or migrating planning authority remains an explicit Papertiger operation.
+- Skills and the operator guide name the single-page read path (`export` and `source fetch`), the existence check (`source wiki-search --what nearmatch`), the `.wikitool/drafts/` drafting location, the template-catalog prerequisites, and the global baseline that `status`, `diff`, `review` and push preview require. The interview skill checks the live wiki before creating a ledger and treats only the person's own words as testimony; the review skill sets a depth rule and a written review record. These follow fresh-agent research runs against the extracted archive.
+
+### Fixed
+
+- `review` names the concrete push-preview failure, such as a missing `article accept` decision, in its brief output and exit message instead of a generic sentence.
+- `article lint` no longer reports `structure.malformed_heading` for template or parameter lines that end with `=`, such as `{{Reflist|refs=`; a heading missing its opening marker is still reported.
+- `templates show` and `templates examples` explain the pull and catalog-build prerequisites when the local template catalog has no entries.
 
 ## [0.10.0] - 2026-09-09
 
