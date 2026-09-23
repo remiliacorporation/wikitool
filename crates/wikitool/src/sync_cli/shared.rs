@@ -7,7 +7,7 @@ use wikitool_core::config::WikiConfig;
 use wikitool_core::runtime::{ResolvedPaths, RuntimeStatus};
 use wikitool_core::sync::{
     DiffBaselineStatus, DiffChangeType, NS_CATEGORY, NS_MAIN, NS_MEDIAWIKI, NS_MODULE, NS_TEMPLATE,
-    SyncPlanChange, SyncPlanReport, SyncSelection,
+    NS_USER, SyncPlanChange, SyncPlanReport, SyncSelection,
 };
 
 use crate::cli_support::normalize_path;
@@ -99,7 +99,14 @@ pub(super) fn pull_namespaces_from_args(args: &PullArgs, config: &WikiConfig) ->
         return vec![NS_CATEGORY];
     }
     if args.all {
-        let mut namespaces = vec![NS_MAIN, NS_CATEGORY, NS_TEMPLATE, NS_MODULE, NS_MEDIAWIKI];
+        let mut namespaces = vec![
+            NS_MAIN,
+            NS_USER,
+            NS_CATEGORY,
+            NS_TEMPLATE,
+            NS_MODULE,
+            NS_MEDIAWIKI,
+        ];
         for custom in &config.wiki.custom_namespaces {
             if custom.id >= 0 {
                 namespaces.push(custom.id);
@@ -149,4 +156,33 @@ pub(super) fn status_display_changes(
             true
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pull_all_includes_user_pages() {
+        let args = PullArgs {
+            full: false,
+            overwrite_local: false,
+            category: None,
+            templates: false,
+            categories: false,
+            all: true,
+            format: super::super::OutputFormat::Text,
+        };
+        assert_eq!(
+            pull_namespaces_from_args(&args, &WikiConfig::default()),
+            vec![
+                NS_MAIN,
+                NS_USER,
+                NS_MEDIAWIKI,
+                NS_TEMPLATE,
+                NS_CATEGORY,
+                NS_MODULE
+            ]
+        );
+    }
 }
