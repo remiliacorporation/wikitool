@@ -11,7 +11,7 @@ use crate::support::{compute_sha256, normalize_path, table_exists, unix_timestam
 pub use crate::support::{compute_wiki_sync_hash, normalize_wiki_content, parse_redirect};
 pub use mediawiki_protocol::{
     DeleteLogEntry, DeleteOutcome, DeleteReceipt, EditConstraint, EditReceipt, NS_CATEGORY,
-    NS_MAIN, NS_MEDIAWIKI, NS_MODULE, NS_TEMPLATE, PageTimestampInfo, RemotePage,
+    NS_MAIN, NS_MEDIAWIKI, NS_MODULE, NS_TEMPLATE, NS_USER, PageTimestampInfo, RemotePage,
     RevisionLineageEntry, WikiReadApi, WikiWriteApi,
 };
 pub use workspace::{

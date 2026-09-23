@@ -4,6 +4,12 @@ All notable changes to wikitool are documented here. The format follows [Keep a 
 
 The release workflow extracts the section for the requested version and fails if it is missing, so land notes here (staged under Unreleased, then retitled) before dispatching a release. Write one line per paragraph or bullet: GitHub release bodies render every newline as a line break, so hard-wrapped prose comes out ragged.
 
+## [Unreleased]
+
+### Fixed
+
+- Assign User pages their MediaWiki namespace ID during sync writes and baseline recovery, and include them in `sync pull --all`.
+
 ## [0.11.0] - 2026-09-18
 
 Extracted archives are now complete agent projects; the old wrapper-directory layout is gone. Existing projects keep their configuration and durable stores when the new archive is extracted over them.
