@@ -10,7 +10,8 @@ use crate::runtime::ResolvedPaths;
 
 pub use mediawiki_protocol::{
     EditConstraint, EditReceipt, MediaWikiClient, MediaWikiClientConfig, NS_CATEGORY, NS_MAIN,
-    NS_MEDIAWIKI, NS_MODULE, NS_TEMPLATE, PageTimestampInfo, RemotePage, WikiReadApi, WikiWriteApi,
+    NS_MEDIAWIKI, NS_MODULE, NS_TEMPLATE, NS_USER, PageTimestampInfo, RemotePage, WikiReadApi,
+    WikiWriteApi,
 };
 pub use wikitool_sync::{
     DiffBaselineStatus, DiffChange, DiffChangeType, DiffOptions, DiffReport, PreparedPublication,

@@ -20,7 +20,7 @@ pub use client::{
     WikiReadApi, WikiWriteApi,
 };
 pub use entities::decode_html_entities;
-pub use namespace::{NS_CATEGORY, NS_MAIN, NS_MEDIAWIKI, NS_MODULE, NS_TEMPLATE};
+pub use namespace::{NS_CATEGORY, NS_MAIN, NS_MEDIAWIKI, NS_MODULE, NS_TEMPLATE, NS_USER};
 pub use render::{
     MAX_RENDER_WIKITEXT_BYTES, RenderCheckIssue, RenderCheckOptions, RenderCheckReport,
     RenderedScopeReport, render_check_page, render_check_wikitext, render_wikitext_html,
