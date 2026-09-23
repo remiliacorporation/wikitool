@@ -119,35 +119,6 @@ pub(super) fn pull_namespaces_from_args(args: &PullArgs, config: &WikiConfig) ->
     vec![NS_MAIN]
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pull_all_includes_user_pages() {
-        let args = PullArgs {
-            full: false,
-            overwrite_local: false,
-            category: None,
-            templates: false,
-            categories: false,
-            all: true,
-            format: super::super::OutputFormat::Text,
-        };
-        assert_eq!(
-            pull_namespaces_from_args(&args, &WikiConfig::default()),
-            vec![
-                NS_MAIN,
-                NS_USER,
-                NS_MEDIAWIKI,
-                NS_TEMPLATE,
-                NS_CATEGORY,
-                NS_MODULE
-            ]
-        );
-    }
-}
-
 pub(super) fn format_baseline_status(value: Option<&DiffBaselineStatus>) -> &'static str {
     match value {
         Some(DiffBaselineStatus::Available) => "available",
@@ -185,4 +156,33 @@ pub(super) fn status_display_changes(
             true
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pull_all_includes_user_pages() {
+        let args = PullArgs {
+            full: false,
+            overwrite_local: false,
+            category: None,
+            templates: false,
+            categories: false,
+            all: true,
+            format: super::super::OutputFormat::Text,
+        };
+        assert_eq!(
+            pull_namespaces_from_args(&args, &WikiConfig::default()),
+            vec![
+                NS_MAIN,
+                NS_USER,
+                NS_MEDIAWIKI,
+                NS_TEMPLATE,
+                NS_CATEGORY,
+                NS_MODULE
+            ]
+        );
+    }
 }
