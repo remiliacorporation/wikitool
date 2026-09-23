@@ -1,6 +1,7 @@
 use super::siteinfo::SiteInfoNamespace;
 
 pub const NS_MAIN: i32 = 0;
+pub const NS_USER: i32 = 2;
 pub const NS_CATEGORY: i32 = 14;
 pub const NS_TEMPLATE: i32 = 10;
 pub const NS_MODULE: i32 = 828;
@@ -9,6 +10,9 @@ pub const NS_MEDIAWIKI: i32 = 8;
 pub fn namespace_name_to_id(namespace: &str) -> Option<i32> {
     match namespace {
         "Main" => Some(NS_MAIN),
+        // User is a standard content folder; its pages push and pull like
+        // Main. File stays absent: file pages need upload semantics.
+        "User" => Some(NS_USER),
         "Category" => Some(NS_CATEGORY),
         "Template" => Some(NS_TEMPLATE),
         "Module" => Some(NS_MODULE),
@@ -97,6 +101,14 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn standard_content_folders_have_numeric_identities_except_file() {
+        assert_eq!(namespace_name_to_id("Main"), Some(NS_MAIN));
+        assert_eq!(namespace_name_to_id("User"), Some(NS_USER));
+        assert_eq!(namespace_name_to_id("Category"), Some(NS_CATEGORY));
+        assert_eq!(namespace_name_to_id("File"), None);
+    }
 
     #[test]
     fn discovery_filters_builtin_and_talk_namespaces() {
