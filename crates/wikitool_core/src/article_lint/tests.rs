@@ -230,50 +230,7 @@ fn detects_raw_wikitext_balance_errors_inside_references() {
 }
 
 #[test]
-fn detects_sentence_case_heading() {
-    let temp = tempdir().expect("tempdir");
-    let project_root = temp.path().join("project");
-    let paths = paths(&project_root);
-    write_instruction_sources(&paths);
-    write_common_templates(&paths);
-    let article_path = paths.wiki_content_dir.join("Main").join("Alpha.wiki");
-    write_file(
-        &article_path,
-        "{{SHORTDESC:Alpha}}\n{{Article quality|unverified}}\n\n== Early Life ==\nText.\n\n== References ==\n{{Reflist}}\n",
-    );
-
-    let report = lint_article(&paths, &article_path).expect("lint");
-    assert!(has_rule(&report, "style.sentence_case_heading"));
-}
-
-#[test]
-fn sentence_case_heading_exempts_proper_nouns() {
-    let temp = tempdir().expect("tempdir");
-    let project_root = temp.path().join("project");
-    let paths = paths(&project_root);
-    write_instruction_sources(&paths);
-    write_common_templates(&paths);
-    // A local page title supplies the unseeded proper noun. The heading is correct
-    // sentence case and must not be flagged.
-    write_file(
-        &paths
-            .wiki_content_dir
-            .join("Main")
-            .join("Example_Person.wiki"),
-        "{{SHORTDESC:Example Person}}\n{{Article quality|unverified}}\n\n'''Example Person''' is a page.\n\n== References ==\n{{Reflist}}\n",
-    );
-    let article_path = paths.wiki_content_dir.join("Main").join("Alpha.wiki");
-    write_file(
-        &article_path,
-        "{{SHORTDESC:Alpha}}\n{{Article quality|unverified}}\n\n'''Alpha''' is a page.\n\n== Influence on Example Person ==\nText.\n\n== References ==\n{{Reflist}}\n",
-    );
-
-    let report = lint_article(&paths, &article_path).expect("lint");
-    assert!(!has_rule(&report, "style.sentence_case_heading"));
-}
-
-#[test]
-fn sentence_case_heading_preserves_proper_nouns_in_suggestion() {
+fn sentence_case_heading_preserves_local_proper_nouns() {
     let temp = tempdir().expect("tempdir");
     let project_root = temp.path().join("project");
     let paths = paths(&project_root);
@@ -286,52 +243,6 @@ fn sentence_case_heading_preserves_proper_nouns_in_suggestion() {
             .join("Example_Person.wiki"),
         "{{SHORTDESC:Example Person}}\n{{Article quality|unverified}}\n\n'''Example Person''' is a page.\n\n== References ==\n{{Reflist}}\n",
     );
-    let article_path = paths.wiki_content_dir.join("Main").join("Alpha.wiki");
-    write_file(
-        &article_path,
-        "{{SHORTDESC:Alpha}}\n{{Article quality|unverified}}\n\n'''Alpha''' is a page.\n\n== Influence Of Example Person ==\nText.\n\n== References ==\n{{Reflist}}\n",
-    );
-
-    let report = lint_article(&paths, &article_path).expect("lint");
-    let issue = report
-        .issues
-        .iter()
-        .find(|issue| issue.rule_id == "style.sentence_case_heading")
-        .expect("sentence-case issue");
-    assert!(
-        issue
-            .suggested_fixes
-            .iter()
-            .any(|fix| fix.replacement_preview.as_deref() == Some("Influence of Example Person"))
-    );
-}
-
-#[test]
-fn sentence_case_heading_still_flags_non_proper_nouns() {
-    let temp = tempdir().expect("tempdir");
-    let project_root = temp.path().join("project");
-    let paths = paths(&project_root);
-    write_instruction_sources(&paths);
-    write_common_templates(&paths);
-    // "Battle" and "Strategies" are ordinary capitalized words, not proper nouns, so the
-    // title-cased heading is still a real violation.
-    let article_path = paths.wiki_content_dir.join("Main").join("Alpha.wiki");
-    write_file(
-        &article_path,
-        "{{SHORTDESC:Alpha}}\n{{Article quality|unverified}}\n\n'''Alpha''' is a page.\n\n== Notable Battle Strategies ==\nText.\n\n== References ==\n{{Reflist}}\n",
-    );
-
-    let report = lint_article(&paths, &article_path).expect("lint");
-    assert!(has_rule(&report, "style.sentence_case_heading"));
-}
-
-#[test]
-fn sentence_case_heading_does_not_promote_lowercase_title_words() {
-    let temp = tempdir().expect("tempdir");
-    let project_root = temp.path().join("project");
-    let paths = paths(&project_root);
-    write_instruction_sources(&paths);
-    write_common_templates(&paths);
     write_file(
         &paths
             .wiki_content_dir
@@ -340,13 +251,56 @@ fn sentence_case_heading_does_not_promote_lowercase_title_words() {
         "{{SHORTDESC:Network spirituality}}\n{{Article quality|unverified}}\n\n'''Network spirituality''' is a page.\n\n== References ==\n{{Reflist}}\n",
     );
     let article_path = paths.wiki_content_dir.join("Main").join("Alpha.wiki");
-    write_file(
-        &article_path,
-        "{{SHORTDESC:Alpha}}\n{{Article quality|unverified}}\n\n'''Alpha''' is a page.\n\n== Influence of Network Spirituality ==\nText.\n\n== References ==\n{{Reflist}}\n",
-    );
-
-    let report = lint_article(&paths, &article_path).expect("lint");
-    assert!(has_rule(&report, "style.sentence_case_heading"));
+    for (name, heading, expected_issue, suggested_heading) in [
+        ("ordinary title case", "Early Life", true, None),
+        (
+            "known proper noun",
+            "Influence on Example Person",
+            false,
+            None,
+        ),
+        (
+            "suggestion retains proper noun",
+            "Influence Of Example Person",
+            true,
+            Some("Influence of Example Person"),
+        ),
+        (
+            "ordinary capitalized words",
+            "Notable Battle Strategies",
+            true,
+            None,
+        ),
+        (
+            "lowercase title word is not promoted",
+            "Influence of Network Spirituality",
+            true,
+            None,
+        ),
+    ] {
+        write_file(
+            &article_path,
+            &format!(
+                "{{{{SHORTDESC:Alpha}}}}\n{{{{Article quality|unverified}}}}\n\n'''Alpha''' is a page.\n\n== {heading} ==\nText.\n\n== References ==\n{{{{Reflist}}}}\n"
+            ),
+        );
+        let report = lint_article(&paths, &article_path).expect("lint");
+        let issue = report
+            .issues
+            .iter()
+            .find(|issue| issue.rule_id == "style.sentence_case_heading");
+        assert_eq!(issue.is_some(), expected_issue, "{name}");
+        if let Some(suggested_heading) = suggested_heading {
+            assert!(
+                issue
+                    .unwrap()
+                    .suggested_fixes
+                    .iter()
+                    .any(|fix| fix.replacement_preview.as_deref() == Some(suggested_heading)),
+                "{name}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -379,71 +333,48 @@ fn source_review_rule_matches_a_citation_url_without_deciding_reliability() {
 }
 
 #[test]
-fn accepts_tabber_separator_lines_as_extension_markup() {
+fn malformed_heading_lint_distinguishes_wikitext_syntax() {
     let temp = tempdir().expect("tempdir");
     let project_root = temp.path().join("project");
     let paths = paths(&project_root);
     write_instruction_sources(&paths);
     write_common_templates(&paths);
     let article_path = paths.wiki_content_dir.join("Main").join("Alpha.wiki");
-    write_file(
-        &article_path,
-        "{{SHORTDESC:Alpha}}\n{{Article quality|unverified}}\n\n'''Alpha''' is a page.\n\n<tabber>\n|-|First tab=\nText.\n|-|Second tab=\nMore text.\n</tabber>\n\n== References ==\n{{Reflist}}\n",
-    );
-
-    let report = lint_article(&paths, &article_path).expect("lint");
-    assert!(!has_rule(&report, "structure.malformed_heading"));
-}
-
-#[test]
-fn accepts_template_parameter_lines_that_end_with_equals() {
-    let temp = tempdir().expect("tempdir");
-    let project_root = temp.path().join("project");
-    let paths = paths(&project_root);
-    write_instruction_sources(&paths);
-    write_common_templates(&paths);
-    let article_path = paths.wiki_content_dir.join("Main").join("Alpha.wiki");
-    write_file(
-        &article_path,
-        "{{SHORTDESC:Alpha}}\n{{Article quality|unverified}}\n{{Infobox subject\n| name = Alpha\n| image =\n| type = Test\n}}\n\n'''Alpha''' is a page.\n\n== References ==\n{{Reflist}}\n",
-    );
-
-    let report = lint_article(&paths, &article_path).expect("lint");
-    assert!(!has_rule(&report, "structure.malformed_heading"));
-}
-
-#[test]
-fn accepts_template_call_lines_that_end_with_a_parameter_assignment() {
-    let temp = tempdir().expect("tempdir");
-    let project_root = temp.path().join("project");
-    let paths = paths(&project_root);
-    write_instruction_sources(&paths);
-    write_common_templates(&paths);
-    let article_path = paths.wiki_content_dir.join("Main").join("Alpha.wiki");
-    write_file(
-        &article_path,
-        "{{SHORTDESC:Alpha}}\n{{Article quality|unverified}}\n\n'''Alpha''' is a page.<ref name=\"a\" />\n\n== References ==\n{{Reflist|refs=\n<ref name=\"a\">Source A.</ref>\n}}\n",
-    );
-
-    let report = lint_article(&paths, &article_path).expect("lint");
-    assert!(!has_rule(&report, "structure.malformed_heading"));
-}
-
-#[test]
-fn detects_heading_lines_missing_an_opening_marker() {
-    let temp = tempdir().expect("tempdir");
-    let project_root = temp.path().join("project");
-    let paths = paths(&project_root);
-    write_instruction_sources(&paths);
-    write_common_templates(&paths);
-    let article_path = paths.wiki_content_dir.join("Main").join("Alpha.wiki");
-    write_file(
-        &article_path,
-        "{{SHORTDESC:Alpha}}\n{{Article quality|unverified}}\n\n'''Alpha''' is a page.\n\nHistory ==\n\nText.\n\n== References ==\n{{Reflist}}\n",
-    );
-
-    let report = lint_article(&paths, &article_path).expect("lint");
-    assert!(has_rule(&report, "structure.malformed_heading"));
+    for (name, body, expected_issue) in [
+        (
+            "tabber separator",
+            "<tabber>\n|-|First tab=\nText.\n|-|Second tab=\nMore text.\n</tabber>",
+            false,
+        ),
+        (
+            "empty template parameter",
+            "{{Infobox subject\n| name = Alpha\n| image =\n| type = Test\n}}",
+            false,
+        ),
+        (
+            "template call parameter assignment",
+            "<ref name=\"a\" />\n{{Reflist|refs=\n<ref name=\"a\">Source A.</ref>\n}}",
+            false,
+        ),
+        (
+            "missing opening heading marker",
+            "History ==\n\nText.",
+            true,
+        ),
+    ] {
+        write_file(
+            &article_path,
+            &format!(
+                "{{{{SHORTDESC:Alpha}}}}\n{{{{Article quality|unverified}}}}\n\n'''Alpha''' is a page.\n\n{body}\n\n== References ==\n{{{{Reflist}}}}\n"
+            ),
+        );
+        let report = lint_article(&paths, &article_path).expect("lint");
+        assert_eq!(
+            has_rule(&report, "structure.malformed_heading"),
+            expected_issue,
+            "{name}"
+        );
+    }
 }
 
 #[test]
