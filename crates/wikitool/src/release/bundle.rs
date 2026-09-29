@@ -593,9 +593,9 @@ fn validate_contextmink_manifest(
     platform_slug: &str,
 ) -> Result<()> {
     let schema = manifest.get("schema").and_then(serde_json::Value::as_str);
-    if schema != Some("contextmink.release-manifest.v2") {
+    if schema != Some("contextmink.release_manifest.v3") {
         bail!(
-            "contextmink manifest schema is {schema:?}, expected contextmink.release-manifest.v2"
+            "contextmink manifest schema is {schema:?}, expected contextmink.release_manifest.v3"
         );
     }
     let name = manifest.get("name").and_then(serde_json::Value::as_str);
@@ -754,9 +754,9 @@ fn validate_papertiger_manifest(
     platform_slug: &str,
 ) -> Result<()> {
     let schema = manifest.get("schema").and_then(serde_json::Value::as_str);
-    if schema != Some("papertiger.release-manifest.v2") {
+    if schema != Some("papertiger.release_manifest.v3") {
         bail!(
-            "papertiger manifest schema is {schema:?}, expected \"papertiger.release-manifest.v2\""
+            "papertiger manifest schema is {schema:?}, expected \"papertiger.release_manifest.v3\""
         );
     }
     let name = manifest.get("name").and_then(serde_json::Value::as_str);
@@ -1249,7 +1249,7 @@ mod tests {
         assert!(release_archive_hash_from_pins("bad hash line\n", archive).is_err());
         let source_commit = "0123456789abcdef0123456789abcdef01234567";
         let manifest: serde_json::Value = serde_json::json!({
-            "schema": "contextmink.release-manifest.v2",
+            "schema": "contextmink.release_manifest.v3",
             "name": "contextmink",
             "version": "0.3.0",
             "source_commit": source_commit,
@@ -1283,7 +1283,7 @@ mod tests {
                 .is_err()
         );
         let linux_manifest: serde_json::Value = serde_json::json!({
-            "schema": "contextmink.release-manifest.v2",
+            "schema": "contextmink.release_manifest.v3",
             "name": "contextmink",
             "version": "0.3.0",
             "source_commit": source_commit,
@@ -1295,7 +1295,7 @@ mod tests {
                 .is_ok()
         );
         let linux_with_bridge: serde_json::Value = serde_json::json!({
-            "schema": "contextmink.release-manifest.v2",
+            "schema": "contextmink.release_manifest.v3",
             "name": "contextmink",
             "version": "0.3.0",
             "source_commit": source_commit,
@@ -1313,7 +1313,7 @@ mod tests {
             .is_err()
         );
         let windows_without_bridge: serde_json::Value = serde_json::json!({
-            "schema": "contextmink.release-manifest.v2",
+            "schema": "contextmink.release_manifest.v3",
             "name": "contextmink",
             "version": "0.3.0",
             "source_commit": source_commit,
@@ -1330,7 +1330,7 @@ mod tests {
             .is_err()
         );
         let wrong_binary: serde_json::Value = serde_json::json!({
-            "schema": "contextmink.release-manifest.v2",
+            "schema": "contextmink.release_manifest.v3",
             "name": "contextmink",
             "version": "0.3.0",
             "source_commit": source_commit,
@@ -1360,7 +1360,7 @@ mod tests {
     #[test]
     fn papertiger_pin_and_manifest_validation_fail_fast() {
         let manifest: serde_json::Value = serde_json::json!({
-            "schema": "papertiger.release-manifest.v2",
+            "schema": "papertiger.release_manifest.v3",
             "name": "papertiger",
             "version": "0.9.0",
             "source_commit": "3f2a1ef6f40ad01ca9b07d44b28b10d7a3276af0",

@@ -6,9 +6,18 @@ The release workflow extracts the section for the requested version and fails if
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-29
+
+The text form of `templates show` now defaults to a short brief, matching its existing `--view brief` default. Use `--view full` for the prior expanded text output. JSON briefs include every declared parameter key while keeping detailed parameter cards bounded.
+
+### Changed
+
+- Bundled Contextmink 0.16.0 and Papertiger 0.20.0 replace 0.14.0 and 0.16.0. Contextmink's release-owned setup no longer accepts `--replace-managed` and uses newer setup receipt schemas. Papertiger's `note` command now requires `--text`, and file evidence resolution checks project-local files. Existing project configuration and durable planner state remain outside the release archive.
+
 ### Fixed
 
 - Assign User pages their MediaWiki namespace ID during sync writes and baseline recovery, and include them in `sync pull --all`.
+- Honor `templates show --view brief` in text output and expose the complete declared parameter key list in brief JSON.
 
 ## [0.11.0] - 2026-09-18
 

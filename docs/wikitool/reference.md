@@ -2084,7 +2084,7 @@ Options:
       --format <FORMAT>      Output format: text|json [default: text] [possible values: text, json]
       --project-root <PATH>
       --data-dir <PATH>
-      --view <VIEW>          JSON view: brief|full [default: brief] [possible values: brief, full]
+      --view <VIEW>          Output view: brief|full [default: brief] [possible values: brief, full]
       --config <PATH>
       --diagnostics          Print resolved runtime diagnostics
   -h, --help                 Print help

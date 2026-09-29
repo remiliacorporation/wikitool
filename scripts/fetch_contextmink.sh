@@ -138,7 +138,7 @@ stage_platform() {
     echo "fetch_contextmink: release archive lacks expected manifest: $source_root/tools/contextmink/manifest.json" >&2
     exit 65
   fi
-  if ! grep -Fq '"schema": "contextmink.release-manifest.v2"' "$source_root/tools/contextmink/manifest.json" \
+  if ! grep -Fq '"schema": "contextmink.release_manifest.v3"' "$source_root/tools/contextmink/manifest.json" \
     || ! grep -Fq '"version": "'"$version"'"' "$source_root/tools/contextmink/manifest.json" \
     || ! grep -Fq '"source_commit": "'"$expected_source_commit"'"' "$source_root/tools/contextmink/manifest.json" \
     || ! grep -Fq '"platform": "'"$selected_platform"'"' "$source_root/tools/contextmink/manifest.json"; then
