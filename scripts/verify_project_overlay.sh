@@ -24,7 +24,7 @@ export PAPERTIGER_ACTOR=overlay-smoke PAPERTIGER_SESSION=overlay-smoke
 test ! -e .wikitool
 test ! -e state
 test -f AGENTS.md
-test -f CLAUDE.md
+test ! -e CLAUDE.md
 test -f README.md
 test -f .gitignore
 test -f docs/wikitool/guide.md
@@ -55,7 +55,7 @@ fi
 jq -e '.wiki.url.value == "https://wiki.remilia.org" and .wiki.api_url.value == "https://wiki.remilia.org/api.php" and .adapter_path == "tools/wikitool/site_adapters/remilia-wiki/site-adapter.toml"' "$fixture/config.json"
 "$wikitool" companions > "$fixture/companions.json"
 jq -e '.status == "ok" and (.companions | length == 2)' "$fixture/companions.json"
-"tools/contextmink/bin/contextmink${suffix}" --json files . --limit 2 > "$fixture/retrieval.json"
+"tools/contextmink/bin/contextmink${suffix}" --json files . --show-files 2 > "$fixture/retrieval.json"
 if [[ -n "$suffix" ]]; then
   printf '#!/usr/bin/env bash\nprintf "bridge-ok\\n"\n' > "$fixture/bridge-check.sh"
   "tools/contextmink/bin/contextmink-bridge.exe" --script "$fixture/bridge-check.sh" > "$fixture/bridge.out"

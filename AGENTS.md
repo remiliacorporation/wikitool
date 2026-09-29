@@ -3,10 +3,12 @@
 Work from this project directory. The release is ready to use: run
 `tools/wikitool/bin/wikitool` (`.exe` on Windows). Remilia Wiki is the default
 target; `config show` reports the effective target and policy. No installation,
-skill-copying or initialization sequence is required. Read the
+skill-copying or initialization sequence is required; on macOS, run the
+[first-run check](#macos-first-run) once per session. Read the
 [operator guide](docs/wikitool/guide.md) when the task needs it.
 
-`CLAUDE.md` routes here. Select skills by the requested outcome:
+This file owns project instructions for Claude Code and other agents.
+Select skills by the requested outcome:
 
 - `wikitool`: retrieval, templates, mechanical checks and revision-bound sync.
 - `wiki-writing`: new or substantially revised sourced encyclopedic prose.
@@ -18,6 +20,37 @@ skill-copying or initialization sequence is required. Read the
 Skills and their references are already present in both harness directories.
 A lookup does not need an editorial workflow; an adequate brief does not need
 an interview. Complete authorized drafts without inventing publication scope.
+
+## macOS first run
+
+Release executables are unsigned and not notarized by Apple. After a browser
+download, macOS may quarantine them and block first launch, including after an
+update. A blocked tool may exit with `Killed: 9` or show a warning dialog.
+Wikitool cannot clear this itself. In an extracted release on macOS, before the
+first Wikitool, Contextmink or Papertiger command of a session, run this
+read-only check from the project root:
+
+```bash
+xattr tools/wikitool/bin/wikitool tools/contextmink/bin/contextmink tools/papertiger/bin/papertiger
+```
+
+If no line names `com.apple.quarantine`, continue without mentioning it.
+Otherwise, tell the user in plain words that macOS flagged these downloaded
+tools as unverified because the executables are unsigned and not notarized,
+that one command removes the download flag from exactly the listed files and
+does not change Gatekeeper for anything else, and that each update needs this
+again. Ask before running it. With approval, run one command naming only the
+flagged files, as absolute paths. For example, when only Wikitool is flagged:
+
+```bash
+xattr -d com.apple.quarantine /absolute/project/tools/wikitool/bin/wikitool
+```
+
+Clear `tools/papertiger/bin/papertiger-mise` the same way only when a task
+uses it. Never use `xattr -r`, `xattr -c`, `sudo`, `spctl` or a directory
+argument. If the user declines, do not retry; they can instead use
+System Settings, Privacy & Security, "Open Anyway" after the first block.
+[macOS Gatekeeper](docs/wikitool/macos-gatekeeper.md) explains the details.
 
 ## Authority
 

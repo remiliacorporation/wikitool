@@ -335,36 +335,6 @@ fn failed_catalog_publication_preserves_previous_rows_and_search() {
 }
 
 #[test]
-#[ignore = "bounded catalog performance exercise; run explicitly with --nocapture"]
-fn catalog_refresh_timing() {
-    let temp = tempdir().expect("tempdir");
-    let paths = paths(temp.path());
-    let body = "A representative catalog paragraph with [[Beta]] and searchable text.\n".repeat(50);
-    for page in 0..500 {
-        write_file(
-            &paths.wiki_content_dir.join(format!("Main/Page{page}.wiki")),
-            &body,
-        );
-    }
-    write_file(
-        &paths.templates_dir.join("misc/Template_Example.wiki"),
-        "Example {{{name|}}}",
-    );
-    let start = std::time::Instant::now();
-    let built = rebuild_index(&paths, &ScanOptions::default()).expect("content build");
-    let content_ms = start.elapsed().as_millis();
-    assert_eq!(built.inserted_rows, 501);
-    let start = std::time::Instant::now();
-    for _ in 0..5 {
-        sync_template_catalog_with_adapter(&paths, &test_site_adapter()).expect("template refresh");
-    }
-    eprintln!(
-        "catalog timing: pages=501 content_ms={content_ms} five_template_refreshes_ms={}",
-        start.elapsed().as_millis()
-    );
-}
-
-#[test]
 fn query_search_and_context_bundle() {
     let temp = tempdir().expect("tempdir");
     let project_root = temp.path().join("project");

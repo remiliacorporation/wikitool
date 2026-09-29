@@ -86,7 +86,7 @@ pub(crate) struct TemplatesShowArgs {
         value_enum,
         default_value_t = BriefView::Brief,
         value_name = "VIEW",
-        help = "JSON view: brief|full"
+        help = "Output view: brief|full"
     )]
     view: BriefView,
 }
@@ -333,7 +333,11 @@ fn run_templates_show(runtime: &RuntimeOptions, args: TemplatesShowArgs) -> Resu
 
     println!("templates show");
     println!("project_root: {}", normalize_path(&paths.project_root));
-    print_template_entry(&entry);
+    if args.view.is_full() {
+        print_template_entry(&entry);
+    } else {
+        print_template_brief(&entry);
+    }
     println!("policy: {LOCAL_DB_POLICY_MESSAGE}");
     if runtime.diagnostics {
         println!("\n[diagnostics]\n{}", paths.diagnostics());
@@ -533,6 +537,60 @@ fn print_template_entry(entry: &TemplateCatalogEntry) {
     println!("example_count: {}", entry.examples.len());
 }
 
+fn print_template_brief(entry: &TemplateCatalogEntry) {
+    let brief = build_template_brief(entry);
+    println!("view: brief");
+    println!("template_title: {}", brief.template_title);
+    println!("category: {}", brief.category);
+    if let Some(summary) = brief.summary_text {
+        println!("summary_text: {summary}");
+    }
+    println!(
+        "declared_parameter_count: {}",
+        brief.contract.declared_parameter_count
+    );
+    for (name, parameters) in [
+        ("required_parameters", &brief.contract.required_parameters),
+        ("suggested_parameters", &brief.contract.suggested_parameters),
+        (
+            "deprecated_parameters",
+            &brief.contract.deprecated_parameters,
+        ),
+    ] {
+        if !parameters.is_empty() {
+            println!(
+                "{name}: {}",
+                parameters
+                    .iter()
+                    .map(|parameter| parameter.name)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+    }
+    if !brief.contract.declared_parameter_keys.is_empty() {
+        let shown = brief
+            .contract
+            .declared_parameter_keys
+            .iter()
+            .take(12)
+            .copied()
+            .collect::<Vec<_>>();
+        println!("declared_parameter_keys: {}", shown.join(", "));
+        if brief.contract.declared_parameter_keys.len() > shown.len() {
+            println!(
+                "declared_parameter_keys_more: {}",
+                brief.contract.declared_parameter_keys.len() - shown.len()
+            );
+        }
+    }
+    println!("usage_count: {}", brief.usage.usage_count);
+    for warning in &brief.warnings {
+        println!("warning: {warning}");
+    }
+    println!("full_view_command: {}", brief.full_view_command.display);
+}
+
 fn join_or_none(values: &[String]) -> String {
     if values.is_empty() {
         "<none>".to_string()
@@ -562,6 +620,7 @@ struct TemplateBrief<'a> {
 struct TemplateContractCard<'a> {
     has_templatedata: bool,
     declared_parameter_count: usize,
+    declared_parameter_keys: Vec<&'a str>,
     required_parameters: Vec<TemplateParameterCard<'a>>,
     suggested_parameters: Vec<TemplateParameterCard<'a>>,
     deprecated_parameters: Vec<TemplateParameterCard<'a>>,
@@ -622,6 +681,16 @@ fn build_template_brief(entry: &TemplateCatalogEntry) -> TemplateBrief<'_> {
     if entry.parameters.is_empty() {
         warnings.push("no parameters are declared or observed for this template".to_string());
     }
+    let declared_parameters = entry
+        .parameters
+        .iter()
+        .filter(|parameter| {
+            parameter
+                .sources
+                .iter()
+                .any(|source| source == "templatedata" || source == "source")
+        })
+        .collect::<Vec<_>>();
 
     TemplateBrief {
         schema_version: "wikitool_brief_v1",
@@ -633,16 +702,11 @@ fn build_template_brief(entry: &TemplateCatalogEntry) -> TemplateBrief<'_> {
         summary_text: entry.summary_text.as_deref(),
         contract: TemplateContractCard {
             has_templatedata: entry.templatedata.is_some(),
-            declared_parameter_count: entry
-                .parameters
+            declared_parameter_count: declared_parameters.len(),
+            declared_parameter_keys: declared_parameters
                 .iter()
-                .filter(|parameter| {
-                    parameter
-                        .sources
-                        .iter()
-                        .any(|source| source == "templatedata" || source == "source")
-                })
-                .count(),
+                .map(|parameter| parameter.name.as_str())
+                .collect(),
             required_parameters: entry
                 .parameters
                 .iter()

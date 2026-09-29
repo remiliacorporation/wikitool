@@ -7,6 +7,8 @@ description: Use Wikitool for MediaWiki retrieval, templates, mechanical checks 
 
 In an extracted release, invoke `tools/wikitool/bin/wikitool[.exe]` from the
 project root. Skills and companions are already present; no setup is needed.
+On macOS, apply the [release trust](references/macos-release-trust.md) check
+before the first tool command of a session.
 Use `config show` to inspect the shipped default or existing project target.
 
 Use the smallest operation that answers the task. CLI help owns flags. Run from
@@ -44,8 +46,8 @@ Load the procedure that applies:
   changes and migration; a read-only parameter lookup does not need it.
 - [Sync and acceptance](references/sync-and-acceptance.md): remote writes,
   target changes and uncertain mutation outcomes.
-- [macOS release trust](references/macos-release-trust.md): first-run quarantine
-  problems on unsigned macOS releases.
+- [macOS release trust](references/macos-release-trust.md): first-run Gatekeeper
+  quarantine on unsigned macOS releases.
 
 Use the selected adapter for site policy. `wiki-writing` owns substantial prose,
 `prose-review` editorial assessment, and `wiki-interview` missing human knowledge.

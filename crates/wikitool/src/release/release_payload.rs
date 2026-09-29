@@ -31,7 +31,6 @@ pub(super) fn stage_release_payload(
         ".env.template",
         "README.md",
         "AGENTS.md",
-        "CLAUDE.md",
         "VERSIONING.md",
         "CHANGELOG.md",
         "LICENSE",
@@ -191,7 +190,7 @@ mod tests {
         );
         assert!(!output.path().join("skills").exists());
         assert!(output.path().join("AGENTS.md").is_file());
-        assert!(output.path().join("CLAUDE.md").is_file());
+        assert!(!output.path().join("CLAUDE.md").exists());
         assert!(!output.path().join(".claude").exists());
     }
 

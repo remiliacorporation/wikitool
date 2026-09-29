@@ -9,7 +9,7 @@
 - [Source access](source-access.md): human-solved challenges and scoped sessions.
 - [HTML conversion](html-to-wikitext.md): bounded DOM-to-MediaWiki conversion.
 - [Source wikitext](source-wikitext.md): revision-bound parsing and explicit rewrites.
-- [macOS trust](macos-gatekeeper.md): unsigned releases and exact-executable exceptions.
+- [macOS Gatekeeper](macos-gatekeeper.md): unsigned releases and the user-approved first-run clearance.
 
 For flags: `wikitool <command> --help` or `reference.md`.
 

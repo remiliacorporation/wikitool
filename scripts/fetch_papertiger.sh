@@ -138,7 +138,7 @@ stage_platform() {
     echo "fetch_papertiger: release archive lacks expected manifest: $manifest" >&2
     exit 65
   fi
-  if ! grep -Eq '"schema"[[:space:]]*:[[:space:]]*"papertiger.release-manifest.v2"' "$manifest" \
+  if ! grep -Eq '"schema"[[:space:]]*:[[:space:]]*"papertiger.release_manifest.v3"' "$manifest" \
     || ! grep -Eq '"name"[[:space:]]*:[[:space:]]*"papertiger"' "$manifest" \
     || ! grep -Eq '"version"[[:space:]]*:[[:space:]]*"'"$version"'"' "$manifest" \
     || ! grep -Eq '"source_commit"[[:space:]]*:[[:space:]]*"'"$expected_source_commit"'"' "$manifest" \
