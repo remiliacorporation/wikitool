@@ -12,6 +12,8 @@ The text form of `templates show` now defaults to a short brief, matching its ex
 
 ### Changed
 
+- On macOS, root `AGENTS.md` now has the agent check the bundled Wikitool, Contextmink and Papertiger executables for Gatekeeper's download quarantine before the first tool command of a session. If they are flagged, the agent explains why and, with the user's approval, clears exactly those files in one command. External checksum verification is now optional guidance rather than a precondition. The macOS trust declaration is `wikitool.macos-release-trust.v2` and lists `papertiger-mise` as optional.
+- The release retains a thin `CLAUDE.md` route to `AGENTS.md` for Claude Code installations without native `AGENTS.md` support. Skills remain in both `.agents/skills/` and `.claude/skills/`.
 - Bundled Contextmink 0.16.0 and Papertiger 0.20.0 replace 0.14.0 and 0.16.0. Contextmink's release-owned setup no longer accepts `--replace-managed` and uses newer setup receipt schemas. Papertiger's `note` command now requires `--text`, and file evidence resolution checks project-local files. Existing project configuration and durable planner state remain outside the release archive.
 
 ### Fixed

@@ -66,6 +66,8 @@ and `skills inspect`. Exercise the extracted release with
 establishes artifact integrity; it does not demonstrate improved agent judgment.
 
 The extracted archive is the agent project. Root `AGENTS.md` owns task routing
-and authority boundaries, `CLAUDE.md` routes there, and both harness discovery
-directories already contain complete skill packages. Start work directly;
+and authority boundaries; `CLAUDE.md` routes Claude Code versions that do not
+read it directly. Both harness discovery directories already
+contain complete skill packages because Claude Code discovers skills only under
+`.claude/skills/`. Start work directly;
 skill installation is not a prerequisite.

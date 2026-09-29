@@ -78,7 +78,7 @@ Experimental / top-level steered:
 Packaged / distributable:
 
 1. Stage the pinned upstream Contextmink and Papertiger packs with `bash scripts/fetch_contextmink.sh --all` and `bash scripts/fetch_papertiger.sh --all`, then use `cargo run --package wikitool --features maintainer -- release build-matrix --contextmink-dist dist/contextmink-dist --papertiger-dist dist/papertiger-dist` from a source checkout to emit per-target zip bundles.
-2. Each bundle is a complete agent project. Extract into a new directory and work there. Root AGENTS.md, CLAUDE.md, README and documentation ship alongside native tools under tools/ and complete skills in both harness directories. Fresh projects use tools/wikitool/default-config.toml for Remilia Wiki. Existing project configuration wins. Packaged binaries have no maintainer surface.
+2. Each bundle is a complete agent project. Extract into a new directory and work there. Root AGENTS.md, a CLAUDE.md route, README and documentation ship alongside native tools under tools/ and complete skills in both harness directories. Fresh projects use tools/wikitool/default-config.toml for Remilia Wiki. Existing project configuration wins. Packaged binaries have no maintainer surface.
 3. A project adapter supplement is opt-in via `--host-project-root <PATH>`. It is packaged under
    `site_adapters/project/` and never replaces the public guidance, skills, or built-in catalog.
 
@@ -112,10 +112,10 @@ itself is not a pass and must never be used to bless a release.
    - `bash scripts/fetch_papertiger.sh --platform <platform> --dest dist/papertiger-dist`
    - `cargo run --package wikitool --features maintainer -- release build-matrix --targets <triple> --contextmink-dist dist/contextmink-dist --papertiger-dist dist/papertiger-dist`
    - or run GitHub workflow `.github/workflows/release-artifacts.yml` with `artifact_version=X.Y.Z` for per-platform artifacts
-   - every GitHub macOS artifact is explicitly marked unsigned and carries the bounded,
-     checksum-first Gatekeeper procedure
+   - every GitHub macOS artifact is explicitly marked unsigned; root `AGENTS.md` carries the
+     bounded, user-approved Gatekeeper first-run procedure
 7. Run `bash scripts/verify_project_overlay.sh <archive.zip>` against the actual archive. It must contain:
-   - root `AGENTS.md`, `CLAUDE.md`, `README.md`, operator documentation, release history and licenses
+   - root `AGENTS.md`, a `CLAUDE.md` route, `README.md`, operator documentation, release history and licenses
    - `tools/wikitool/bin/wikitool[.exe]`, `default-config.toml`, adapters and the hash-manifested `skills/` distribution
    - complete `.agents/skills/` and `.claude/skills/` packages for the four public skills and both companions
    - unchanged upstream Contextmink and Papertiger overlays, with native binaries under `tools/<name>/bin/`, manifests, licenses, contracts and pinned `archive.sha256` receipts

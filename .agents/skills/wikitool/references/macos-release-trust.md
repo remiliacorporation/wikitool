@@ -1,10 +1,12 @@
 ## macOS release trust
 
-First verify the archive against the release's external `SHA256SUMS.txt`, then inspect
-`tools/wikitool/macos-release-trust.json`, which must identify an `unsigned_github_release`. Explain that Wikitool
-cannot repair quarantine before its first execution and that the checksum does not provide an
-Apple identity. After the user approves those exact verified bytes, use `xattr -d
-com.apple.quarantine` only on each exact executable path they intend to run: `tools/wikitool/bin/wikitool`,
-`tools/contextmink/bin/contextmink`, `tools/papertiger/bin/papertiger`, and, only if requested,
-`tools/papertiger/bin/papertiger-mise`. Never use recursive quarantine removal on a download directory or
-disable Gatekeeper globally.
+Unsigned macOS release executables may carry `com.apple.quarantine` after a browser download,
+and Gatekeeper may block first launch (`Killed: 9` or a warning dialog); Wikitool
+cannot clear this itself. From the project root, check read-only with `xattr
+tools/wikitool/bin/wikitool tools/contextmink/bin/contextmink tools/papertiger/bin/papertiger`.
+If any line names `com.apple.quarantine`, explain plainly that macOS flagged these downloaded
+tools as unverified, that one command clears exactly the listed files without changing
+Gatekeeper for anything else, and that each update needs it again. With the user's approval,
+run one `xattr -d com.apple.quarantine` command naming only the flagged files by absolute path.
+Add `tools/papertiger/bin/papertiger-mise` only when a task uses it. Never use `xattr -r`,
+`xattr -c`, `sudo`, `spctl` or a directory argument, and do not retry a declined request.

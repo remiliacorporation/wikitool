@@ -16,16 +16,20 @@ printf 'fixture\n' > "$bundle/tools/contextmink/bin/contextmink"
 printf 'fixture\n' > "$bundle/tools/papertiger/bin/papertiger"
 printf 'fixture\n' > "$bundle/tools/papertiger/bin/papertiger-mise"
 cp "$repo_root/docs/wikitool/macos-gatekeeper.md" "$bundle/docs/wikitool/macos-gatekeeper.md"
+cp "$repo_root/AGENTS.md" "$bundle/AGENTS.md"
 cp "$repo_root/.agents/skills/wikitool/SKILL.md" \
   "$bundle/tools/wikitool/skills/wikitool/SKILL.md"
 
 bash "$repo_root/scripts/declare_unsigned_macos.sh" --bundle-dir "$bundle" >/dev/null
 
 trust="$bundle/tools/wikitool/macos-release-trust.json"
-grep -q '"schema": "wikitool.macos-release-trust.v1"' "$trust"
+grep -q '"schema": "wikitool.macos-release-trust.v2"' "$trust"
 grep -q '"status": "unsigned_github_release"' "$trust"
-grep -q '"gatekeeper": "explicit_checksum_bound_quarantine_exception_required"' "$trust"
-grep -q '"executables": \["tools/wikitool/bin/wikitool", "tools/contextmink/bin/contextmink", "tools/papertiger/bin/papertiger", "tools/papertiger/bin/papertiger-mise"\]' "$trust"
+grep -q '"gatekeeper": "user_approved_exact_quarantine_exception_required"' "$trust"
+grep -q '"executables": \["tools/wikitool/bin/wikitool", "tools/contextmink/bin/contextmink", "tools/papertiger/bin/papertiger"\]' "$trust"
+grep -q '"optional_executables": \["tools/papertiger/bin/papertiger-mise"\]' "$trust"
+grep -q '"first_run": "AGENTS.md#macos-first-run"' "$trust"
+grep -q '^## macOS first run$' "$bundle/AGENTS.md"
 grep -q '"instructions": "docs/wikitool/macos-gatekeeper.md"' "$trust"
 
 if bash "$repo_root/scripts/declare_unsigned_macos.sh" --bundle-dir "$bundle" >/dev/null 2>&1; then

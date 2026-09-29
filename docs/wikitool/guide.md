@@ -145,8 +145,9 @@ ignored; process variables win. Do not print credentials into diagnostics.
 `wiki.mark_edits_as_bot` controls transport labeling, independently of who reviewed.
 
 Sync currently supports MediaWiki's `first-letter` title identity, not
-case-sensitive namespaces. Unsigned macOS releases have a separate
-[trust procedure](macos-gatekeeper.md); a normal Windows or Linux task does not need it.
+case-sensitive namespaces. Unsigned macOS releases need a user-approved
+[first-run Gatekeeper clearance](macos-gatekeeper.md) after each download; Windows and
+Linux do not.
 
 ## Specialized work
 

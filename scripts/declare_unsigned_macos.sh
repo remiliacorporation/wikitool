@@ -41,6 +41,7 @@ for required in \
   "$bundle_dir/tools/papertiger/bin/papertiger" \
   "$bundle_dir/tools/papertiger/bin/papertiger-mise" \
   "$bundle_dir/docs/wikitool/macos-gatekeeper.md" \
+  "$bundle_dir/AGENTS.md" \
   "$bundle_dir/tools/wikitool/skills/wikitool/SKILL.md"
 do
   if [[ ! -f "$required" || -L "$required" ]]; then
@@ -57,10 +58,12 @@ fi
 
 printf '%s\n' \
   '{' \
-  '  "schema": "wikitool.macos-release-trust.v1",' \
+  '  "schema": "wikitool.macos-release-trust.v2",' \
   '  "status": "unsigned_github_release",' \
-  '  "gatekeeper": "explicit_checksum_bound_quarantine_exception_required",' \
-  '  "executables": ["tools/wikitool/bin/wikitool", "tools/contextmink/bin/contextmink", "tools/papertiger/bin/papertiger", "tools/papertiger/bin/papertiger-mise"],' \
+  '  "gatekeeper": "user_approved_exact_quarantine_exception_required",' \
+  '  "executables": ["tools/wikitool/bin/wikitool", "tools/contextmink/bin/contextmink", "tools/papertiger/bin/papertiger"],' \
+  '  "optional_executables": ["tools/papertiger/bin/papertiger-mise"],' \
+  '  "first_run": "AGENTS.md#macos-first-run",' \
   '  "instructions": "docs/wikitool/macos-gatekeeper.md"' \
   '}' > "$trust_path"
 
