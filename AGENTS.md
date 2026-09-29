@@ -7,9 +7,8 @@ skill-copying or initialization sequence is required; on macOS, run the
 [first-run check](#macos-first-run) once per session. Read the
 [operator guide](docs/wikitool/guide.md) when the task needs it.
 
-This file owns substantive project instructions. `CLAUDE.md` routes here for
-Claude Code installations that do not read `AGENTS.md` directly. Select skills
-by the requested outcome:
+This file owns project instructions for Claude Code and other agents.
+Select skills by the requested outcome:
 
 - `wikitool`: retrieval, templates, mechanical checks and revision-bound sync.
 - `wiki-writing`: new or substantially revised sourced encyclopedic prose.

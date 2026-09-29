@@ -17,7 +17,7 @@ Invoke `tools/wikitool/bin/wikitool`
 download quarantine flag, your agent asks before clearing it; see
 [macOS Gatekeeper](docs/wikitool/macos-gatekeeper.md).
 
-The archive is a complete agent project: root `AGENTS.md`, a `CLAUDE.md` route, this
+The archive is a complete agent project: root `AGENTS.md`, this
 README and operator documentation, Wikitool, complete Contextmink and Papertiger
 packages, and discoverable skills under `.agents/skills/` and `.claude/skills/`.
 No setup command is needed. Wikitool's executable, adapters and hash-manifested

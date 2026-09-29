@@ -24,7 +24,7 @@ export PAPERTIGER_ACTOR=overlay-smoke PAPERTIGER_SESSION=overlay-smoke
 test ! -e .wikitool
 test ! -e state
 test -f AGENTS.md
-test -f CLAUDE.md
+test ! -e CLAUDE.md
 test -f README.md
 test -f .gitignore
 test -f docs/wikitool/guide.md
