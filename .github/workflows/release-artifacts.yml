@@ -128,6 +128,8 @@ jobs:
           name: wikitool-release-${{ needs.preflight.outputs.version }}-${{ matrix.platform }}
           path: dist/release-matrix/wikitool-${{ needs.preflight.outputs.version }}-${{ matrix.platform }}.zip
           if-no-files-found: error
+          # Only publish-release in this run needs the zips; the GitHub Release keeps them.
+          retention-days: 1
 
   publish-release:
     if: inputs.create_release

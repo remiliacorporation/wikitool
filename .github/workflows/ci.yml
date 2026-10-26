@@ -41,7 +41,7 @@ jobs:
       - name: Public CLI regressions
         run: cargo run --quiet --package wikitest -- suite wikitool-regressions --require-all
       - name: Retain replayable regression evidence
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: wikitest-regressions-${{ matrix.os }}
@@ -52,6 +52,7 @@ jobs:
             target/debug/wikitest
             target/debug/wikitest.exe
           if-no-files-found: error
+          retention-days: 3
 
   rust-lint:
     runs-on: ubuntu-latest
