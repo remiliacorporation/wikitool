@@ -6,6 +6,15 @@ The release workflow extracts the section for the requested version and fails if
 
 ## [Unreleased]
 
+### Added
+
+- `wikitool upload` uploads one local media file as a `File:` page through the reviewed preview/apply workflow. The preview reads the local bytes and the target's current file state without credentials and returns a plan ID bound to the target, title, local path, SHA-1, size, observed remote file, same-content titles, description text and summary. Apply recomputes the plan, rejects drift, records a durable receipt before sending one `action=upload` request, and verifies the stored SHA-1. An existing file with different content needs `--replace`; identical content is reported as already present. Upload warnings end the mutation as not applied and are never retried with `ignorewarnings`.
+- `mutation list`, `mutation show` and `mutation reconcile` cover upload receipts. Reconciliation settles an uncertain upload by the remote file's SHA-1 history and never replays it. `mutation close` does not accept upload receipts.
+
+### Changed
+
+- The durable sync store moves to schema version 8, which adds the upload receipt table and rewrites nothing else. The first command that opens an existing store migrates it; older Wikitool builds then refuse that store.
+
 ## [0.12.0] - 2026-09-29
 
 The text form of `templates show` now defaults to a short brief, matching its existing `--view brief` default. Use `--view full` for the prior expanded text output. JSON briefs include every declared parameter key while keeping detailed parameter cards bounded.

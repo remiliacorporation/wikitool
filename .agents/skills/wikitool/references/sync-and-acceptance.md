@@ -22,10 +22,19 @@ come from `WIKITOOL_BOT_USER` and `WIKITOOL_BOT_PASS` and are checked at apply.
 Delete also previews first. Inspect endpoint, title, observed revision, reason,
 local effect, and plan ID before applying the exact plan.
 
+`upload --file PATH --filename "Name.jpg" --text-file PATH --summary TEXT`
+previews one media upload without credentials. Inspect endpoint, title, SHA-1,
+observed remote file, duplicate titles, and plan ID before applying the exact
+plan. An existing file with different content needs a planned `--replace`;
+identical content is already present and nothing is sent. An upload warning
+means nothing was stored: report its keys and do not work around it. Uploads
+stay outside `wiki_content/` and the sync baseline.
+
 ## Ambiguous outcomes
 
 Never replay an uncertain write. Inspect `mutation list` and `mutation show`,
-then use `mutation reconcile` for the edit or delete. If remote truth remains
+then use `mutation reconcile` for the edit, delete or upload; an upload settles
+by the remote file's SHA-1 and has no operator closure. If remote truth remains
 permanently unavailable, explicit operator closure records uncertainty rather
 than success, invalidates that title's baseline, and requires `pull --full --all`
 before another write. Local drift may additionally require deliberate
