@@ -12,6 +12,7 @@ mod pull;
 mod push;
 mod shared;
 mod status;
+mod upload;
 
 pub(crate) use delete::run_delete;
 pub(crate) use diff::run_diff;
@@ -20,6 +21,7 @@ pub(crate) use mutation::run_mutation;
 pub(crate) use pull::run_pull;
 pub(crate) use push::run_push;
 pub(crate) use status::run_status;
+pub(crate) use upload::run_upload;
 
 #[derive(Debug, Args)]
 pub(crate) struct InitArgs {
@@ -214,6 +216,45 @@ pub(crate) struct DeleteArgs {
 }
 
 #[derive(Debug, Args)]
+pub(crate) struct UploadArgs {
+    #[arg(long, value_name = "PATH", help = "Local media file to upload")]
+    pub(crate) file: PathBuf,
+    #[arg(
+        long,
+        value_name = "NAME",
+        help = "Target file name without the File: prefix, including its extension"
+    )]
+    pub(crate) filename: String,
+    #[arg(
+        long,
+        value_name = "PATH",
+        help = "Wikitext for the file description page (required when the file is new)"
+    )]
+    pub(crate) text_file: Option<PathBuf>,
+    #[arg(long, value_name = "TEXT", help = "Upload comment (required)")]
+    pub(crate) summary: String,
+    #[arg(
+        long,
+        help = "Permit planning a new version over an existing file with different content"
+    )]
+    pub(crate) replace: bool,
+    #[arg(
+        long,
+        value_name = "PLAN_ID",
+        help = "Apply the exact target/content/remote-state-bound plan ID; without this option the command only previews"
+    )]
+    pub(crate) apply: Option<String>,
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = OutputFormat::Text,
+        value_name = "FORMAT",
+        help = "Output format: text|json"
+    )]
+    pub(crate) format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
 pub(crate) struct MutationArgs {
     #[command(subcommand)]
     pub(crate) command: MutationCommand,
@@ -277,6 +318,7 @@ pub(crate) enum MutationCommand {
 pub(crate) enum MutationOperationArg {
     Edit,
     Delete,
+    Upload,
 }
 
 impl From<MutationOperationArg> for wikitool_core::sync::RemoteMutationOperation {
@@ -284,6 +326,7 @@ impl From<MutationOperationArg> for wikitool_core::sync::RemoteMutationOperation
         match value {
             MutationOperationArg::Edit => Self::Edit,
             MutationOperationArg::Delete => Self::Delete,
+            MutationOperationArg::Upload => Self::Upload,
         }
     }
 }

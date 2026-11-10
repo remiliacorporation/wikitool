@@ -29,6 +29,7 @@ Commands:
   module      Run Lua module linting and related checks
   export      Export a remote wiki page tree to local files
   delete      Delete a page from the live wiki
+  upload      Upload a media file to the live wiki
   mutation    Inspect and reconcile durable remote mutation receipts
   db          Inspect or reset the local runtime database
   docs        Manage and query pinned MediaWiki docs corpora
@@ -347,6 +348,28 @@ Options:
   -h, --help                 Print help
 ```
 
+## upload
+
+```text
+Upload a media file to the live wiki
+
+Usage: wikitool upload [OPTIONS] --file <PATH> --filename <NAME> --summary <TEXT>
+
+Options:
+      --file <PATH>          Local media file to upload
+      --project-root <PATH>
+      --data-dir <PATH>
+      --filename <NAME>      Target file name without the File: prefix, including its extension
+      --config <PATH>
+      --text-file <PATH>     Wikitext for the file description page (required when the file is new)
+      --diagnostics          Print resolved runtime diagnostics
+      --summary <TEXT>       Upload comment (required)
+      --replace              Permit planning a new version over an existing file with different content
+      --apply <PLAN_ID>      Apply the exact target/content/remote-state-bound plan ID; without this option the command only previews
+      --format <FORMAT>      Output format: text|json [default: text] [possible values: text, json]
+  -h, --help                 Print help
+```
+
 ## mutation
 
 ```text
@@ -394,7 +417,7 @@ Show one target-bound remote mutation receipt
 Usage: wikitool mutation show [OPTIONS] <OPERATION> <MUTATION_ID>
 
 Arguments:
-  <OPERATION>    [possible values: edit, delete]
+  <OPERATION>    [possible values: edit, delete, upload]
   <MUTATION_ID>
 
 Options:
@@ -414,7 +437,7 @@ Reconcile one mutation without replaying its write
 Usage: wikitool mutation reconcile [OPTIONS] <OPERATION> <MUTATION_ID>
 
 Arguments:
-  <OPERATION>    [possible values: edit, delete]
+  <OPERATION>    [possible values: edit, delete, upload]
   <MUTATION_ID>
 
 Options:
@@ -435,7 +458,7 @@ Usage: wikitool mutation close [OPTIONS] --actor <ACTOR> --reason <REASON> <OPER
 
 Arguments:
   <OPERATION>
-          [possible values: edit, delete]
+          [possible values: edit, delete, upload]
 
   <MUTATION_ID>
 

@@ -64,6 +64,9 @@ pub(crate) fn run_mutation(runtime: &RuntimeOptions, args: MutationArgs) -> Resu
                     "local_effect_status: {}",
                     receipt.local_effect_status.as_deref().unwrap_or("<none>")
                 );
+                if let Some(file_sha1) = &receipt.file_sha1 {
+                    println!("file_sha1: {file_sha1}");
+                }
                 println!("detail: {}", receipt.detail.as_deref().unwrap_or("<none>"));
                 if let Some(closure) = receipt.closure {
                     println!("closure_id: {}", closure.closure_id);

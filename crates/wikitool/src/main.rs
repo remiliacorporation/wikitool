@@ -104,6 +104,8 @@ enum Commands {
     Export(export_cli::ExportArgs),
     #[command(about = "Delete a page from the live wiki")]
     Delete(sync_cli::DeleteArgs),
+    #[command(about = "Upload a media file to the live wiki")]
+    Upload(sync_cli::UploadArgs),
     #[command(about = "Inspect and reconcile durable remote mutation receipts")]
     Mutation(sync_cli::MutationArgs),
     #[command(about = "Inspect or reset the local runtime database")]
@@ -170,6 +172,7 @@ fn main() -> Result<()> {
         Some(Commands::Module(args)) => module_cli::run_module(&runtime, args),
         Some(Commands::Export(args)) => export_cli::run_export(&runtime, args),
         Some(Commands::Delete(args)) => sync_cli::run_delete(&runtime, args),
+        Some(Commands::Upload(args)) => sync_cli::run_upload(&runtime, args),
         Some(Commands::Mutation(args)) => sync_cli::run_mutation(&runtime, args),
         Some(Commands::Db(args)) => db_cli::run_db(&runtime, args),
         Some(Commands::Docs(args)) => docs_cli::run_docs(&runtime, args),

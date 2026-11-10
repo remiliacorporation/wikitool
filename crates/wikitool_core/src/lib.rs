@@ -22,5 +22,6 @@ pub mod source;
 pub mod support;
 pub mod sync;
 pub mod title_variants;
+pub mod upload;
 pub mod wiki_interview;
 pub(crate) mod wikitext;

@@ -18,6 +18,8 @@ use crate::{
     SyncPathEffectKind, SyncProjectPaths, SyncTargetIdentity,
 };
 
+mod upload;
+
 #[derive(Default)]
 struct MockApi {
     all_pages_by_namespace: BTreeMap<i32, Vec<String>>,
@@ -44,6 +46,7 @@ struct MockApi {
     delete_log_entries: Vec<DeleteLogEntry>,
     delete_hook: Option<Box<dyn FnMut()>>,
     delete_postread_page: Option<RemotePage>,
+    upload: upload::UploadFake,
     login_required: bool,
     logged_in: bool,
     request_count: usize,

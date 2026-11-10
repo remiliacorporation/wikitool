@@ -8,6 +8,7 @@ pub mod render;
 pub mod render_assertions;
 pub mod search;
 pub mod siteinfo;
+pub mod upload;
 pub mod write;
 
 pub use cargo_query::{
@@ -30,5 +31,9 @@ pub use render_assertions::{
 };
 pub use search::{
     ExternalSearchReport, MediaWikiSearchOptions, MediaWikiSearchWhat, search_pages_report,
+};
+pub use upload::{
+    RemoteFileObservation, RemoteFileVersion, UploadOutcome, UploadRequest, UploadWarning,
+    WikiUploadApi,
 };
 pub use write::{PurgeOptions, PurgePageReport, PurgeReport};

@@ -146,6 +146,7 @@ pub enum RemoteMutationEffectKind {
 pub enum RemoteMutationOperation {
     Edit,
     Delete,
+    Upload,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -260,6 +261,79 @@ pub struct RemoteDeleteApplyRequest<'a> {
     pub credentials: Option<(&'a str, &'a str)>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RemoteUploadAction {
+    /// No local file exists under the title; the upload creates it.
+    Upload,
+    /// A different file exists and `--replace` was planned; the upload adds a
+    /// new version and is the only action that sends `ignorewarnings`.
+    Replace,
+    /// The title already stores exactly these bytes; apply sends nothing.
+    AlreadyPresent,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RemoteFileObservedState {
+    Present,
+    Missing,
+}
+
+/// The exact local inputs of one upload. `bytes` and `text` are the content
+/// that will be sent; `local_path` is display and plan-binding identity only.
+#[derive(Debug, Clone, Copy)]
+pub struct RemoteUploadInput<'a> {
+    pub filename: &'a str,
+    pub local_path: &'a str,
+    pub bytes: &'a [u8],
+    pub text: Option<&'a str>,
+    pub summary: &'a str,
+    pub replace: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemoteUploadPlan {
+    pub plan_id: String,
+    pub target_api_url: String,
+    pub canonical_title: String,
+    pub local_path: String,
+    pub file_size: u64,
+    pub file_sha1: String,
+    pub detected_content: String,
+    pub action: RemoteUploadAction,
+    pub replace_requested: bool,
+    pub observed_state: RemoteFileObservedState,
+    pub observed_sha1: Option<String>,
+    pub observed_size: Option<u64>,
+    pub observed_timestamp: Option<String>,
+    pub duplicate_titles: Vec<String>,
+    pub text_sha256: Option<String>,
+    pub summary: String,
+    pub notes: Vec<String>,
+    pub request_count: usize,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RemoteUploadStatus {
+    Uploaded,
+    AlreadyPresent,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemoteUploadReport {
+    pub status: RemoteUploadStatus,
+    pub target_api_url: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mutation_id: Option<i64>,
+    pub file_sha1: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remote_timestamp: Option<String>,
+    pub detail: Option<String>,
+    pub request_count: usize,
+}
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct RemoteMutationInspection {
     pub mutation_id: i64,
@@ -273,6 +347,9 @@ pub struct RemoteMutationInspection {
     pub expected_revision_id: Option<i64>,
     pub response_revision_id: Option<i64>,
     pub deletion_log_id: Option<i64>,
+    /// MediaWiki file identity bound by an upload receipt.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_sha1: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub local_effect_policy: Option<RemoteDeleteLocalEffectPolicy>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -306,6 +383,8 @@ pub struct RemoteMutationListReport {
 #[serde(rename_all = "snake_case")]
 pub enum RemoteMutationReconciliationStatus {
     StateAdvanced,
+    /// An upload receipt whose SHA-1 is the current remote file version.
+    Applied,
     NotApplied,
     AppliedThenChanged,
     AppliedThenRecreated,

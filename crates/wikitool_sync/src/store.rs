@@ -10,7 +10,7 @@ use url::Url;
 
 use crate::SyncProjectPaths;
 
-const SYNC_STORE_SCHEMA_VERSION: i32 = 7;
+const SYNC_STORE_SCHEMA_VERSION: i32 = 8;
 const MUTATION_CLOSURE_SCHEMA: &str = r#"
 CREATE TABLE sync_mutation_closures (
     closure_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -117,6 +117,40 @@ CREATE UNIQUE INDEX idx_sync_delete_mutations_one_unresolved_title
 CREATE INDEX idx_sync_delete_mutations_phase ON sync_delete_mutations(phase);
 CREATE INDEX idx_sync_delete_mutations_log_id
     ON sync_delete_mutations(response_log_id);
+"#;
+/// Uploaded files are not part of the page-sync mirror, so this receipt binds
+/// MediaWiki's file identity (SHA-1) instead of a revision or local path effect.
+const UPLOAD_MUTATION_SCHEMA: &str = r#"
+CREATE TABLE sync_upload_mutations (
+    mutation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    target_api_url TEXT NOT NULL,
+    title TEXT NOT NULL,
+    local_path TEXT NOT NULL,
+    file_sha1 TEXT NOT NULL,
+    file_size INTEGER NOT NULL,
+    text_sha256 TEXT,
+    summary TEXT NOT NULL,
+    replace_existing INTEGER NOT NULL DEFAULT 0,
+    expected_sha1 TEXT,
+    expected_timestamp TEXT,
+    plan_id TEXT NOT NULL,
+    phase TEXT NOT NULL CHECK (phase IN (
+        'intent_persisted',
+        'outcome_ambiguous',
+        'reconciliation_required',
+        'resolved'
+    )),
+    response_timestamp TEXT,
+    request_started_at_unix INTEGER,
+    terminal_outcome TEXT,
+    detail TEXT,
+    created_at_unix INTEGER NOT NULL,
+    updated_at_unix INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX idx_sync_upload_mutations_one_unresolved_title
+    ON sync_upload_mutations(title)
+    WHERE phase NOT IN ('state_advanced', 'resolved');
+CREATE INDEX idx_sync_upload_mutations_phase ON sync_upload_mutations(phase);
 "#;
 const SYNC_STORE_SCHEMA: &str = r#"
 CREATE TABLE sync_ledger_pages (
@@ -265,6 +299,7 @@ const REQUIRED_TABLES: &[&str] = &[
     "sync_store_meta",
     "sync_edit_mutations",
     "sync_delete_mutations",
+    "sync_upload_mutations",
     "sync_mutation_closures",
     "sync_invalidated_titles",
 ];
@@ -670,6 +705,9 @@ fn publish_store(path: &Path, legacy_path: Option<&Path>) -> Result<Option<(usiz
             .execute_batch(SYNC_STORE_SCHEMA)
             .context("failed to initialize temporary sync-store schema")?;
         connection
+            .execute_batch(UPLOAD_MUTATION_SCHEMA)
+            .context("failed to initialize temporary upload-receipt schema")?;
+        connection
             .pragma_update(None, "user_version", SYNC_STORE_SCHEMA_VERSION)
             .context("failed to stamp sync-store schema version")?;
 
@@ -796,7 +834,7 @@ fn migrate_sync_store_connection(connection: &mut Connection) -> Result<()> {
         1 => {
             let transaction = connection
                 .transaction()
-                .context("failed to begin sync-store v1 to v7 migration")?;
+                .context("failed to begin sync-store v1 to v8 migration")?;
             transaction
                 .execute_batch(EDIT_MUTATION_SCHEMA)
                 .context("failed to create durable edit-mutation receipts")?;
@@ -806,17 +844,18 @@ fn migrate_sync_store_connection(connection: &mut Connection) -> Result<()> {
             transaction
                 .execute_batch(MUTATION_CLOSURE_SCHEMA)
                 .context("failed to create mutation closure authority")?;
+            create_upload_mutations(&transaction)?;
             transaction
                 .pragma_update(None, "user_version", SYNC_STORE_SCHEMA_VERSION)
-                .context("failed to stamp sync-store schema version 7")?;
+                .context("failed to stamp sync-store schema version 8")?;
             transaction
                 .commit()
-                .context("failed to commit sync-store v1 to v7 migration")
+                .context("failed to commit sync-store v1 to v8 migration")
         }
         2 => {
             let transaction = connection
                 .transaction()
-                .context("failed to begin sync-store v2 to v7 migration")?;
+                .context("failed to begin sync-store v2 to v8 migration")?;
             migrate_edit_mutations_to_v4(&transaction)?;
             transaction
                 .execute_batch(DELETE_MUTATION_SCHEMA)
@@ -824,33 +863,35 @@ fn migrate_sync_store_connection(connection: &mut Connection) -> Result<()> {
             transaction
                 .execute_batch(MUTATION_CLOSURE_SCHEMA)
                 .context("failed to create mutation closure authority")?;
+            create_upload_mutations(&transaction)?;
             transaction
                 .pragma_update(None, "user_version", SYNC_STORE_SCHEMA_VERSION)
-                .context("failed to stamp sync-store schema version 7")?;
+                .context("failed to stamp sync-store schema version 8")?;
             transaction
                 .commit()
-                .context("failed to commit sync-store v2 to v7 migration")
+                .context("failed to commit sync-store v2 to v8 migration")
         }
         3 => {
             let transaction = connection
                 .transaction()
-                .context("failed to begin sync-store v3 to v7 migration")?;
+                .context("failed to begin sync-store v3 to v8 migration")?;
             migrate_edit_mutations_to_v4(&transaction)?;
             migrate_delete_mutations_to_v4(&transaction)?;
             transaction
                 .execute_batch(MUTATION_CLOSURE_SCHEMA)
                 .context("failed to create mutation closure authority")?;
+            create_upload_mutations(&transaction)?;
             transaction
                 .pragma_update(None, "user_version", SYNC_STORE_SCHEMA_VERSION)
-                .context("failed to stamp sync-store schema version 7")?;
+                .context("failed to stamp sync-store schema version 8")?;
             transaction
                 .commit()
-                .context("failed to commit sync-store v3 to v7 migration")
+                .context("failed to commit sync-store v3 to v8 migration")
         }
         4 => {
             let transaction = connection
                 .transaction()
-                .context("failed to begin sync-store v4 to v7 migration")?;
+                .context("failed to begin sync-store v4 to v8 migration")?;
             transaction
                 .execute(
                     "ALTER TABLE sync_edit_mutations ADD COLUMN namespace_id INTEGER",
@@ -861,44 +902,67 @@ fn migrate_sync_store_connection(connection: &mut Connection) -> Result<()> {
             transaction
                 .execute_batch(MUTATION_CLOSURE_SCHEMA)
                 .context("failed to create mutation closure authority")?;
+            create_upload_mutations(&transaction)?;
             transaction
                 .pragma_update(None, "user_version", SYNC_STORE_SCHEMA_VERSION)
-                .context("failed to stamp sync-store schema version 7")?;
+                .context("failed to stamp sync-store schema version 8")?;
             transaction
                 .commit()
-                .context("failed to commit sync-store v4 to v7 migration")
+                .context("failed to commit sync-store v4 to v8 migration")
         }
         5 => {
             let transaction = connection
                 .transaction()
-                .context("failed to begin sync-store v5 to v7 migration")?;
+                .context("failed to begin sync-store v5 to v8 migration")?;
             migrate_delete_mutations_to_v7(&transaction)?;
             transaction
                 .execute_batch(MUTATION_CLOSURE_SCHEMA)
                 .context("failed to create mutation closure authority")?;
+            create_upload_mutations(&transaction)?;
             transaction
                 .pragma_update(None, "user_version", SYNC_STORE_SCHEMA_VERSION)
-                .context("failed to stamp sync-store schema version 7")?;
+                .context("failed to stamp sync-store schema version 8")?;
             transaction
                 .commit()
-                .context("failed to commit sync-store v5 to v7 migration")
+                .context("failed to commit sync-store v5 to v8 migration")
         }
         6 => {
             let transaction = connection
                 .transaction()
-                .context("failed to begin sync-store v6 to v7 migration")?;
+                .context("failed to begin sync-store v6 to v8 migration")?;
             migrate_delete_mutations_to_v7(&transaction)?;
+            create_upload_mutations(&transaction)?;
             transaction
                 .pragma_update(None, "user_version", SYNC_STORE_SCHEMA_VERSION)
-                .context("failed to stamp sync-store schema version 7")?;
+                .context("failed to stamp sync-store schema version 8")?;
             transaction
                 .commit()
-                .context("failed to commit sync-store v6 to v7 migration")
+                .context("failed to commit sync-store v6 to v8 migration")
+        }
+        7 => {
+            let transaction = connection
+                .transaction()
+                .context("failed to begin sync-store v7 to v8 migration")?;
+            create_upload_mutations(&transaction)?;
+            transaction
+                .pragma_update(None, "user_version", SYNC_STORE_SCHEMA_VERSION)
+                .context("failed to stamp sync-store schema version 8")?;
+            transaction
+                .commit()
+                .context("failed to commit sync-store v7 to v8 migration")
         }
         other => anyhow::bail!(
-            "expected sync-store schema version 1, 2, 3, 4, 5, 6, or {SYNC_STORE_SCHEMA_VERSION}, found {other}"
+            "expected sync-store schema version 1, 2, 3, 4, 5, 6, 7, or {SYNC_STORE_SCHEMA_VERSION}, found {other}"
         ),
     }
+}
+
+/// Version 8 is purely additive: upload receipts get their own table and no
+/// existing sync authority is rewritten.
+fn create_upload_mutations(transaction: &rusqlite::Transaction<'_>) -> Result<()> {
+    transaction
+        .execute_batch(UPLOAD_MUTATION_SCHEMA)
+        .context("failed to create durable upload-mutation receipts")
 }
 
 fn migrate_edit_mutations_to_v4(transaction: &rusqlite::Transaction<'_>) -> Result<()> {
@@ -1414,6 +1478,7 @@ mod tests {
                  DROP TABLE sync_mutation_closures;
                  DROP TABLE sync_edit_mutations;
                  DROP TABLE sync_delete_mutations;
+                 DROP TABLE sync_upload_mutations;
                  PRAGMA user_version = 1;",
             )
             .expect("downgrade fixture to schema version 1");
@@ -1481,6 +1546,7 @@ mod tests {
                     'wiki_content/Main/Alpha.wiki', 'exact', 'normalized', 'edit',
                     'existing_revision', 41, 'outcome_ambiguous', 'pending', 7, 8
                  );
+                 DROP TABLE sync_upload_mutations;
                  PRAGMA user_version = 2;",
             )
             .expect("build literal pre-change v2 fixture");
@@ -1513,6 +1579,7 @@ mod tests {
                 "DROP TABLE sync_invalidated_titles;
                  DROP TABLE sync_mutation_closures;
                  DROP TABLE sync_delete_mutations;
+                 DROP TABLE sync_upload_mutations;
                  PRAGMA user_version = 5;",
             )
             .expect("downgrade fixture to schema version 5");
@@ -1554,6 +1621,7 @@ mod tests {
         connection
             .execute_batch(
                 "DROP TABLE sync_delete_mutations;
+                 DROP TABLE sync_upload_mutations;
                  PRAGMA user_version = 6;",
             )
             .expect("remove current delete table");
@@ -1618,6 +1686,60 @@ mod tests {
                 [],
             )
             .expect("new pre-rename authority status is accepted");
+    }
+
+    #[test]
+    fn version_seven_store_gains_upload_receipts_without_rewriting_authority() {
+        let temp = tempdir().expect("tempdir");
+        let paths = test_paths(temp.path());
+        let connection = open_or_create_sync_store(&paths).expect("create current store");
+        connection
+            .execute_batch(
+                "INSERT INTO sync_config (key, value) VALUES ('sentinel', 'preserved');
+                 INSERT INTO sync_delete_mutations (
+                    target_api_url, title, expected_revision_id, reason, reason_marker,
+                    phase, created_at_unix, updated_at_unix
+                 ) VALUES (
+                    'https://wiki.example/api.php', 'Alpha', 42, 'delete',
+                    'wikitool-delete:v7', 'outcome_ambiguous', 7, 8
+                 );
+                 DROP TABLE sync_upload_mutations;
+                 PRAGMA user_version = 7;",
+            )
+            .expect("downgrade fixture to schema version 7");
+        drop(connection);
+
+        let migrated = open_existing_store(&paths.sync_store_path()).expect("migrate v7 store");
+        assert_eq!(
+            migrated
+                .query_row("PRAGMA user_version", [], |row| row.get::<_, i32>(0))
+                .expect("schema version"),
+            SYNC_STORE_SCHEMA_VERSION
+        );
+        assert_eq!(
+            row_count(&migrated, "sync_upload_mutations").expect("upload receipt table"),
+            0
+        );
+        assert_eq!(
+            migrated
+                .query_row(
+                    "SELECT phase FROM sync_delete_mutations WHERE title = 'Alpha'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )
+                .expect("preserved delete receipt"),
+            "outcome_ambiguous"
+        );
+        assert_eq!(
+            migrated
+                .query_row(
+                    "SELECT value FROM sync_config WHERE key = 'sentinel'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )
+                .expect("preserved sentinel"),
+            "preserved"
+        );
     }
 
     #[test]
@@ -1687,6 +1809,7 @@ mod tests {
                     'wiki_content/Main/Beta.wiki', 42, 'delete',
                     'wikitool-delete:fixture', 'outcome_ambiguous', 'pending', 1, 1
                  );
+                 DROP TABLE sync_upload_mutations;
                  PRAGMA user_version = 3;",
             )
             .expect("build literal pre-change v3 fixture");

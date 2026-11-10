@@ -350,6 +350,10 @@ pub(super) fn unresolved_remote_mutation(
              UNION ALL
              SELECT 'delete', mutation_id, title, phase
              FROM sync_delete_mutations
+             WHERE phase NOT IN ('state_advanced', 'resolved')
+             UNION ALL
+             SELECT 'upload', mutation_id, title, phase
+             FROM sync_upload_mutations
              WHERE phase NOT IN ('state_advanced', 'resolved')",
         )
         .context("failed to prepare unresolved remote-mutation query")?;

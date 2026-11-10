@@ -10,11 +10,14 @@ use crate::storage::{
 };
 use crate::support::unix_timestamp;
 use crate::support::{compute_sha256, normalize_wiki_content};
+use crate::upload::{
+    load_upload_inspection, load_upload_inspections, reconcile_upload_mutation_with_api,
+};
 use crate::{
     DeleteReconciliationStatus, EditConstraint, EditReceipt, RemoteMutationInspection,
     RemoteMutationListReport, RemoteMutationOperation, RemoteMutationReconciliationReport,
     RemoteMutationReconciliationStatus, RemotePage, SyncProjectPaths, SyncTargetIdentity,
-    WikiWriteApi,
+    WikiUploadApi, WikiWriteApi,
 };
 
 pub fn list_remote_mutations(
@@ -25,6 +28,7 @@ pub fn list_remote_mutations(
     let connection = open_existing_sync_connection(paths, target)?;
     let mut mutations = load_edit_inspections(&connection, unresolved_only)?;
     mutations.extend(load_delete_inspections(&connection, unresolved_only)?);
+    mutations.extend(load_upload_inspections(&connection, unresolved_only)?);
     mutations.sort_by_key(|item| (item.mutation_id, operation_sort_key(item.operation)));
     Ok(RemoteMutationListReport {
         target_api_url: target.api_url().to_string(),
@@ -46,6 +50,7 @@ pub fn show_remote_mutation(
     let inspection = match operation {
         RemoteMutationOperation::Edit => load_edit_inspection(&connection, mutation_id)?,
         RemoteMutationOperation::Delete => load_delete_inspection(&connection, mutation_id)?,
+        RemoteMutationOperation::Upload => load_upload_inspection(&connection, mutation_id)?,
     };
     if inspection.target_api_url != target.api_url() {
         bail!(
@@ -59,7 +64,7 @@ pub fn show_remote_mutation(
     Ok(inspection)
 }
 
-pub fn reconcile_remote_mutation_with_api<A: WikiWriteApi>(
+pub fn reconcile_remote_mutation_with_api<A: WikiUploadApi>(
     paths: &SyncProjectPaths,
     target: &SyncTargetIdentity,
     api: &mut A,
@@ -105,7 +110,18 @@ pub fn reconcile_remote_mutation_with_api<A: WikiWriteApi>(
                 request_count: report.request_count,
             })
         }
+        RemoteMutationOperation::Upload => {
+            reconcile_upload_mutation_with_api(paths, target, api, mutation_id)
+        }
     }
+}
+
+/// Operator closure invalidates a page-sync baseline, which uploaded files do
+/// not have, and the closure ledger only admits edit and delete receipts.
+fn upload_closure_unsupported() -> anyhow::Error {
+    anyhow::anyhow!(
+        "operator closure is not supported for upload mutations; reconcile the receipt against the remote file's SHA-1 instead"
+    )
 }
 
 pub fn close_remote_mutation(
@@ -159,6 +175,7 @@ pub fn close_remote_mutation(
                 },
             )
             .with_context(|| format!("delete mutation {mutation_id} does not exist"))?,
+        RemoteMutationOperation::Upload => return Err(upload_closure_unsupported()),
     };
     if stored_target != target.api_url() {
         bail!(
@@ -220,12 +237,14 @@ pub fn close_remote_mutation(
     let table = match operation {
         RemoteMutationOperation::Edit => "sync_edit_mutations",
         RemoteMutationOperation::Delete => "sync_delete_mutations",
+        RemoteMutationOperation::Upload => return Err(upload_closure_unsupported()),
     };
     let local_effect_guard = match operation {
         RemoteMutationOperation::Edit => "",
         RemoteMutationOperation::Delete => {
             " AND local_effect_status NOT IN ('source_staging', 'source_staged')"
         }
+        RemoteMutationOperation::Upload => return Err(upload_closure_unsupported()),
     };
     let changed = transaction
         .execute(
@@ -664,6 +683,7 @@ fn decode_edit_inspection(row: &rusqlite::Row<'_>) -> rusqlite::Result<RemoteMut
         expected_revision_id: row.get(6)?,
         response_revision_id: row.get(7)?,
         deletion_log_id: None,
+        file_sha1: None,
         local_effect_policy: None,
         local_effect_status: None,
         detail: row.get(8)?,
@@ -684,6 +704,7 @@ fn decode_delete_inspection(row: &rusqlite::Row<'_>) -> rusqlite::Result<RemoteM
         expected_revision_id: row.get(6)?,
         response_revision_id: None,
         deletion_log_id: row.get(7)?,
+        file_sha1: None,
         local_effect_policy: Some(crate::RemoteDeleteLocalEffectPolicy {
             backup_enabled: row.get::<_, i64>(10)? != 0,
             backup_directory: row.get(11)?,
@@ -842,6 +863,7 @@ fn operation_sort_key(operation: RemoteMutationOperation) -> u8 {
     match operation {
         RemoteMutationOperation::Edit => 0,
         RemoteMutationOperation::Delete => 1,
+        RemoteMutationOperation::Upload => 2,
     }
 }
 
@@ -849,5 +871,6 @@ fn operation_label(operation: RemoteMutationOperation) -> &'static str {
     match operation {
         RemoteMutationOperation::Edit => "edit",
         RemoteMutationOperation::Delete => "delete",
+        RemoteMutationOperation::Upload => "upload",
     }
 }
