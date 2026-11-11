@@ -21,7 +21,7 @@ use crate::mediawiki::{
     MediaWikiDeleteLog, MediaWikiFixture, MediaWikiObservation, MediaWikiRequest, MediaWikiService,
 };
 use crate::model::MediaWikiPage;
-use crate::process::run_bounded;
+use crate::process::run_bounded_with_stdin;
 
 /// Default per-command limit; the whole process tree is killed when it is exceeded.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
@@ -137,6 +137,19 @@ impl<'w> Project<'w> {
     /// if it times out or its output exceeds the capture budget.
     #[track_caller]
     pub fn run_with_env(&self, args: &[&str], env: &[(&str, &str)]) -> Output {
+        self.run_command(args, env, None)
+    }
+
+    /// Runs `wikitool <args>` with `stdin` as its standard input, which is closed after the
+    /// bytes are written. Paths and environment are controlled exactly as in [`Self::run`];
+    /// other commands get an empty standard input.
+    #[track_caller]
+    pub fn run_with_stdin(&self, args: &[&str], stdin: &[u8]) -> Output {
+        self.run_command(args, &[], Some(stdin))
+    }
+
+    #[track_caller]
+    fn run_command(&self, args: &[&str], env: &[(&str, &str)], stdin: Option<&[u8]>) -> Output {
         let index = self.commands_run.get();
         self.commands_run.set(index + 1);
         let mut argv = vec![
@@ -162,11 +175,12 @@ impl<'w> Project<'w> {
         environment.extend(self.environment.clone());
         let command = format!("wikitool {}", args.join(" "));
         let output_directory = self.root.join(".wikitest-private/process-output");
-        let outcome = match run_bounded(
+        let outcome = match run_bounded_with_stdin(
             &self.wikitool,
             &argv,
             &self.root,
             &environment,
+            stdin,
             self.timeout.get(),
             OUTPUT_BUDGET,
             &output_directory.join(format!("{index:03}.stdout.txt")),

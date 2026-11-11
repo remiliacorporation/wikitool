@@ -1,37 +1,20 @@
 use std::fs;
-use std::path::Path;
-use std::process::{Command, Output};
-
-fn wikitool(root: &Path, args: &[&str]) -> Output {
-    let output = Command::new(env!("CARGO_BIN_EXE_wikitool"))
-        .arg("--project-root")
-        .arg(root)
-        .args(args)
-        .output()
-        .expect("run wikitool");
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    output
-}
+use wikitest::harness::Project;
 
 #[test]
 fn template_show_brief_exposes_all_declared_keys_without_full_text_detail() {
-    let root = tempfile::tempdir().expect("project fixture");
-    let templates = root.path().join("templates/misc");
+    let wt = Project::new(env!("CARGO_BIN_EXE_wikitool"));
+    let templates = wt.path().join("templates/misc");
     fs::create_dir_all(&templates).expect("template directory");
     fs::write(
         templates.join("Template_Test.wiki"),
         "<includeonly>{{{alpha|}}} {{{beta|}}} {{{gamma|}}} {{{delta|}}} {{{epsilon|}}} {{{zeta|}}} {{{eta|}}} {{{theta|}}} {{{iota|}}} {{{kappa|}}} {{{lambda|}}} {{{mu|}}} {{{nu|}}}</includeonly><noinclude><templatedata>{\"params\":{\"templatedata_only\":{\"suggested\":true}}}</templatedata></noinclude>",
     )
     .expect("template source");
-    wikitool(root.path(), &["templates", "catalog", "build"]);
+    wt.run(&["templates", "catalog", "build"]).assert_code(0);
 
-    let json = wikitool(
-        root.path(),
-        &[
+    let brief = wt
+        .run(&[
             "templates",
             "show",
             "Test",
@@ -39,9 +22,9 @@ fn template_show_brief_exposes_all_declared_keys_without_full_text_detail() {
             "json",
             "--view",
             "brief",
-        ],
-    );
-    let brief: serde_json::Value = serde_json::from_slice(&json.stdout).expect("brief JSON");
+        ])
+        .assert_code(0)
+        .json();
     let mut declared_keys = brief["contract"]["declared_parameter_keys"]
         .as_array()
         .expect("all declared names")
@@ -70,11 +53,8 @@ fn template_show_brief_exposes_all_declared_keys_without_full_text_detail() {
     );
     assert_eq!(brief["contract"]["declared_parameter_count"], 14);
 
-    let text = wikitool(
-        root.path(),
-        &["templates", "show", "Test", "--view", "brief"],
-    );
-    let text = String::from_utf8(text.stdout).expect("brief text");
+    let text = wt.run(&["templates", "show", "Test", "--view", "brief"]);
+    let text = &text.assert_code(0).stdout;
     assert!(text.contains("view: brief\n"));
     assert!(text.contains("declared_parameter_count: 14\n"));
     assert!(text.contains("declared_parameter_keys_more: 2\n"));
@@ -83,10 +63,7 @@ fn template_show_brief_exposes_all_declared_keys_without_full_text_detail() {
         "brief expanded full detail"
     );
 
-    let full = wikitool(
-        root.path(),
-        &["templates", "show", "Test", "--view", "full"],
-    );
-    let full = String::from_utf8(full.stdout).expect("full text");
+    let full = wt.run(&["templates", "show", "Test", "--view", "full"]);
+    let full = &full.assert_code(0).stdout;
     assert!(full.contains("parameter: alpha ("));
 }

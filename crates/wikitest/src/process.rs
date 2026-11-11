@@ -52,6 +52,33 @@ pub fn run_bounded(
     stdout_path: &Path,
     stderr_path: &Path,
 ) -> Result<ProcessOutcome> {
+    run_bounded_with_stdin(
+        executable,
+        arguments,
+        cwd,
+        environment,
+        None,
+        timeout,
+        maximum_output_bytes,
+        stdout_path,
+        stderr_path,
+    )
+}
+
+/// Like [`run_bounded`], but writes `stdin` to the child's standard input and then closes it.
+/// With `None`, standard input is the null device, as in [`run_bounded`].
+#[allow(clippy::too_many_arguments)]
+pub fn run_bounded_with_stdin(
+    executable: &Path,
+    arguments: &[String],
+    cwd: &Path,
+    environment: &BTreeMap<String, String>,
+    stdin: Option<&[u8]>,
+    timeout: Duration,
+    maximum_output_bytes: usize,
+    stdout_path: &Path,
+    stderr_path: &Path,
+) -> Result<ProcessOutcome> {
     if timeout.is_zero() {
         bail!("process timeout must be nonzero");
     }
@@ -75,7 +102,11 @@ pub fn run_bounded(
         .args(arguments)
         .current_dir(cwd)
         .envs(environment)
-        .stdin(Stdio::null())
+        .stdin(if stdin.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     configure_process_tree(&mut command);
@@ -104,6 +135,16 @@ pub fn run_bounded(
     let stderr = child.stderr.take().context("child stderr was not piped")?;
     let stdout_capture = spawn_capture(stdout, stdout_path.to_path_buf(), maximum_output_bytes);
     let stderr_capture = spawn_capture(stderr, stderr_path.to_path_buf(), maximum_output_bytes);
+    // Write from a thread so a child that does not read stdin cannot block the timeout loop.
+    let stdin_writer = match stdin {
+        Some(bytes) => {
+            let mut pipe = child.stdin.take().context("child stdin was not piped")?;
+            let bytes = bytes.to_vec();
+            // Dropping the pipe at the end of the thread closes the child's stdin.
+            Some(thread::spawn(move || pipe.write_all(&bytes)))
+        }
+        None => None,
+    };
 
     let deadline = started + timeout;
     let (status, timed_out) = loop {
@@ -123,6 +164,15 @@ pub fn run_bounded(
     process_tree
         .terminate()
         .context("failed to terminate descendant processes after command exit")?;
+    if let Some(writer) = stdin_writer {
+        match writer.join() {
+            Ok(Ok(())) => {}
+            // The child exited without reading everything; its output shows the consequence.
+            Ok(Err(error)) if error.kind() == std::io::ErrorKind::BrokenPipe => {}
+            Ok(Err(error)) => return Err(error).context("failed to write child stdin"),
+            Err(_) => bail!("child stdin writer panicked"),
+        }
+    }
 
     let stdout = stdout_capture
         .finish(CAPTURE_DRAIN_TIMEOUT, "stdout")

@@ -34,24 +34,10 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Build default end-user and test binaries
-        run: cargo build --package wikitool --package wikitest
-      - name: Validate manifests and fixture identities
-        run: cargo run --quiet --package wikitest -- validate
-      - name: Public CLI regressions
-        run: cargo run --quiet --package wikitest -- suite wikitool-regressions --require-all
-      - name: Retain replayable regression evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: wikitest-regressions-${{ matrix.os }}
-          path: |
-            .wikitest/runs
-            target/debug/wikitool
-            target/debug/wikitool.exe
-            target/debug/wikitest
-            target/debug/wikitest.exe
-          if-no-files-found: error
+      # Default features on purpose: these tests launch the end-user binary.
+      # The rust-tests job runs the same tests against the maintainer build.
+      - name: Public CLI regressions against the default binary
+        run: cargo test --package wikitool
 
   rust-lint:
     runs-on: ubuntu-latest

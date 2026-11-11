@@ -20,16 +20,21 @@ treat an unchanged full capability campaign as evidence of improved instructions
 ```text
 cargo test --workspace
 # Also use --all-features for maintainer or test-infrastructure changes.
-cargo build -p wikitool -p wikitest
-target/debug/wikitest validate
-target/debug/wikitest suite wikitool-regressions --require-all
 ```
 
-CI runs the regression suite on Linux and Windows. It requires every declared capability, rejects
-skips, and retains receipts with the exact evaluated binaries. Rebuild the default end-user binary
-after an all-features test or maintainer build before evaluating it. The full
-`wikitool-capabilities` suite additionally exercises conversion, companion inspection, and broader
-MediaWiki reading. Choose it for changes to those surfaces or a comprehensive review.
+The public CLI scenarios are integration tests in `crates/wikitool/tests/*_cli.rs`,
+built on the harness in `crates/wikitest/src/harness.rs`. They launch the built
+`wikitool` binary in an isolated project, most of them against the fake MediaWiki
+service, and run as part of `cargo test`. A failing test keeps its project
+directory and names it, with the fake wiki's observed state beside it.
+
+CI runs `cargo test --package wikitool` with default features on Linux and Windows, so the
+scenarios exercise the end-user binary on both, and runs the whole workspace with all features on
+Linux, which exercises the maintainer build.
+
+The JSON scenario runner (`wikitest run`, `suite`, `validate`, `inspect`) and its catalog under
+`wikitest/scenarios/` still exist but no longer run in CI. They are being retired; the sections
+below describe them until they are removed.
 
 A failed suite can have valid, replayable evidence. `inspect` reports the original failed status
 and verifies only the capabilities actually demonstrated; it rejects a forged pass or invented
