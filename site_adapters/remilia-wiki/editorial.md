@@ -28,7 +28,7 @@ Define every subject on its own terms. A page's presence on Remilia Wiki does no
 
 Include a relationship to those entities only when all three conditions hold:
 
-1. an inspected source establishes the relationship;
+1. an inspected source establishes the relationship, or the contributor supplies it as fact about their own project;
 2. the relationship materially helps a reader understand the subject;
 3. its placement and length are proportionate to its importance in the source record.
 
@@ -59,7 +59,7 @@ A contributor's account of their own work and roles, and their account of Remili
 Write as an encyclopedia with gravitas: plain declarative sentences, concrete actors, actions and dates, and no defensive framing. Weight comes from facts, not adjectives.
 
 - State established and first-party facts without hedges. "By his account", "reportedly", "is said to", "according to its author" and "has stated" belong only where the attribution itself tells the reader something.
-- Attribute quotations, opinions, interpretations, disputed accounts, and allegations. When a passage rests on one account, such as a court complaint, frame it once at the start of the passage or section and let the following sentences stand; do not repeat "according to the complaint" in every sentence.
+- Attribute quotations, opinions, interpretations, disputed accounts, and allegations. When a passage rests on one account, such as a memoir or a single report, frame it once at the start of the passage and let the following sentences stand. Allegations about a named person or outside organization are the exception: what a court complaint or other one-sided filing says someone did or said is attributed in every paragraph that states it, not only at the head of the section. One attribution per paragraph is enough; do not repeat "according to the complaint" in every sentence.
 - Quote people where their exact words carry meaning, especially Remilia's own writers, and let the quotation do the work rather than paraphrasing around it.
 - Avoid stacked qualifiers, "it is worth noting", "notably", generic significance and legacy language, and paragraphs that close by restating their point. Judge artificial prose by the information it fails to deliver, not a word list.
 

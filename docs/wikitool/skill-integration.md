@@ -22,13 +22,13 @@ Project adapters should answer what varies by deployment: citation templates, qu
 
 Encoding prose doctrine in the binary makes it stale, hard to audit, and falsely authoritative. Encoding revision safety only in prompts makes it optional. Keep each decision at the layer that can actually enforce or reason about it.
 
-## Why there are three editorial skills
+## Why there are two editorial skills
 
 Keep routing coarse enough that safety-critical variants cannot be skipped by choosing the wrong sibling skill:
 
 - Human notes are an input mode within `wiki-writing`, retaining source discrimination, reviewable claim support and the same authoring exit conditions.
 - Living-person and contentious-claim remediation is a mandatory branch within `prose-review`. It is not an optional alternative to ordinary review.
-- `wiki-interview` is separate because interactive intake has its own conversation state, stopping conditions, and neutral ledger artifact.
+- Interviewing is also an input mode within `wiki-writing`. It was a separate `wiki-interview` skill until use showed that agents asked the person in conversation and wrote from the answers without selecting it. The `interview` commands and the neutral ledger remain for knowledge that must outlast a session.
 
 Create a new top-level skill only when its trigger, procedure, and output authority are genuinely distinct. Scenario-specific rigor belongs in required references and conditional branches when the underlying task is still writing or review.
 

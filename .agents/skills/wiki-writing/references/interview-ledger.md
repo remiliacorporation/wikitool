@@ -12,7 +12,13 @@ The Wikitool interview brief is a neutral record, not a hidden prompt or an edit
 - **Exclusions and Holds** — privacy limits, do-not-assert items, disputed claims, and material held pending evidence.
 - **Possible Article Shape** — optional human suggestions, not a generated draft plan.
 
-The scout section is tool-written and records local observations. Do not edit it into human testimony.
+The scout section is tool-written and records local observations. Do not edit it into human testimony or treat it as a required outline.
+
+## Creating a ledger
+
+Before `interview init`, check the live wiki with `source wiki-search TERM --what nearmatch` and read any existing page on the subject. Choose `--intent` and `--source-article` from what exists; the ledger's intent cannot be changed afterwards. Live command help owns the remaining flags.
+
+Keeping testimony apart from inspected sources records provenance; it is not a judgment that the testimony is doubtful. Where site policy makes the wiki a first-party record, note in the ledger that what the person supplied as fact is publishable as fact, and reserve leads for what they are unsure of.
 
 ## Recording discipline
 

@@ -186,6 +186,7 @@ fn audit_canonical_skills(repo_root: &Path, checks: &mut Vec<DocsAuditCheck>) {
                 "evidence-to-prose.md",
                 "human-notes.md",
                 "mediawiki-structure.md",
+                "interview-ledger.md",
                 "frozen-packet.md",
             ][..],
         ),
@@ -198,7 +199,6 @@ fn audit_canonical_skills(repo_root: &Path, checks: &mut Vec<DocsAuditCheck>) {
                 "frozen-packet.md",
             ][..],
         ),
-        ("wiki-interview", &["interview-ledger.md"][..]),
         (
             "wikitool",
             &[
@@ -441,11 +441,9 @@ fn audit_host_project(host_root: &Path, checks: &mut Vec<DocsAuditCheck>) {
         ".agents/skills/wikitool/SKILL.md",
         ".agents/skills/wiki-writing/SKILL.md",
         ".agents/skills/prose-review/SKILL.md",
-        ".agents/skills/wiki-interview/SKILL.md",
         ".claude/skills/wikitool/SKILL.md",
         ".claude/skills/wiki-writing/SKILL.md",
         ".claude/skills/prose-review/SKILL.md",
-        ".claude/skills/wiki-interview/SKILL.md",
     ] {
         let path = host_root.join(relative);
         let ok = read_to_string(&path).is_ok_and(|body| {
@@ -467,6 +465,9 @@ fn audit_host_project(host_root: &Path, checks: &mut Vec<DocsAuditCheck>) {
     for relative in [
         ".claude/skills/review.md",
         ".claude/skills/knowledge-interview.md",
+        ".claude/skills/wiki-interview.md",
+        ".claude/skills/wiki-interview",
+        ".agents/skills/wiki-interview",
     ] {
         let path = host_root.join(relative);
         push_check(
@@ -486,7 +487,6 @@ fn audit_host_project(host_root: &Path, checks: &mut Vec<DocsAuditCheck>) {
         ".claude/skills/wikitool.md",
         ".claude/skills/wiki-writing.md",
         ".claude/skills/prose-review.md",
-        ".claude/skills/wiki-interview.md",
     ] {
         let path = host_root.join(relative);
         push_check(

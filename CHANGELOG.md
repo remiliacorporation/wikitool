@@ -13,6 +13,10 @@ The release workflow extracts the section for the requested version and fails if
 
 ### Changed
 
+- The `wiki-interview` skill is retired and Wikitool now ships three skills: `wikitool`, `wiki-writing` and `prose-review`. Asking a person for missing knowledge is part of `wiki-writing` (its human-notes reference), and the interview ledger contract is now `wiki-writing/references/interview-ledger.md`. The `interview` commands are unchanged. `skills setup-project` removes the retired skill's unmodified files from a project that an earlier release installed.
+- Writing and review guidance treats a wiki that is a first-party record of its own subject accordingly: what a contributor supplies as fact is stated in the wiki's voice, and needless hedging is a review defect. Allegations about a named person or outside organization keep their attribution in every paragraph that states them. A contributor's verdict on their own work is attributed as opinion.
+- `prose-review` records the full SHA-256 of the bytes it reviewed and confirms each quotation against the file before reporting it. `wiki-writing` compares that hash with the final bytes before acceptance, so a page edited after review is re-reviewed or reported as unreviewed.
+- The `wikitool` skill documents that batch selectors cover `wiki_content/` only, that `export --urls-file` writes Markdown only, and how `article changeset prepare` and `accept` bind hashes, lint results and warning decisions.
 - The durable sync store moves to schema version 8, which adds the upload receipt table and rewrites nothing else. The first command that opens an existing store migrates it; older Wikitool builds then refuse that store.
 
 ## [0.12.0] - 2026-09-29

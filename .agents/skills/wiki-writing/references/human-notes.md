@@ -13,6 +13,14 @@ Keep the working record explicit:
 
 In the working record, do not relabel layer 2 as layer 3: note who supplied what. Whether layer 2 reaches the published voice as plain fact is a site-policy decision, covered below. Never discard layer 2 because it is not independently sourced.
 
+## Asking for what is missing
+
+Ask the person when the article needs knowledge that the supplied material and sources do not hold. Read what was supplied and reuse established scope first; an adequate brief, source-only research or a routine edit needs no interview. Follow the consequential gaps in their account: identity, chronology, firsthand versus secondhand knowledge, source locations, disputed relationships and exclusions. Ask in conversation, without a fixed questionnaire, and only what materially changes the article or its research.
+
+Only the person's own words are testimony. Record answers verbatim with who said them and when. Never write an answer the person did not give, and label any placeholder or reconstruction as not testimony. Resolve whether ambiguous sensitive material is private, attribution-limited or excluded, and keep only the boundary future work needs.
+
+Missing nonessential facts do not block a bounded draft: record them and continue. When the knowledge must outlast the session, keep it in an [interview ledger](interview-ledger.md).
+
 ## Preserve intent without preserving defects
 
 Identify what the human is trying to communicate before restructuring it. Retain exact terminology when it is meaningful, but ask when a label is ambiguous, private, contested, or unusually capitalized. Preserve exclusions and do-not-assert boundaries exactly.
@@ -29,7 +37,7 @@ Keeping the four layers apart is a working discipline. It does not dictate the p
 - **Ask first.** When a supplied statement is implausible on its face, contradicts an inspected source or the contributor's other statements, or alleges misconduct or other reputational claims about an identifiable person or outside organization, ask the contributor for its basis before drafting. Write what the answer resolves; record an unresolved allegation as a hold. Doubt never becomes hedged prose.
 - **Private context** stays out of publication.
 
-First-party voice is not license for promotion. State what was made, done or meant; leave praise and claims of outside importance and influence to sources that establish them.
+First-party voice is not license for promotion. State what was made, done or meant; leave praise and claims of outside importance and influence to sources that establish them. What a contributor intended is fact; their verdict on the result (that it is legitimate, successful or important) is an opinion, so quote or attribute it.
 
 Failure in either direction is a defect. Publishing an unexamined allegation about someone else launders it; hedging the contributor's knowledge with "by his account", "he has said" or "according to X" discredits the wiki's own record and reads as machine caution. Neither makes the article more accurate.
 

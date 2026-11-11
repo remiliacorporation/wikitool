@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const PUBLIC_SKILLS: [&str; 4] = ["prose-review", "wiki-interview", "wiki-writing", "wikitool"];
+const PUBLIC_SKILLS: [&str; 3] = ["prose-review", "wiki-writing", "wikitool"];
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -89,6 +89,7 @@ fn public_skill_packages_have_valid_structure_and_routed_references() {
             "evidence-to-prose.md",
             "human-notes.md",
             "mediawiki-structure.md",
+            "interview-ledger.md",
             "frozen-packet.md",
         ],
     );
@@ -101,7 +102,6 @@ fn public_skill_packages_have_valid_structure_and_routed_references() {
             "frozen-packet.md",
         ],
     );
-    assert_skill_shape("wiki-interview", &["interview-ledger.md"]);
     assert_skill_shape(
         "wikitool",
         &[

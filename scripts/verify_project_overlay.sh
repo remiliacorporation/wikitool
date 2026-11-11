@@ -28,7 +28,7 @@ test ! -e CLAUDE.md
 test -f README.md
 test -f .gitignore
 test -f docs/wikitool/guide.md
-for skill in wikitool wiki-writing wiki-interview prose-review contextmink papertiger; do
+for skill in wikitool wiki-writing prose-review contextmink papertiger; do
   test -f ".agents/skills/$skill/SKILL.md"
   test -f ".claude/skills/$skill/SKILL.md"
 done
@@ -40,7 +40,9 @@ else
   test ! -e .agents/skills/contextmink-bridge
   test ! -e .claude/skills/contextmink-bridge
 fi
-for skill in wikitool wiki-writing wiki-interview prose-review; do
+test ! -e .agents/skills/wiki-interview
+test ! -e .claude/skills/wiki-interview
+for skill in wikitool wiki-writing prose-review; do
   diff -qr "tools/wikitool/skills/$skill" ".agents/skills/$skill"
   diff -qr "tools/wikitool/skills/$skill" ".claude/skills/$skill"
 done

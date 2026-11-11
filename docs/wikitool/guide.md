@@ -73,9 +73,9 @@ wikitool article lint .wikitool/drafts/Title.wiki --title "Title" --format json
 
 The writing skill owns source support and the finished draft. Use `article fix
 --apply safe` when its actual repairs are wanted, inspect changes, and repeat
-affected checks. Do not run it merely because a recipe includes it. Use
-`wiki-interview` only for consequential missing human knowledge or exclusions;
-an adequate brief does not require another interview.
+affected checks. Do not run it merely because a recipe includes it. Ask the
+person only for consequential missing knowledge or exclusions, as the skill's
+human-notes reference describes; an adequate brief does not require an interview.
 
 For review of an off-wiki draft, `review --draft-path PATH --title TITLE` skips
 push preview but may report global catalog diagnostics. Its promotion-oriented

@@ -51,7 +51,12 @@ Follow the project's human publication policy. Never invent a human decision
 or self-attest to satisfy it. `article accept` binds the exact bytes, target, and
 adapter policy to a named decision. A coherent multi-article decision can use
 `article changeset prepare` then `article changeset accept`; later byte changes
-invalidate individual members. Prose, target, or policy changes invalidate
+invalidate individual members. `prepare` freezes each member's hash and lint
+result with one truthful `--prose-origin` in the manifest named by `--output`.
+`accept` refuses while any member has a lint error and, by default, a warning;
+`--warnings accept` records the human's decision to accept warnings. The
+manifest's hashes are the bytes to compare with any independent review record
+before asking for the decision. Prose, target, or policy changes invalidate
 acceptance. Legacy JSON ledgers cannot authorize publication.
 
 The editor name is self-reported and unauthenticated. Inspect acceptance

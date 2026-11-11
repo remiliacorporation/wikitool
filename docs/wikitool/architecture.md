@@ -121,9 +121,9 @@ list.
 Canonical procedures live under `.agents/skills/`:
 
 - `wikitool` operates the mechanical surface and preserves mutation boundaries.
-- `wiki-interview` asks from supplied material and the conversation rather than a canned
-  questionnaire, then stores a neutral ledger.
 - `wiki-writing` keeps material claims bound to inspected sources, retaining a claim map for substantial synthesis.
+  For missing human knowledge it asks from supplied material and the conversation, not a canned
+  questionnaire, and stores a neutral ledger when the record must outlast the session.
 - `prose-review` reconstructs claims independently, opens the exact sources, tests weight and BLP
   concerns, and answers whether a reader would want the article.
 

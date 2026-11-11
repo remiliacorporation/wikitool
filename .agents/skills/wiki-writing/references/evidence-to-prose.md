@@ -36,7 +36,8 @@ Split a sentence when its clauses require different sources. One citation at the
 - Preserve what the source says and what it does not say. Similarity is not entailment.
 - Keep dates, quantities, identities, quotations, uncertainty, and causal direction exact.
 - Attribute opinion, analysis, interpretation, allegations, and contested labels. Do not attribute established or first-party facts; a hedge on a plain fact misstates its status as surely as an unattributed allegation does.
-- When a passage rests on one account (a complaint, a memoir, a single report), frame it once at the start of the passage and keep the frame visible; do not repeat "according to" in every sentence.
+- When a passage rests on one account (a memoir, a single report), frame it once at the start of the passage; do not repeat "according to" in every sentence.
+- Allegations about a named person or outside organization, such as those pleaded in a complaint, keep their attribution in every paragraph that states them. A frame at the head of a section does not carry through it, and a quotation the filing reproduces is still the filing's account.
 - Do not turn absence of evidence into evidence of absence.
 - Do not turn chronology into causation.
 - Do not use one source to imply broad consensus.

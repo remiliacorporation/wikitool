@@ -28,7 +28,7 @@ Under a site's first-party policy, content contributors supplied as fact (their 
 
 ## Over-attribution
 
-Report over-attribution as a defect in its own right. Look for hedges on first-party or settled facts ("by his account", "reportedly", "has said", "is said to"), the same attribution frame repeated in consecutive sentences, and stacked qualifiers. They misstate a claim's status as surely as missing attribution does, and they erode the reader's trust in the wiki's own record. The repair is a single frame per single-source passage and plain statement elsewhere.
+Report over-attribution as a defect in its own right. Look for hedges on first-party or settled facts ("by his account", "reportedly", "has said", "is said to"), the same attribution frame repeated in consecutive sentences, and stacked qualifiers. They misstate a claim's status as surely as missing attribution does, and they erode the reader's trust in the wiki's own record. The repair is a single frame per single-source passage and plain statement elsewhere. Do not apply that repair to allegations about a named person or outside organization: those keep an attribution in each paragraph, and removing it is the defect covered in [Sensitive claims](blp-sensitive.md).
 
 ## Drift in compression
 
