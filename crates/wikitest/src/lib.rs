@@ -1,6 +1,7 @@
 pub mod artifact;
 mod canonical;
 pub mod catalog;
+pub mod harness;
 pub mod identity;
 pub mod inspection;
 pub mod mediawiki;

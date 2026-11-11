@@ -2825,6 +2825,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "wikitest",
  "wikitool_core",
  "zip",
 ]

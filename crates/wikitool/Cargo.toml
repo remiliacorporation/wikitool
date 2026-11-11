@@ -23,3 +23,4 @@ wikitool_core = { path = "../wikitool_core" }
 
 [dev-dependencies]
 tempfile = "3.25.0"
+wikitest = { path = "../wikitest" }
