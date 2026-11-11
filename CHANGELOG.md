@@ -19,6 +19,10 @@ The release workflow extracts the section for the requested version and fails if
 - The `wikitool` skill documents that batch selectors cover `wiki_content/` only, that `export --urls-file` writes Markdown only, and how `article changeset prepare` and `accept` bind hashes, lint results and warning decisions.
 - The durable sync store moves to schema version 8, which adds the upload receipt table and rewrites nothing else. The first command that opens an existing store migrates it; older Wikitool builds then refuse that store.
 
+### Fixed
+
+- `mutation reconcile` on an edit or delete receipt that `mutation close` already closed now reports status `operator_closed` and exits successfully instead of failing with "unsupported terminal phase/outcome"; it contacts no wiki and leaves the receipt, the closure record and the title's write block unchanged. A receipt resolved before the sync store recorded terminal outcomes reports `outcome_not_recorded`.
+
 ## [0.12.0] - 2026-09-29
 
 The text form of `templates show` now defaults to a short brief, matching its existing `--view brief` default. Use `--view full` for the prior expanded text output. JSON briefs include every declared parameter key while keeping detailed parameter cards bounded.

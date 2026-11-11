@@ -163,6 +163,23 @@ impl MutationPhase {
         Self::TERMINAL.contains(&self)
     }
 
+    /// The receipt as reconciliation reports it, or `None` while it is open.
+    pub(crate) fn terminal_receipt<O>(self, outcome: Option<O>) -> Option<TerminalReceipt<O>> {
+        let terminal = match self {
+            Self::StateAdvanced => Some(TerminalReceipt::StateAdvanced),
+            Self::Resolved => Some(outcome.map_or(
+                TerminalReceipt::ResolvedWithoutOutcome,
+                TerminalReceipt::Resolved,
+            )),
+            Self::IntentPersisted
+            | Self::ResponseBound
+            | Self::OutcomeAmbiguous
+            | Self::ReconciliationRequired => None,
+        };
+        debug_assert_eq!(terminal.is_some(), self.is_terminal());
+        terminal
+    }
+
     fn admitted_for_upload(self) -> Result<Self, UnknownStoredValue> {
         if Self::UPLOAD.contains(&self) {
             Ok(self)
@@ -191,6 +208,20 @@ impl DeleteLocalEffectStatus {
             sql_text_list(Self::STAGED_SOURCE.map(Self::as_str))
         )
     }
+}
+
+/// A terminal edit or delete receipt, so the reports built from it match every
+/// terminal outcome by name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TerminalReceipt<O> {
+    /// The verified remote change advanced sync state.
+    StateAdvanced,
+    /// Terminal without advancing sync state, for the recorded reason.
+    Resolved(O),
+    /// Resolved in a store older than schema version 4, which had no
+    /// terminal-outcome column: the v4 table rebuild copies the phase and
+    /// leaves the outcome NULL.
+    ResolvedWithoutOutcome,
 }
 
 /// The two phases a receipt enters while its remote outcome is unsettled.

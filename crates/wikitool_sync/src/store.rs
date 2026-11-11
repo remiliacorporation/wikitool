@@ -292,6 +292,50 @@ CREATE TABLE sync_invalidated_titles (
 );
 "#;
 
+/// The receipt tables of a version-3 store, literally: neither table has a
+/// terminal-outcome column or a phase CHECK.
+#[cfg(test)]
+pub(crate) const VERSION_THREE_MUTATION_TABLES: &str = r#"
+CREATE TABLE sync_edit_mutations (
+    mutation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    target_api_url TEXT NOT NULL,
+    title TEXT NOT NULL,
+    namespace TEXT NOT NULL,
+    relative_path TEXT NOT NULL,
+    intended_content_sha256 TEXT NOT NULL,
+    intended_normalized_sha256 TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    constraint_kind TEXT NOT NULL,
+    expected_revision_id INTEGER,
+    phase TEXT NOT NULL,
+    response_title TEXT,
+    response_page_id INTEGER,
+    response_old_revision_id INTEGER,
+    response_new_revision_id INTEGER,
+    response_new_timestamp TEXT,
+    detail TEXT,
+    created_at_unix INTEGER NOT NULL,
+    updated_at_unix INTEGER NOT NULL
+);
+CREATE TABLE sync_delete_mutations (
+    mutation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    target_api_url TEXT NOT NULL,
+    title TEXT NOT NULL,
+    relative_path TEXT,
+    expected_revision_id INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    reason_marker TEXT NOT NULL UNIQUE,
+    phase TEXT NOT NULL,
+    response_kind TEXT,
+    response_title TEXT,
+    response_log_id INTEGER,
+    response_log_timestamp TEXT,
+    detail TEXT,
+    created_at_unix INTEGER NOT NULL,
+    updated_at_unix INTEGER NOT NULL
+);
+"#;
+
 const REQUIRED_TABLES: &[&str] = &[
     "sync_ledger_pages",
     "sync_config",
@@ -1752,46 +1796,15 @@ mod tests {
                 "DROP TABLE sync_invalidated_titles;
                  DROP TABLE sync_mutation_closures;
                  DROP TABLE sync_edit_mutations;
-                 DROP TABLE sync_delete_mutations;
-                 CREATE TABLE sync_edit_mutations (
-                    mutation_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    target_api_url TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    namespace TEXT NOT NULL,
-                    relative_path TEXT NOT NULL,
-                    intended_content_sha256 TEXT NOT NULL,
-                    intended_normalized_sha256 TEXT NOT NULL,
-                    summary TEXT NOT NULL,
-                    constraint_kind TEXT NOT NULL,
-                    expected_revision_id INTEGER,
-                    phase TEXT NOT NULL,
-                    response_title TEXT,
-                    response_page_id INTEGER,
-                    response_old_revision_id INTEGER,
-                    response_new_revision_id INTEGER,
-                    response_new_timestamp TEXT,
-                    detail TEXT,
-                    created_at_unix INTEGER NOT NULL,
-                    updated_at_unix INTEGER NOT NULL
-                 );
-                 CREATE TABLE sync_delete_mutations (
-                    mutation_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    target_api_url TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    relative_path TEXT,
-                    expected_revision_id INTEGER NOT NULL,
-                    reason TEXT NOT NULL,
-                    reason_marker TEXT NOT NULL UNIQUE,
-                    phase TEXT NOT NULL,
-                    response_kind TEXT,
-                    response_title TEXT,
-                    response_log_id INTEGER,
-                    response_log_timestamp TEXT,
-                    detail TEXT,
-                    created_at_unix INTEGER NOT NULL,
-                    updated_at_unix INTEGER NOT NULL
-                 );
-                 INSERT INTO sync_edit_mutations (
+                 DROP TABLE sync_delete_mutations;",
+            )
+            .expect("remove current receipt tables");
+        connection
+            .execute_batch(VERSION_THREE_MUTATION_TABLES)
+            .expect("create literal version-three receipt tables");
+        connection
+            .execute_batch(
+                "INSERT INTO sync_edit_mutations (
                     target_api_url, title, namespace, relative_path,
                     intended_content_sha256, intended_normalized_sha256, summary,
                     constraint_kind, expected_revision_id, phase, detail,

@@ -201,6 +201,10 @@ pub enum DeleteReconciliationStatus {
     RemotePresentAfterMissing,
     StillAmbiguous,
     RemotePresent,
+    /// An operator closed the receipt without claiming a remote outcome.
+    OperatorClosed,
+    /// The receipt was resolved before terminal outcomes were recorded.
+    OutcomeNotRecorded,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -391,6 +395,10 @@ pub enum RemoteMutationReconciliationStatus {
     RemotePresentAfterMissing,
     StillAmbiguous,
     ReconciliationRequired,
+    /// An operator closed the receipt without claiming a remote outcome.
+    OperatorClosed,
+    /// The receipt was resolved before terminal outcomes were recorded.
+    OutcomeNotRecorded,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -3,7 +3,8 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 
 use crate::lifecycle::{
     DeleteLocalEffectStatus, DeleteTerminalOutcome, EditTerminalOutcome, MutationPhase, PhaseGuard,
-    PhaseTransition, UnresolvedPhase, decode_delete_lifecycle, decode_edit_lifecycle,
+    PhaseTransition, TerminalReceipt, UnresolvedPhase, decode_delete_lifecycle,
+    decode_edit_lifecycle,
 };
 use crate::remote::{observe_remote_page, reconcile_delete_mutation_with_api};
 use crate::storage::{
@@ -100,6 +101,12 @@ pub fn reconcile_remote_mutation_with_api<A: WikiUploadApi>(
                 }
                 DeleteReconciliationStatus::RemotePresent => {
                     RemoteMutationReconciliationStatus::ReconciliationRequired
+                }
+                DeleteReconciliationStatus::OperatorClosed => {
+                    RemoteMutationReconciliationStatus::OperatorClosed
+                }
+                DeleteReconciliationStatus::OutcomeNotRecorded => {
+                    RemoteMutationReconciliationStatus::OutcomeNotRecorded
                 }
             };
             Ok(RemoteMutationReconciliationReport {
@@ -329,8 +336,8 @@ fn reconcile_edit_mutation_with_api<A: WikiWriteApi>(
     let connection = open_existing_sync_connection(paths, target)?;
     let intent = load_edit_mutation(&connection, mutation_id)?;
     require_edit_target(&intent, target)?;
-    if intent.phase.is_terminal() {
-        return terminal_edit_report(&intent, target, api.request_count());
+    if let Some(terminal) = intent.phase.terminal_receipt(intent.terminal_outcome) {
+        return terminal_edit_report(&intent, terminal, target, api.request_count());
     }
     if intent.request_started_at_unix.is_none() {
         let detail = "the durable edit intent was never marked request-started; no MediaWiki edit request was issued";
@@ -851,31 +858,40 @@ fn require_edit_target(intent: &EditMutationIntent, target: &SyncTargetIdentity)
     Ok(())
 }
 
+/// Report a terminal receipt without contacting the wiki or writing the store.
 fn terminal_edit_report(
     intent: &EditMutationIntent,
+    terminal: TerminalReceipt<EditTerminalOutcome>,
     target: &SyncTargetIdentity,
     request_count: usize,
 ) -> Result<RemoteMutationReconciliationReport> {
-    let (status, detail) = match (intent.phase, intent.terminal_outcome) {
-        (MutationPhase::StateAdvanced, _) => (
+    let (status, detail) = match terminal {
+        TerminalReceipt::StateAdvanced => (
             RemoteMutationReconciliationStatus::StateAdvanced,
-            "edit mutation already advanced sync state".to_string(),
+            "edit mutation already advanced sync state",
         ),
-        (MutationPhase::Resolved, Some(EditTerminalOutcome::NotApplied)) => (
+        TerminalReceipt::Resolved(EditTerminalOutcome::NotApplied) => (
             RemoteMutationReconciliationStatus::NotApplied,
-            "edit mutation was already resolved as not applied".to_string(),
+            "edit mutation was already resolved as not applied",
         ),
-        (MutationPhase::Resolved, Some(EditTerminalOutcome::AppliedThenChanged)) => (
+        TerminalReceipt::Resolved(EditTerminalOutcome::AppliedThenChanged) => (
             RemoteMutationReconciliationStatus::AppliedThenChanged,
-            "edit mutation was already resolved as applied then changed".to_string(),
+            "edit mutation was already resolved as applied then changed",
         ),
-        _ => bail!(
-            "edit mutation {} has unsupported terminal phase/outcome {}/{:?}",
-            intent.mutation_id,
-            intent.phase,
-            intent.terminal_outcome.map(EditTerminalOutcome::as_str)
+        TerminalReceipt::Resolved(EditTerminalOutcome::OperatorClosedUnresolved) => (
+            RemoteMutationReconciliationStatus::OperatorClosed,
+            "edit mutation was closed by an operator without a claimed remote outcome",
+        ),
+        TerminalReceipt::ResolvedWithoutOutcome => (
+            RemoteMutationReconciliationStatus::OutcomeNotRecorded,
+            "edit mutation was resolved before the sync store recorded terminal outcomes; its remote outcome was not recorded",
+        ),
+        TerminalReceipt::Resolved(EditTerminalOutcome::StateAdvanced) => bail!(
+            "edit mutation {} is resolved with terminal outcome state_advanced, which only a receipt in phase state_advanced records",
+            intent.mutation_id
         ),
     };
+    let detail = detail.to_string();
     Ok(RemoteMutationReconciliationReport {
         mutation_id: intent.mutation_id,
         operation: RemoteMutationOperation::Edit,

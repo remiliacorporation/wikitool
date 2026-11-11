@@ -421,7 +421,9 @@ pub(crate) fn reconcile_upload_mutation_with_api<A: WikiUploadApi>(
                 RemoteMutationReconciliationStatus::AppliedThenChanged,
                 "upload mutation was already resolved as applied then changed",
             ),
-            None => bail!("upload mutation {mutation_id} has unsupported terminal outcome None"),
+            None => bail!(
+                "upload mutation {mutation_id} is resolved without a terminal outcome; upload receipts begin at sync store schema version 8 and every resolution records one"
+            ),
         };
         return Ok(report(status, detail.to_string(), api.request_count()));
     }

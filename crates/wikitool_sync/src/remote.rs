@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
 use crate::lifecycle::{
-    DeleteLocalEffectStatus, DeleteResponseKind, DeleteTerminalOutcome, MutationPhase,
+    DeleteLocalEffectStatus, DeleteResponseKind, DeleteTerminalOutcome, TerminalReceipt,
     UnresolvedPhase,
 };
 use crate::storage::{
@@ -507,8 +507,8 @@ pub fn reconcile_delete_mutation_with_api<A: WikiWriteApi>(
     let intent = load_delete_mutation(&connection, mutation_id)?;
     require_mutation_target(&intent, target)?;
 
-    if intent.phase.is_terminal() {
-        return terminal_delete_report(&intent, target, api.request_count());
+    if let Some(terminal) = intent.phase.terminal_receipt(intent.terminal_outcome) {
+        return terminal_delete_report(&intent, terminal, target, api.request_count());
     }
     if intent.response_kind == Some(DeleteResponseKind::AlreadyMissing) {
         let current = observe_remote_page(api, &intent.title)?;
@@ -997,35 +997,44 @@ fn append_persistence_error(detail: String, error: Option<anyhow::Error>) -> Str
     }
 }
 
+/// Report a terminal receipt without contacting the wiki or writing the store.
 fn terminal_delete_report(
     intent: &DeleteMutationIntent,
+    terminal: TerminalReceipt<DeleteTerminalOutcome>,
     target: &SyncTargetIdentity,
     request_count: usize,
 ) -> Result<DeleteReconciliationReport> {
-    let (status, detail) = match (intent.phase, intent.terminal_outcome) {
-        (MutationPhase::StateAdvanced, _) => (
+    let (status, detail) = match terminal {
+        TerminalReceipt::StateAdvanced => (
             DeleteReconciliationStatus::StateAdvanced,
-            "delete mutation already advanced sync state".to_string(),
+            "delete mutation already advanced sync state",
         ),
-        (MutationPhase::Resolved, Some(DeleteTerminalOutcome::NotApplied)) => (
+        TerminalReceipt::Resolved(DeleteTerminalOutcome::NotApplied) => (
             DeleteReconciliationStatus::NotApplied,
-            "delete mutation was already resolved as not applied".to_string(),
+            "delete mutation was already resolved as not applied",
         ),
-        (MutationPhase::Resolved, Some(DeleteTerminalOutcome::AppliedThenRecreated)) => (
+        TerminalReceipt::Resolved(DeleteTerminalOutcome::AppliedThenRecreated) => (
             DeleteReconciliationStatus::AppliedThenRecreated,
-            "delete mutation was already resolved as applied then recreated".to_string(),
+            "delete mutation was already resolved as applied then recreated",
         ),
-        (MutationPhase::Resolved, Some(DeleteTerminalOutcome::RemotePresentAfterMissing)) => (
+        TerminalReceipt::Resolved(DeleteTerminalOutcome::RemotePresentAfterMissing) => (
             DeleteReconciliationStatus::RemotePresentAfterMissing,
-            "delete mutation was already resolved as remote present after missingtitle".to_string(),
+            "delete mutation was already resolved as remote present after missingtitle",
         ),
-        _ => bail!(
-            "delete mutation {} has unsupported terminal phase/outcome {}/{:?}",
-            intent.mutation_id,
-            intent.phase,
-            intent.terminal_outcome.map(DeleteTerminalOutcome::as_str)
+        TerminalReceipt::Resolved(DeleteTerminalOutcome::OperatorClosedUnresolved) => (
+            DeleteReconciliationStatus::OperatorClosed,
+            "delete mutation was closed by an operator without a claimed remote outcome",
+        ),
+        TerminalReceipt::ResolvedWithoutOutcome => (
+            DeleteReconciliationStatus::OutcomeNotRecorded,
+            "delete mutation was resolved before the sync store recorded terminal outcomes; its remote outcome was not recorded",
+        ),
+        TerminalReceipt::Resolved(DeleteTerminalOutcome::StateAdvanced) => bail!(
+            "delete mutation {} is resolved with terminal outcome state_advanced, which only a receipt in phase state_advanced records",
+            intent.mutation_id
         ),
     };
+    let detail = detail.to_string();
     Ok(DeleteReconciliationReport {
         mutation_id: intent.mutation_id,
         target_api_url: target.api_url().to_string(),
