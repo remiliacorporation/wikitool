@@ -5,6 +5,10 @@ use std::fs;
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
+use crate::lifecycle::{
+    DeleteLocalEffectStatus, DeleteResponseKind, DeleteTerminalOutcome, MutationPhase,
+    UnresolvedPhase,
+};
 use crate::storage::{
     DeleteMutationIntent, NewDeleteMutation, advance_verified_delete_mutation,
     begin_delete_mutation, bind_delete_response, complete_delete_mutation_without_state_change,
@@ -201,8 +205,8 @@ pub fn apply_remote_delete_with_api<A: WikiWriteApi>(
             format!("local delete effects could not be prepared before request start: {error:#}"),
         ));
     }
-    if intent.local_effect_status == "pending" {
-        intent.local_effect_status = "backup_ready".to_string();
+    if intent.local_effect_status == DeleteLocalEffectStatus::Pending {
+        intent.local_effect_status = DeleteLocalEffectStatus::BackupReady;
     }
 
     let immediate = match observe_remote_page(api, &plan.canonical_title) {
@@ -228,7 +232,7 @@ pub fn apply_remote_delete_with_api<A: WikiWriteApi>(
                 &connection,
                 target,
                 &intent,
-                "remote_present_after_missing",
+                DeleteTerminalOutcome::RemotePresentAfterMissing,
                 &detail,
             ) {
                 return Err(reconciliation_required_error(
@@ -252,7 +256,7 @@ pub fn apply_remote_delete_with_api<A: WikiWriteApi>(
         if let Err(error) = bind_delete_response(
             &connection,
             &intent,
-            "already_missing",
+            DeleteResponseKind::AlreadyMissing,
             &plan.canonical_title,
             None,
             None,
@@ -326,8 +330,13 @@ pub fn apply_remote_delete_with_api<A: WikiWriteApi>(
             let detail = format!(
                 "delete request failed after its durable request-start marker: {error:#}; the request will not be retried"
             );
-            let persistence_error =
-                persist_unresolved(&connection, &intent, "outcome_ambiguous", &detail).err();
+            let persistence_error = persist_unresolved(
+                &connection,
+                &intent,
+                UnresolvedPhase::OutcomeAmbiguous,
+                &detail,
+            )
+            .err();
             let detail = append_persistence_error(detail, persistence_error);
             return Err(RemoteDeleteError::OutcomeAmbiguous {
                 mutation_id: intent.mutation_id,
@@ -349,9 +358,17 @@ pub fn apply_remote_delete_with_api<A: WikiWriteApi>(
                     format!("typed delete receipt failed title-identity validation: {error:#}"),
                 ));
             }
-            ("deleted", receipt.title, Some(receipt.log_id))
+            (
+                DeleteResponseKind::Deleted,
+                receipt.title,
+                Some(receipt.log_id),
+            )
         }
-        DeleteOutcome::AlreadyMissing => ("already_missing", plan.canonical_title.clone(), None),
+        DeleteOutcome::AlreadyMissing => (
+            DeleteResponseKind::AlreadyMissing,
+            plan.canonical_title.clone(),
+            None,
+        ),
     };
     if let Err(error) = bind_delete_response(
         &connection,
@@ -384,7 +401,9 @@ pub fn apply_remote_delete_with_api<A: WikiWriteApi>(
         }
     };
     if let Some(current) = current {
-        if response_kind == "deleted" && current.revision_id == observed_revision_id {
+        if response_kind == DeleteResponseKind::Deleted
+            && current.revision_id == observed_revision_id
+        {
             let Some(log_id) = deletion_log_id else {
                 return Err(reconciliation_required_error(
                     &connection,
@@ -404,9 +423,9 @@ pub fn apply_remote_delete_with_api<A: WikiWriteApi>(
                 detail,
             ));
         }
-        let (terminal_outcome, status, detail) = if response_kind == "deleted" {
+        let (terminal_outcome, status, detail) = if response_kind == DeleteResponseKind::Deleted {
             (
-                "applied_then_recreated",
+                DeleteTerminalOutcome::AppliedThenRecreated,
                 RemoteDeleteStatus::AppliedThenRecreated,
                 format!(
                     "MediaWiki returned a typed delete receipt, but revision {} is present after the response; local sync authority was retained",
@@ -415,7 +434,7 @@ pub fn apply_remote_delete_with_api<A: WikiWriteApi>(
             )
         } else {
             (
-                "remote_present_after_missing",
+                DeleteTerminalOutcome::RemotePresentAfterMissing,
                 RemoteDeleteStatus::RemotePresentAfterMissing,
                 format!(
                     "MediaWiki reported missingtitle, then revision {} was observed; this request did not delete the page and local sync authority was retained",
@@ -459,7 +478,7 @@ pub fn apply_remote_delete_with_api<A: WikiWriteApi>(
         ));
     }
     Ok(RemoteDeleteReport {
-        status: if response_kind == "deleted" {
+        status: if response_kind == DeleteResponseKind::Deleted {
             RemoteDeleteStatus::Deleted
         } else {
             RemoteDeleteStatus::AlreadyMissing
@@ -488,10 +507,10 @@ pub fn reconcile_delete_mutation_with_api<A: WikiWriteApi>(
     let intent = load_delete_mutation(&connection, mutation_id)?;
     require_mutation_target(&intent, target)?;
 
-    if intent.phase == "state_advanced" || intent.phase == "resolved" {
+    if intent.phase.is_terminal() {
         return terminal_delete_report(&intent, target, api.request_count());
     }
-    if intent.response_kind.as_deref() == Some("already_missing") {
+    if intent.response_kind == Some(DeleteResponseKind::AlreadyMissing) {
         let current = observe_remote_page(api, &intent.title)?;
         if let Some(current) = current {
             let detail = format!(
@@ -503,7 +522,7 @@ pub fn reconcile_delete_mutation_with_api<A: WikiWriteApi>(
                 &connection,
                 target,
                 &intent,
-                "remote_present_after_missing",
+                DeleteTerminalOutcome::RemotePresentAfterMissing,
                 &detail,
             )?;
             return Ok(DeleteReconciliationReport {
@@ -520,7 +539,12 @@ pub fn reconcile_delete_mutation_with_api<A: WikiWriteApi>(
             let detail = format!(
                 "verified remote absence could not finish local effects during reconciliation: {error:#}"
             );
-            persist_unresolved(&connection, &intent, "reconciliation_required", &detail)?;
+            persist_unresolved(
+                &connection,
+                &intent,
+                UnresolvedPhase::ReconciliationRequired,
+                &detail,
+            )?;
             bail!(detail);
         }
         return Ok(DeleteReconciliationReport {
@@ -540,7 +564,7 @@ pub fn reconcile_delete_mutation_with_api<A: WikiWriteApi>(
             &connection,
             target,
             &intent,
-            "not_applied",
+            DeleteTerminalOutcome::NotApplied,
             detail,
         )?;
         return Ok(DeleteReconciliationReport {
@@ -576,7 +600,12 @@ pub fn reconcile_delete_mutation_with_api<A: WikiWriteApi>(
                     "delete marker/log {log_id} proves a delete response, but expected revision {} is still visible; replica lag prevents terminal classification",
                     intent.expected_revision_id
                 );
-                persist_unresolved(&connection, &intent, "reconciliation_required", &detail)?;
+                persist_unresolved(
+                    &connection,
+                    &intent,
+                    UnresolvedPhase::ReconciliationRequired,
+                    &detail,
+                )?;
                 return Ok(DeleteReconciliationReport {
                     mutation_id,
                     target_api_url: target.api_url().to_string(),
@@ -596,7 +625,7 @@ pub fn reconcile_delete_mutation_with_api<A: WikiWriteApi>(
                 &connection,
                 target,
                 &intent,
-                "applied_then_recreated",
+                DeleteTerminalOutcome::AppliedThenRecreated,
                 &detail,
             )?;
             return Ok(DeleteReconciliationReport {
@@ -614,7 +643,7 @@ pub fn reconcile_delete_mutation_with_api<A: WikiWriteApi>(
             bind_delete_response(
                 &connection,
                 &intent,
-                "deleted",
+                DeleteResponseKind::Deleted,
                 &marker.title,
                 Some(marker.log_id),
                 Some(&marker.timestamp),
@@ -624,7 +653,12 @@ pub fn reconcile_delete_mutation_with_api<A: WikiWriteApi>(
             let detail = format!(
                 "verified delete lineage could not finish local effects during reconciliation: {error:#}"
             );
-            persist_unresolved(&connection, &intent, "reconciliation_required", &detail)?;
+            persist_unresolved(
+                &connection,
+                &intent,
+                UnresolvedPhase::ReconciliationRequired,
+                &detail,
+            )?;
             bail!(detail);
         }
         return Ok(DeleteReconciliationReport {
@@ -649,7 +683,7 @@ pub fn reconcile_delete_mutation_with_api<A: WikiWriteApi>(
                 &connection,
                 target,
                 &intent,
-                "not_applied",
+                DeleteTerminalOutcome::NotApplied,
                 &detail,
             )?;
             Ok(DeleteReconciliationReport {
@@ -667,7 +701,12 @@ pub fn reconcile_delete_mutation_with_api<A: WikiWriteApi>(
                 "no visible delete marker was found and current revision {} still matches the expected revision, but hidden delete-log comments prevent proving whether this mutation applied; operator review is required",
                 current.revision_id
             );
-            persist_unresolved(&connection, &intent, "reconciliation_required", &detail)?;
+            persist_unresolved(
+                &connection,
+                &intent,
+                UnresolvedPhase::ReconciliationRequired,
+                &detail,
+            )?;
             Ok(DeleteReconciliationReport {
                 mutation_id,
                 target_api_url: target.api_url().to_string(),
@@ -683,7 +722,12 @@ pub fn reconcile_delete_mutation_with_api<A: WikiWriteApi>(
                 "no visible delete marker was found and current revision {} differs from expected revision {}; operator review is required",
                 current.revision_id, intent.expected_revision_id
             );
-            persist_unresolved(&connection, &intent, "reconciliation_required", &detail)?;
+            persist_unresolved(
+                &connection,
+                &intent,
+                UnresolvedPhase::ReconciliationRequired,
+                &detail,
+            )?;
             Ok(DeleteReconciliationReport {
                 mutation_id,
                 target_api_url: target.api_url().to_string(),
@@ -701,7 +745,12 @@ pub fn reconcile_delete_mutation_with_api<A: WikiWriteApi>(
                 "the page is absent and complete visible delete-log lineage has no matching marker; application cannot be distinguished from an unrelated deletion"
             }
             .to_string();
-            persist_unresolved(&connection, &intent, "outcome_ambiguous", &detail)?;
+            persist_unresolved(
+                &connection,
+                &intent,
+                UnresolvedPhase::OutcomeAmbiguous,
+                &detail,
+            )?;
             Ok(DeleteReconciliationReport {
                 mutation_id,
                 target_api_url: target.api_url().to_string(),
@@ -872,7 +921,7 @@ fn require_mutation_target(
 fn persist_unresolved(
     connection: &rusqlite::Connection,
     intent: &DeleteMutationIntent,
-    phase: &'static str,
+    phase: UnresolvedPhase,
     detail: &str,
 ) -> Result<()> {
     mark_delete_mutation_unresolved(connection, intent, phase, detail).with_context(|| {
@@ -895,7 +944,7 @@ fn not_applied_error(
         connection,
         target,
         intent,
-        "not_applied",
+        DeleteTerminalOutcome::NotApplied,
         &detail,
     ) {
         Ok(()) => RemoteDeleteError::NotApplied {
@@ -923,8 +972,13 @@ fn reconciliation_required_error(
     intent: &DeleteMutationIntent,
     detail: String,
 ) -> anyhow::Error {
-    let persistence_error =
-        persist_unresolved(connection, intent, "reconciliation_required", &detail).err();
+    let persistence_error = persist_unresolved(
+        connection,
+        intent,
+        UnresolvedPhase::ReconciliationRequired,
+        &detail,
+    )
+    .err();
     RemoteDeleteError::ReconciliationRequired {
         mutation_id: intent.mutation_id,
         target_api_url: target.api_url().to_string(),
@@ -948,20 +1002,20 @@ fn terminal_delete_report(
     target: &SyncTargetIdentity,
     request_count: usize,
 ) -> Result<DeleteReconciliationReport> {
-    let (status, detail) = match (intent.phase.as_str(), intent.terminal_outcome.as_deref()) {
-        ("state_advanced", _) => (
+    let (status, detail) = match (intent.phase, intent.terminal_outcome) {
+        (MutationPhase::StateAdvanced, _) => (
             DeleteReconciliationStatus::StateAdvanced,
             "delete mutation already advanced sync state".to_string(),
         ),
-        ("resolved", Some("not_applied")) => (
+        (MutationPhase::Resolved, Some(DeleteTerminalOutcome::NotApplied)) => (
             DeleteReconciliationStatus::NotApplied,
             "delete mutation was already resolved as not applied".to_string(),
         ),
-        ("resolved", Some("applied_then_recreated")) => (
+        (MutationPhase::Resolved, Some(DeleteTerminalOutcome::AppliedThenRecreated)) => (
             DeleteReconciliationStatus::AppliedThenRecreated,
             "delete mutation was already resolved as applied then recreated".to_string(),
         ),
-        ("resolved", Some("remote_present_after_missing")) => (
+        (MutationPhase::Resolved, Some(DeleteTerminalOutcome::RemotePresentAfterMissing)) => (
             DeleteReconciliationStatus::RemotePresentAfterMissing,
             "delete mutation was already resolved as remote present after missingtitle".to_string(),
         ),
@@ -969,7 +1023,7 @@ fn terminal_delete_report(
             "delete mutation {} has unsupported terminal phase/outcome {}/{:?}",
             intent.mutation_id,
             intent.phase,
-            intent.terminal_outcome
+            intent.terminal_outcome.map(DeleteTerminalOutcome::as_str)
         ),
     };
     Ok(DeleteReconciliationReport {

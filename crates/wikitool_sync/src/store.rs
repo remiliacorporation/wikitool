@@ -1863,4 +1863,93 @@ mod tests {
                 .expect("legacy ambiguous edit is conservatively request-started")
         );
     }
+
+    fn table_ddl<'a>(schema: &'a str, table: &str) -> &'a str {
+        let start = schema
+            .find(&format!("CREATE TABLE {table} ("))
+            .unwrap_or_else(|| panic!("{table} is defined"));
+        let rest = &schema[start..];
+        &rest[..rest.find("\n);").expect("table definition ends")]
+    }
+
+    fn check_list(table_ddl: &str, column: &str) -> Vec<String> {
+        let marker = format!("CHECK ({column} IN (");
+        let start = table_ddl
+            .find(&marker)
+            .unwrap_or_else(|| panic!("{column} has a CHECK list"))
+            + marker.len();
+        let list = &table_ddl[start..];
+        let mut values = list[..list.find(')').expect("CHECK list ends")]
+            .split(',')
+            .map(|value| value.trim().trim_matches('\'').to_string())
+            .collect::<Vec<_>>();
+        values.sort();
+        values
+    }
+
+    fn sorted(values: impl IntoIterator<Item = &'static str>) -> Vec<String> {
+        let mut values = values.into_iter().map(str::to_string).collect::<Vec<_>>();
+        values.sort();
+        values
+    }
+
+    /// A lifecycle value added in Rust or SQL alone fails here, as does a
+    /// unique unresolved-title index that disagrees with the rendered guard.
+    #[test]
+    fn lifecycle_vocabularies_match_current_schema_checks() {
+        use crate::lifecycle::{
+            DeleteLocalEffectStatus, DeleteResponseKind, MutationPhase, PhaseGuard,
+        };
+
+        let all_phases = sorted(MutationPhase::ALL.iter().map(|phase| phase.as_str()));
+        let unresolved = PhaseGuard::Unresolved.sql();
+        for (schema, table, phases) in [
+            (SYNC_STORE_SCHEMA, "sync_edit_mutations", all_phases.clone()),
+            (
+                EDIT_MUTATION_SCHEMA,
+                "sync_edit_mutations",
+                all_phases.clone(),
+            ),
+            (
+                SYNC_STORE_SCHEMA,
+                "sync_delete_mutations",
+                all_phases.clone(),
+            ),
+            (
+                DELETE_MUTATION_SCHEMA,
+                "sync_delete_mutations",
+                all_phases.clone(),
+            ),
+            (
+                UPLOAD_MUTATION_SCHEMA,
+                "sync_upload_mutations",
+                sorted(MutationPhase::UPLOAD.map(MutationPhase::as_str)),
+            ),
+        ] {
+            assert_eq!(
+                check_list(table_ddl(schema, table), "phase"),
+                phases,
+                "{table}"
+            );
+            assert!(
+                schema.contains(&format!("ON {table}(title)\n    WHERE {unresolved};")),
+                "{table} unique unresolved-title index"
+            );
+        }
+        for schema in [SYNC_STORE_SCHEMA, DELETE_MUTATION_SCHEMA] {
+            let delete = table_ddl(schema, "sync_delete_mutations");
+            assert_eq!(
+                check_list(delete, "local_effect_status"),
+                sorted(
+                    DeleteLocalEffectStatus::ALL
+                        .iter()
+                        .map(|status| status.as_str())
+                )
+            );
+            assert_eq!(
+                check_list(delete, "response_kind"),
+                sorted(DeleteResponseKind::ALL.iter().map(|kind| kind.as_str()))
+            );
+        }
+    }
 }

@@ -1,4 +1,7 @@
 use super::*;
+use crate::lifecycle::{
+    DeleteResponseKind, DeleteTerminalOutcome, EditTerminalOutcome, UnresolvedPhase,
+};
 use crate::storage::{
     DeleteMutationIntent, EditMutationIntent, NewDeleteMutation, NewEditMutation,
     advance_verified_delete_mutation, advance_verified_edit_mutation, begin_delete_mutation,
@@ -387,7 +390,7 @@ pub fn push_to_remote_with_progress<A: WikiWriteApi>(
                         &context.connection,
                         target,
                         &intent,
-                        "not_applied",
+                        EditTerminalOutcome::NotApplied,
                         &initial_detail,
                     ) {
                         Ok(()) => (
@@ -431,7 +434,7 @@ pub fn push_to_remote_with_progress<A: WikiWriteApi>(
                         let persistence_error = mark_edit_mutation_unresolved(
                             &context.connection,
                             &intent,
-                            "outcome_ambiguous",
+                            UnresolvedPhase::OutcomeAmbiguous,
                             &detail,
                         )
                         .err();
@@ -458,7 +461,7 @@ pub fn push_to_remote_with_progress<A: WikiWriteApi>(
                     let persistence_error = mark_edit_mutation_unresolved(
                         &context.connection,
                         &intent,
-                        "reconciliation_required",
+                        UnresolvedPhase::ReconciliationRequired,
                         &detail,
                     )
                     .err();
@@ -558,7 +561,7 @@ pub fn push_to_remote_with_progress<A: WikiWriteApi>(
                         &context.connection,
                         target,
                         &intent,
-                        "applied_then_changed",
+                        EditTerminalOutcome::AppliedThenChanged,
                         &detail,
                     ) {
                         record_reconciliation_failure(
@@ -749,7 +752,7 @@ pub fn push_to_remote_with_progress<A: WikiWriteApi>(
                         &context.connection,
                         target,
                         &intent,
-                        "not_applied",
+                        DeleteTerminalOutcome::NotApplied,
                         &initial_detail,
                     ) {
                         Ok(()) => (
@@ -801,7 +804,7 @@ pub fn push_to_remote_with_progress<A: WikiWriteApi>(
                         if let Err(error) = bind_delete_response(
                             &context.connection,
                             &intent,
-                            "deleted",
+                            DeleteResponseKind::Deleted,
                             &receipt.title,
                             Some(receipt.log_id),
                             None,
@@ -856,7 +859,7 @@ pub fn push_to_remote_with_progress<A: WikiWriteApi>(
                                 &context.connection,
                                 target,
                                 &intent,
-                                "applied_then_recreated",
+                                DeleteTerminalOutcome::AppliedThenRecreated,
                                 &detail,
                             ) {
                                 record_delete_reconciliation_failure(
@@ -921,7 +924,7 @@ pub fn push_to_remote_with_progress<A: WikiWriteApi>(
                         if let Err(error) = bind_delete_response(
                             &context.connection,
                             &intent,
-                            "already_missing",
+                            DeleteResponseKind::AlreadyMissing,
                             &current_remote.title,
                             None,
                             None,
@@ -965,7 +968,7 @@ pub fn push_to_remote_with_progress<A: WikiWriteApi>(
                                 &context.connection,
                                 target,
                                 &intent,
-                                "remote_present_after_missing",
+                                DeleteTerminalOutcome::RemotePresentAfterMissing,
                                 &detail,
                             ) {
                                 record_delete_reconciliation_failure(
@@ -1035,7 +1038,7 @@ pub fn push_to_remote_with_progress<A: WikiWriteApi>(
                         let detail = mark_delete_failure(
                             &context.connection,
                             &intent,
-                            "outcome_ambiguous",
+                            UnresolvedPhase::OutcomeAmbiguous,
                             format!(
                                 "delete request failed after durable intent: {error:#}; the request will not be retried"
                             ),
@@ -1277,8 +1280,13 @@ fn record_reconciliation_failure(
     acceptance: Option<PublicationProvenance>,
     detail: String,
 ) {
-    let persistence_error =
-        mark_edit_mutation_unresolved(connection, intent, "reconciliation_required", &detail).err();
+    let persistence_error = mark_edit_mutation_unresolved(
+        connection,
+        intent,
+        UnresolvedPhase::ReconciliationRequired,
+        &detail,
+    )
+    .err();
     let detail = append_receipt_persistence_error(detail, persistence_error);
     report.errors.push(format!("{}: {detail}", intent.title));
     report.mutation_effects.push(remote_mutation_effect(
@@ -1300,7 +1308,12 @@ fn record_delete_reconciliation_failure(
     response: Option<&DeleteReceipt>,
     detail: String,
 ) {
-    let detail = mark_delete_failure(connection, intent, "reconciliation_required", detail);
+    let detail = mark_delete_failure(
+        connection,
+        intent,
+        UnresolvedPhase::ReconciliationRequired,
+        detail,
+    );
     report.errors.push(format!("{}: {detail}", intent.title));
     report.mutation_effects.push(delete_mutation_effect(
         intent,
@@ -1319,7 +1332,7 @@ fn record_delete_reconciliation_failure(
 fn mark_delete_failure(
     connection: &Connection,
     intent: &DeleteMutationIntent,
-    phase: &'static str,
+    phase: UnresolvedPhase,
     detail: String,
 ) -> String {
     match mark_delete_mutation_unresolved(connection, intent, phase, &detail) {

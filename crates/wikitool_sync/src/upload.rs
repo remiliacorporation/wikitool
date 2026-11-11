@@ -9,6 +9,10 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 use serde::Serialize;
 use sha1::{Digest, Sha1};
 
+use crate::lifecycle::{
+    MutationPhase, PhaseGuard, PhaseTransition, UnresolvedPhase, UploadTerminalOutcome,
+    decode_upload_lifecycle,
+};
 use crate::storage::{
     ensure_no_unresolved_remote_mutation, normalized_title_key, open_existing_sync_connection,
 };
@@ -166,9 +170,9 @@ struct UploadMutationIntent {
     file_sha1: String,
     expected_sha1: Option<String>,
     expected_timestamp: Option<String>,
-    phase: String,
+    phase: MutationPhase,
     request_started_at_unix: Option<i64>,
-    terminal_outcome: Option<String>,
+    terminal_outcome: Option<UploadTerminalOutcome>,
 }
 
 /// Read local bytes and the target's current file state and return a stable
@@ -278,7 +282,13 @@ pub fn apply_remote_upload_with_api<A: WikiUploadApi>(
                 warning_keys(&warnings)
             );
             return Err(
-                match complete_upload_mutation(&connection, &intent, "not_applied", &detail, None) {
+                match complete_upload_mutation(
+                    &connection,
+                    &intent,
+                    UploadTerminalOutcome::NotApplied,
+                    &detail,
+                    None,
+                ) {
                     Ok(()) => RemoteUploadError::Warnings {
                         mutation_id: intent.mutation_id,
                         target_api_url: intent.target_api_url.clone(),
@@ -344,7 +354,7 @@ pub fn apply_remote_upload_with_api<A: WikiUploadApi>(
     if let Err(error) = complete_upload_mutation(
         &connection,
         &intent,
-        "uploaded",
+        UploadTerminalOutcome::Uploaded,
         "upload response and the re-observed remote SHA-1 both match the planned file",
         remote_timestamp
             .as_deref()
@@ -397,29 +407,33 @@ pub(crate) fn reconcile_upload_mutation_with_api<A: WikiUploadApi>(
         request_count,
     };
 
-    if intent.phase == "resolved" {
-        let (status, detail) = match intent.terminal_outcome.as_deref() {
-            Some("uploaded") => (
+    if intent.phase == MutationPhase::Resolved {
+        let (status, detail) = match intent.terminal_outcome {
+            Some(UploadTerminalOutcome::Uploaded) => (
                 RemoteMutationReconciliationStatus::Applied,
                 "upload mutation was already verified as applied",
             ),
-            Some("not_applied") => (
+            Some(UploadTerminalOutcome::NotApplied) => (
                 RemoteMutationReconciliationStatus::NotApplied,
                 "upload mutation was already resolved as not applied",
             ),
-            Some("applied_then_changed") => (
+            Some(UploadTerminalOutcome::AppliedThenChanged) => (
                 RemoteMutationReconciliationStatus::AppliedThenChanged,
                 "upload mutation was already resolved as applied then changed",
             ),
-            other => {
-                bail!("upload mutation {mutation_id} has unsupported terminal outcome {other:?}")
-            }
+            None => bail!("upload mutation {mutation_id} has unsupported terminal outcome None"),
         };
         return Ok(report(status, detail.to_string(), api.request_count()));
     }
     if intent.request_started_at_unix.is_none() {
         let detail = "the durable upload intent was never marked request-started; no MediaWiki upload request was issued";
-        complete_upload_mutation(&connection, &intent, "not_applied", detail, None)?;
+        complete_upload_mutation(
+            &connection,
+            &intent,
+            UploadTerminalOutcome::NotApplied,
+            detail,
+            None,
+        )?;
         return Ok(report(
             RemoteMutationReconciliationStatus::NotApplied,
             detail.to_string(),
@@ -439,7 +453,7 @@ pub(crate) fn reconcile_upload_mutation_with_api<A: WikiUploadApi>(
         complete_upload_mutation(
             &connection,
             &intent,
-            "uploaded",
+            UploadTerminalOutcome::Uploaded,
             &detail,
             Some(&current.timestamp),
         )?;
@@ -467,7 +481,13 @@ pub(crate) fn reconcile_upload_mutation_with_api<A: WikiUploadApi>(
                 "the remote file is still absent, as planned; the upload did not apply".to_string()
             }
         };
-        complete_upload_mutation(&connection, &intent, "not_applied", &detail, None)?;
+        complete_upload_mutation(
+            &connection,
+            &intent,
+            UploadTerminalOutcome::NotApplied,
+            &detail,
+            None,
+        )?;
         return Ok(report(
             RemoteMutationReconciliationStatus::NotApplied,
             detail,
@@ -491,7 +511,7 @@ pub(crate) fn reconcile_upload_mutation_with_api<A: WikiUploadApi>(
         complete_upload_mutation(
             &connection,
             &intent,
-            "applied_then_changed",
+            UploadTerminalOutcome::AppliedThenChanged,
             &detail,
             Some(&version.timestamp),
         )?;
@@ -509,7 +529,7 @@ pub(crate) fn reconcile_upload_mutation_with_api<A: WikiUploadApi>(
             .any(|version| version.sha1.is_none());
     let (phase, status, detail) = if hidden_history {
         (
-            "outcome_ambiguous",
+            UnresolvedPhase::OutcomeAmbiguous,
             RemoteMutationReconciliationStatus::StillAmbiguous,
             format!(
                 "the visible remote history does not contain SHA-1 {}, but hidden or truncated file versions prevent proving whether this upload applied",
@@ -518,7 +538,7 @@ pub(crate) fn reconcile_upload_mutation_with_api<A: WikiUploadApi>(
         )
     } else {
         (
-            "reconciliation_required",
+            UnresolvedPhase::ReconciliationRequired,
             RemoteMutationReconciliationStatus::ReconciliationRequired,
             format!(
                 "the remote file matches neither the planned prior state nor the receipt's SHA-1 {}; it changed independently and operator review is required",
@@ -535,15 +555,17 @@ pub(crate) fn load_upload_inspections(
     unresolved_only: bool,
 ) -> Result<Vec<RemoteMutationInspection>> {
     let where_clause = if unresolved_only {
-        " WHERE phase NOT IN ('state_advanced', 'resolved')"
+        format!(" WHERE {}", PhaseGuard::Unresolved.sql())
     } else {
-        ""
+        String::new()
     };
     let sql = format!("{UPLOAD_INSPECTION_COLUMNS} FROM sync_upload_mutations{where_clause}");
     let mut statement = connection.prepare(&sql)?;
     let rows = statement.query_map([], decode_upload_inspection)?;
     rows.collect::<rusqlite::Result<Vec<_>>>()
-        .context("failed to decode upload mutation list")
+        .context("failed to decode upload mutation list")?
+        .into_iter()
+        .collect()
 }
 
 pub(crate) fn load_upload_inspection(
@@ -559,23 +581,35 @@ pub(crate) fn load_upload_inspection(
             decode_upload_inspection,
         )
         .optional()?
-        .with_context(|| format!("upload mutation {mutation_id} does not exist"))
+        .with_context(|| format!("upload mutation {mutation_id} does not exist"))?
 }
 
 const UPLOAD_INSPECTION_COLUMNS: &str =
     "SELECT mutation_id, target_api_url, title, local_path, phase,
         request_started_at_unix, terminal_outcome, file_sha1, detail";
 
-fn decode_upload_inspection(row: &rusqlite::Row<'_>) -> rusqlite::Result<RemoteMutationInspection> {
-    Ok(RemoteMutationInspection {
-        mutation_id: row.get(0)?,
+fn decode_upload_inspection(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<Result<RemoteMutationInspection>> {
+    let mutation_id = row.get(0)?;
+    let lifecycle = decode_upload_lifecycle(
+        mutation_id,
+        &row.get::<_, String>(4)?,
+        row.get::<_, Option<String>>(6)?.as_deref(),
+    );
+    let (phase, terminal_outcome) = match lifecycle {
+        Ok(lifecycle) => lifecycle,
+        Err(error) => return Ok(Err(error)),
+    };
+    Ok(Ok(RemoteMutationInspection {
+        mutation_id,
         operation: RemoteMutationOperation::Upload,
         target_api_url: row.get(1)?,
         title: row.get(2)?,
         relative_path: Some(row.get(3)?),
-        phase: row.get(4)?,
+        phase: phase.as_str().to_string(),
         request_started: row.get::<_, Option<i64>>(5)?.is_some(),
-        terminal_outcome: row.get(6)?,
+        terminal_outcome: terminal_outcome.map(|outcome| outcome.as_str().to_string()),
         expected_revision_id: None,
         response_revision_id: None,
         deletion_log_id: None,
@@ -584,7 +618,7 @@ fn decode_upload_inspection(row: &rusqlite::Row<'_>) -> rusqlite::Result<RemoteM
         local_effect_status: None,
         detail: row.get(8)?,
         closure: None,
-    })
+    }))
 }
 
 fn plan_remote_upload_from_observation<A: WikiUploadApi>(
@@ -846,7 +880,7 @@ fn begin_upload_mutation(
                 summary, replace_existing, expected_sha1, expected_timestamp, plan_id,
                 phase, created_at_unix, updated_at_unix
              ) VALUES (
-                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'intent_persisted', ?12, ?12
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?13, ?12, ?12
              )",
             params![
                 target.api_url(),
@@ -861,6 +895,7 @@ fn begin_upload_mutation(
                 plan.observed_timestamp,
                 plan.plan_id,
                 now,
+                MutationPhase::IntentPersisted,
             ],
         )
         .with_context(|| {
@@ -883,7 +918,7 @@ fn begin_upload_mutation(
         file_sha1: plan.file_sha1.clone(),
         expected_sha1: plan.observed_sha1.clone(),
         expected_timestamp: plan.observed_timestamp.clone(),
-        phase: "intent_persisted".to_string(),
+        phase: MutationPhase::IntentPersisted,
         request_started_at_unix: None,
         terminal_outcome: None,
     })
@@ -897,21 +932,30 @@ fn load_upload_mutation(connection: &Connection, mutation_id: i64) -> Result<Upl
              FROM sync_upload_mutations WHERE mutation_id = ?1",
             [mutation_id],
             |row| {
-                Ok(UploadMutationIntent {
+                let lifecycle = decode_upload_lifecycle(
+                    mutation_id,
+                    &row.get::<_, String>(6)?,
+                    row.get::<_, Option<String>>(8)?.as_deref(),
+                );
+                let (phase, terminal_outcome) = match lifecycle {
+                    Ok(lifecycle) => lifecycle,
+                    Err(error) => return Ok(Err(error)),
+                };
+                Ok(Ok(UploadMutationIntent {
                     mutation_id: row.get(0)?,
                     target_api_url: row.get(1)?,
                     title: row.get(2)?,
                     file_sha1: row.get(3)?,
                     expected_sha1: row.get(4)?,
                     expected_timestamp: row.get(5)?,
-                    phase: row.get(6)?,
+                    phase,
                     request_started_at_unix: row.get(7)?,
-                    terminal_outcome: row.get(8)?,
-                })
+                    terminal_outcome,
+                }))
             },
         )
         .optional()?
-        .with_context(|| format!("upload mutation {mutation_id} does not exist"))
+        .with_context(|| format!("upload mutation {mutation_id} does not exist"))?
 }
 
 fn mark_upload_request_started(
@@ -921,10 +965,13 @@ fn mark_upload_request_started(
     let now = i64::try_from(unix_timestamp()?).context("timestamp does not fit into i64")?;
     let changed = connection
         .execute(
-            "UPDATE sync_upload_mutations
-             SET request_started_at_unix = ?1, updated_at_unix = ?1
-             WHERE mutation_id = ?2 AND phase = 'intent_persisted'
-               AND request_started_at_unix IS NULL",
+            &format!(
+                "UPDATE sync_upload_mutations
+                 SET request_started_at_unix = ?1, updated_at_unix = ?1
+                 WHERE mutation_id = ?2 AND {}
+                   AND request_started_at_unix IS NULL",
+                PhaseGuard::IntentPersisted.sql()
+            ),
             params![now, intent.mutation_id],
         )
         .with_context(|| {
@@ -946,23 +993,28 @@ fn mark_upload_request_started(
 fn complete_upload_mutation(
     connection: &Connection,
     intent: &UploadMutationIntent,
-    terminal_outcome: &'static str,
+    terminal_outcome: UploadTerminalOutcome,
     detail: &str,
     response_timestamp: Option<&str>,
 ) -> Result<()> {
     let now = i64::try_from(unix_timestamp()?).context("timestamp does not fit into i64")?;
+    let transition = PhaseTransition::Resolve;
     let changed = connection
         .execute(
-            "UPDATE sync_upload_mutations
-             SET phase = 'resolved', terminal_outcome = ?1, detail = ?2,
-                 response_timestamp = ?3, updated_at_unix = ?4
-             WHERE mutation_id = ?5 AND phase NOT IN ('state_advanced', 'resolved')",
+            &format!(
+                "UPDATE sync_upload_mutations
+                 SET phase = ?6, terminal_outcome = ?1, detail = ?2,
+                     response_timestamp = ?3, updated_at_unix = ?4
+                 WHERE mutation_id = ?5 AND {}",
+                transition.guard().sql()
+            ),
             params![
                 terminal_outcome,
                 detail,
                 response_timestamp,
                 now,
-                intent.mutation_id
+                intent.mutation_id,
+                transition.target()
             ],
         )
         .with_context(|| format!("failed to complete upload mutation {}", intent.mutation_id))?;
@@ -975,19 +1027,20 @@ fn complete_upload_mutation(
 fn mark_upload_mutation_unresolved(
     connection: &Connection,
     intent: &UploadMutationIntent,
-    phase: &'static str,
+    phase: UnresolvedPhase,
     detail: &str,
 ) -> Result<()> {
-    if !matches!(phase, "outcome_ambiguous" | "reconciliation_required") {
-        bail!("invalid unresolved upload-mutation phase {phase}");
-    }
+    let transition = PhaseTransition::MarkUnresolved(phase);
     let now = i64::try_from(unix_timestamp()?).context("timestamp does not fit into i64")?;
     let changed = connection
         .execute(
-            "UPDATE sync_upload_mutations
-             SET phase = ?1, detail = ?2, updated_at_unix = ?3
-             WHERE mutation_id = ?4 AND phase NOT IN ('state_advanced', 'resolved')",
-            params![phase, detail, now, intent.mutation_id],
+            &format!(
+                "UPDATE sync_upload_mutations
+                 SET phase = ?1, detail = ?2, updated_at_unix = ?3
+                 WHERE mutation_id = ?4 AND {}",
+                transition.guard().sql()
+            ),
+            params![transition.target(), detail, now, intent.mutation_id],
         )
         .with_context(|| {
             format!(
@@ -1010,7 +1063,13 @@ fn not_applied_error(
     intent: &UploadMutationIntent,
     detail: String,
 ) -> anyhow::Error {
-    match complete_upload_mutation(connection, intent, "not_applied", &detail, None) {
+    match complete_upload_mutation(
+        connection,
+        intent,
+        UploadTerminalOutcome::NotApplied,
+        &detail,
+        None,
+    ) {
         Ok(()) => RemoteUploadError::NotApplied {
             mutation_id: intent.mutation_id,
             target_api_url: intent.target_api_url.clone(),
@@ -1033,8 +1092,13 @@ fn ambiguous_error(
     intent: &UploadMutationIntent,
     detail: String,
 ) -> anyhow::Error {
-    let persistence_error =
-        mark_upload_mutation_unresolved(connection, intent, "outcome_ambiguous", &detail).err();
+    let persistence_error = mark_upload_mutation_unresolved(
+        connection,
+        intent,
+        UnresolvedPhase::OutcomeAmbiguous,
+        &detail,
+    )
+    .err();
     RemoteUploadError::OutcomeAmbiguous {
         mutation_id: intent.mutation_id,
         target_api_url: intent.target_api_url.clone(),
@@ -1049,9 +1113,13 @@ fn reconciliation_required_error(
     intent: &UploadMutationIntent,
     detail: String,
 ) -> anyhow::Error {
-    let persistence_error =
-        mark_upload_mutation_unresolved(connection, intent, "reconciliation_required", &detail)
-            .err();
+    let persistence_error = mark_upload_mutation_unresolved(
+        connection,
+        intent,
+        UnresolvedPhase::ReconciliationRequired,
+        &detail,
+    )
+    .err();
     RemoteUploadError::ReconciliationRequired {
         mutation_id: intent.mutation_id,
         target_api_url: intent.target_api_url.clone(),

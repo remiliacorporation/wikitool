@@ -24,6 +24,7 @@ pub use workspace::{
 };
 
 mod diff;
+mod lifecycle;
 mod model;
 mod mutations;
 mod namespaces;
