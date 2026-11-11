@@ -19,11 +19,22 @@ sampling and inaccessible sources; none can establish complete independent cover
 
 Use the relevant references:
 - [Source fidelity](references/source-fidelity.md): entailment, citation coverage,
-  attribution, compression and source roles.
-- [Reader value](references/reader-value.md): subject, structure and due weight.
+  attribution and over-attribution, compression and source roles.
+- [Reader value](references/reader-value.md): subject, structure, due weight
+  and register.
 - [Sensitive claims](references/blp-sensitive.md): required when living-person,
   private, health, crime, identity or reputational claims appear or are implied.
 - [Frozen packets](references/frozen-packet.md): closed evaluation inputs only.
+
+Read the site adapter's guidance before judging attribution. Where it makes the
+wiki a first-party record of its own subject, content its contributors supplied
+as fact (their own work, the community's operations, and their domain or
+subcultural knowledge) is the record. Report it only when it is implausible,
+contradicts an inspected source, alleges something about an identifiable
+person or outside organization, promotes, or carries a citation that does not
+cover it; never for lacking an outside source or a hedge. Hedging and repeated
+attribution frames on such content, or on settled facts anywhere, are defects to
+report.
 
 Reconstruct material claims, including infoboxes, captions, headings and category
 placement. Check category scope and browsing value under the site's policy, not

@@ -18,19 +18,41 @@ reads only the local index and reports `likely_missing` for a page that exists.
 Write an off-wiki draft to `.wikitool/drafts/TITLE.wiki`, named as the page
 title, and pass `--title` to `article lint` and `review --draft-path`. Content
 under `wiki_content/` is the synced mirror, not a drafting area. When an
-interview ledger exists, read it and its open items before writing; ledger
-text under human notes is testimony to attribute, not sourced fact.
+interview ledger exists, read it and its open items before writing.
 
 Establish support for material claims before asserting them. Keep sources,
-human testimony, interpretation and unresolved claims distinct. Use the site's
-adapter guidance and inspect local templates when integration matters; retrieval
-neighbors do not determine article structure or approve category membership.
+human testimony, interpretation and unresolved claims distinct in your working
+record; the published voice is a separate decision. Read the site adapter's
+guidance before choosing it. Many wikis, especially community, project and
+fandom wikis, are a first-party record of their own subject and exist partly
+to canonicalize knowledge that is citable nowhere else. There, the contributor
+you work with is a source in their own right, whoever they are: what they write or supply as fact (their
+own work and roles, the community's operations, and their domain or subcultural
+knowledge such as what a term means or how a practice began) goes into the
+wiki's voice, corroborated with citations where a source exists, never
+attributed to them or weakened for lacking an outside source. Elsewhere,
+publish testimony with attribution or hold it as a lead.
+
+Doubt is a question, not a hedge. When a supplied statement is implausible on
+its face, contradicts an inspected source or another statement, or alleges
+something about an identifiable person or outside organization, ask the contributor
+for its basis before writing, then write what is resolved. Inspect local
+templates when integration matters; retrieval neighbors do not determine
+article structure or approve category membership.
+
+Write in a plain, confident encyclopedic register. Attribution is information:
+use it for quotations, opinions, interpretations, disputed claims and
+allegations about other people, and frame a single-source account once per
+passage rather than in every sentence. Do not hedge established or first-party
+facts with "by his account", "reportedly", "has said", "is said to" or similar,
+and do not stack qualifiers to sound careful. Prefer concrete actors, actions
+and dates over significance language.
 
 Choose detail for the work:
 - [Evidence to prose](references/evidence-to-prose.md): research, attribution,
   claim support, quotations and source limits.
-- [Human notes](references/human-notes.md): supplied accounts, drafts or private
-  context that must survive editing without becoming unsourced fact.
+- [Human notes](references/human-notes.md): supplied accounts, drafts and
+  firsthand knowledge, how they reach the published voice, and private context.
 - [MediaWiki structure](references/mediawiki-structure.md): templates, categories,
   references and article integration.
 - [Frozen packets](references/frozen-packet.md): only when a supplied evaluation

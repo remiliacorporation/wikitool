@@ -28,7 +28,15 @@ or exclusions. Do not force a fixed questionnaire. Ask only what materially
 changes the article or its research.
 
 Keep testimony, inspected sources, leads and interviewer inference distinct.
-Preserve corrections and disagreement. Resolve whether ambiguous sensitive
+That separation records provenance; it is not a judgment that testimony is
+doubtful. When site policy makes the wiki a first-party record, what the person
+supplies as fact about their own work, the community's operations or their
+domain and subcultural knowledge is publishable as fact; note that in the
+ledger so authoring states it plainly. Reserve leads for what the person is
+unsure of, and ask follow-up questions only where a statement is implausible,
+conflicts with a source or another statement, or alleges something about an
+identifiable person or outside organization. Do not cross-examine a contributor's
+knowledge for lack of outside sources. Preserve corrections and disagreement. Resolve whether ambiguous sensitive
 material is private, attribution-limited or excluded; retain only the operational
 boundary future work needs, not unnecessary private detail.
 

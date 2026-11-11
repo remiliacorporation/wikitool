@@ -22,7 +22,13 @@ Block prose that appears to inherit a source trail while severing the claim from
 - citing a publisher home page instead of the work;
 - copying citation metadata without inspecting the linked material;
 - citing a local wiki page as if it were independent confirmation;
-- upgrading a human source lead into an established fact.
+- upgrading a human source lead about other people, outside events or reception into an established fact.
+
+Under a site's first-party policy, content contributors supplied as fact (their own work and roles, the community's operations, and their domain or subcultural knowledge, such as what a term means) is the record, not a lead. Do not report its plain statement as unattributed testimony, and do not demand a hedge or an outside source. Report only a real problem: it is implausible on its face, contradicts an inspected source, alleges something about an identifiable person or outside organization, claims outside significance, or sits beside a citation that appears to support it but does not.
+
+## Over-attribution
+
+Report over-attribution as a defect in its own right. Look for hedges on first-party or settled facts ("by his account", "reportedly", "has said", "is said to"), the same attribution frame repeated in consecutive sentences, and stacked qualifiers. They misstate a claim's status as surely as missing attribution does, and they erode the reader's trust in the wiki's own record. The repair is a single frame per single-source passage and plain statement elsewhere.
 
 ## Drift in compression
 
@@ -42,7 +48,7 @@ Compare sentence order, distinctive phrasing, example selection, and paragraph s
 
 ## Source roles and weight
 
-A primary source can establish its own content, release, or stated position. It usually cannot establish independent significance, broad reception, controversy, or the truth of self-description. A weak source can be accurate but still unsuitable for a consequential claim. Explain the mismatch rather than applying a universal source blacklist.
+A primary source can establish its own content, release, credits, or stated position, and on a first-party record it is, with its contributors' supplied knowledge, the authority for the community's own history and culture. It usually cannot establish independent significance, broad reception, controversy, or claims about other people. A weak source can be accurate but still unsuitable for a consequential claim. Explain the mismatch rather than applying a universal source blacklist.
 
 ## Source-review adapter signals
 

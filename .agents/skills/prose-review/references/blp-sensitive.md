@@ -27,6 +27,10 @@ Block publication when:
 - a correction, acquittal, dismissal, or material update is omitted;
 - the only rationale for inclusion is notoriety, shock, or a local relationship.
 
+## What is not a sensitive claim
+
+On a wiki whose site policy treats its contributors as first-party sources, a person's own statement of their work, credits, roles and intentions, and a contributor's account of the community's culture and terminology, are not allegations or contested characterizations. They need no hedge. Apply this procedure to what such statements say about other identifiable people, not to the person's account of themselves.
+
 ## Tone and placement
 
 Use precise, attributed language. Avoid euphemism that obscures the record and sensationalism that amplifies it. Do not place a sensitive detail in the lead unless it is central to the subject's documented significance and due weight clearly supports that prominence.

@@ -11,7 +11,7 @@ Keep the working record explicit:
 3. **Verified evidence** — inspected sources that support publishable claims.
 4. **Editorial decisions** — what to include, omit, attribute, qualify, or hold.
 
-Do not silently promote layer 2 into layer 3. Do not discard layer 2 merely because it is not yet independently sourced; preserve it in the interview ledger or open items so research can address it.
+In the working record, do not relabel layer 2 as layer 3: note who supplied what. Whether layer 2 reaches the published voice as plain fact is a site-policy decision, covered below. Never discard layer 2 because it is not independently sourced.
 
 ## Preserve intent without preserving defects
 
@@ -19,14 +19,19 @@ Identify what the human is trying to communicate before restructuring it. Retain
 
 Mechanical conversion may normalize wikitext, citations, headings, and templates. It must not silently alter factual meaning, emphasis, uncertainty, or voice. Report material reorganizations and omissions.
 
-## Interview-derived prose
+## From firsthand knowledge to published prose
 
-Firsthand knowledge can guide research and may be publishable with explicit attribution when site policy allows. It is not an excuse to write omniscient prose. Distinguish:
+Keeping the four layers apart is a working discipline. It does not dictate the published voice; site policy does. Decide each claim's voice from who is speaking and what about:
 
-- “X said in the interview that…”;
-- a fact independently verified by a source;
-- an unresolved claim recorded as a lead;
-- private context excluded from publication.
+- **First-party record.** When the site adapter treats the wiki as a first-party record of its own subject, the contributor supplying the material is a primary source, whoever they are, and the wiki is where their knowledge becomes the reference. Do not assume who they are or what role they hold, and do not infer it from a name, handle or topic. What they write or supply as fact is publishable in the wiki's voice: their own work, roles, decisions and intentions; the community's operations; and their domain and subcultural knowledge (what a term or concept means, how a practice, meme or work came about, what an event was). If the contributor says "the term means X", the article says "The term means X", not "according to the contributor, the term means X". Hobby, game, project and community wikis work this way. Cite a corroborating artifact where one exists (a post, credit, essay, commit, log or announcement), but do not require one, and never weaken the sentence because the source is the contributor. Where the site moderates submissions, voice and confidence are adjusted there; render what the contributor supplied, neither weakened nor strengthened.
+- **Attributed account.** On wikis without that policy, attribute once and plainly (one framing clause such as "In her account of the project, …" followed by plain sentences), not with a hedge on every sentence.
+- **Quotation.** Quote a person's exact words when the wording itself matters, and name the speaker; the quotation needs attribution, the surrounding facts do not.
+- **Ask first.** When a supplied statement is implausible on its face, contradicts an inspected source or the contributor's other statements, or alleges misconduct or other reputational claims about an identifiable person or outside organization, ask the contributor for its basis before drafting. Write what the answer resolves; record an unresolved allegation as a hold. Doubt never becomes hedged prose.
+- **Private context** stays out of publication.
+
+First-party voice is not license for promotion. State what was made, done or meant; leave praise and claims of outside importance and influence to sources that establish them.
+
+Failure in either direction is a defect. Publishing an unexamined allegation about someone else launders it; hedging the contributor's knowledge with "by his account", "he has said" or "according to X" discredits the wiki's own record and reads as machine caution. Neither makes the article more accurate.
 
 When a human draft is already good, edit locally. Do not replace it wholesale with generic prose merely to make it stylistically uniform.
 
