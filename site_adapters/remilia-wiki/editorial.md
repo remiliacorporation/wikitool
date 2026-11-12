@@ -39,7 +39,7 @@ Rank sources from strongest to weakest. Use the strongest rung that supports the
 4. Recorded participant testimony: interviews and notes from people who were there.
 5. Lore.
 
-The bar falls with the rung. A consequential claim needs rung 1 or 2. A date or a name can rest on rung 3.
+Any rung can carry an ordinary claim, including lore with no citation. Only a sensitive claim about a living person needs rung 1 or 2 (see below). When a stronger rung exists, cite it.
 
 ### Lore
 
