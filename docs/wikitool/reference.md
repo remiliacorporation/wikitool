@@ -28,6 +28,7 @@ Commands:
   review      Run the structured pre-push review gate
   module      Run Lua module linting and related checks
   export      Export a remote wiki page tree to local files
+  ontology    Vendor the pinned ontology and generate Module:Ontology/data
   delete      Delete a page from the live wiki
   upload      Upload a media file to the live wiki
   mutation    Inspect and reconcile durable remote mutation receipts
@@ -323,6 +324,58 @@ Options:
       --combined              With --subpages, combine all pages into one output
       --limit <N>             Maximum total pages to export with --subpages, including the parent page
   -h, --help                  Print help
+```
+
+## ontology
+
+```text
+Vendor the pinned ontology and generate Module:Ontology/data
+
+Usage: wikitool ontology [OPTIONS] <COMMAND>
+
+Commands:
+  export    Export a clean remilia-sdk checkout of the ontology into the vendored copy
+  generate  Generate Module:Ontology/data from the vendored copy
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+      --project-root <PATH>
+      --data-dir <PATH>
+      --config <PATH>
+      --diagnostics          Print resolved runtime diagnostics
+  -h, --help                 Print help
+```
+
+## ontology export
+
+```text
+Export a clean remilia-sdk checkout of the ontology into the vendored copy
+
+Usage: wikitool ontology export [OPTIONS] --from <PATH>
+
+Options:
+      --from <PATH>          The packages/ontology directory of a clean remilia-sdk checkout
+      --project-root <PATH>
+      --data-dir <PATH>
+      --config <PATH>
+      --diagnostics          Print resolved runtime diagnostics
+  -h, --help                 Print help
+```
+
+## ontology generate
+
+```text
+Generate Module:Ontology/data from the vendored copy
+
+Usage: wikitool ontology generate [OPTIONS]
+
+Options:
+      --check                Fail if the module differs from the vendored copy, without writing
+      --project-root <PATH>
+      --data-dir <PATH>
+      --config <PATH>
+      --diagnostics          Print resolved runtime diagnostics
+  -h, --help                 Print help
 ```
 
 ## delete
