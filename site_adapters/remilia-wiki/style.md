@@ -50,6 +50,32 @@ Start from the set for the subject's type, and drop any section the evidence can
 
 Event keeps "Background" because there it names the lead-up to a dated event. Drop it when there is nothing to lead up to.
 
+## Mechanics
+
+These rules set spelling, punctuation, and form. They follow Wikipedia's Manual of Style, with the choices below made for this wiki. A rule that says "keep consistent" means the article may not mix the two forms.
+
+- Use US spelling: color, behavior, organize, center. Quotations and proper names keep their own spelling.
+- Write dates as month, day, year: May 12, 2019. Do not mix this with 12 May 2019 in one article.
+- Use the serial comma: "Reddit, Tumblr, and Twitter".
+- Use straight quotes and apostrophes. Do not use curly ones.
+- Use logical quotation. Put a comma or period inside the closing quote only when it belongs to the quoted words. Write `"Much hug", and "Wow".` for fragments.
+- Use `'s` for the possessive of a singular name that ends in s: "James's book", "Descartes's method". Plurals take a bare apostrophe: "the Beatles' album".
+- Use an en dash for a range: 2019–2021. Do not use a hyphen, and do not use `--` for a dash. Pick spaced or unspaced for the dash that sets off a phrase, and keep it the same through the article.
+- Use three periods for an ellipsis, with no spaces between them.
+- Put no space before a comma, period, colon, semicolon, or closing parenthesis.
+- Write "and" or "or" instead of a slash between words: "artist and musician", not "artist/musician". Board names (/x/), subreddits (r/backrooms), and URLs keep their slashes.
+- Write "and" in prose, not "&", except in a name.
+- Use "×" for dimensions and "number" for "#" in prose: "1920×1080", "number one". Keep "#" in token IDs and color codes.
+- Write in the third person. Do not use "I", "we", "you", or "your" outside a quotation.
+- Write the words out: "do not", not "don't". Quotations keep their contractions.
+- Give a year or a date, not "recently", "currently", "today", or "last year". An article is read years after it is written.
+- Write headings in sentence case, with no leading "The", "A", or "An" unless it is part of a name. Do not end a heading in punctuation, and do not put links, refs, templates, or math in one.
+- Do not repeat the article title in a heading.
+- Bold the title, or a form of it, in the first sentence. Open with a direct "X is a ..." sentence, not "X refers to ...".
+- Keep the lead to one or two paragraphs for most articles. A very long article may take three or four.
+- Use one blank line between paragraphs. Do not leave two or more.
+- Do not end a sentence with "?" or "!" outside a quotation.
+
 ## Worked examples
 
 Both examples come from existing pages. The "After" text shows the form only: each fact in it still needs a citation in the live article.
