@@ -1,7 +1,7 @@
 schema_version = "site_adapter_v2"
 adapter_id = "remilia-wiki"
 docs_profile = "mw-1.46-site-authoring"
-guidance_documents = ["editorial.md", "categories.md", "extensions.md", "templates.md", "visual_subjects.md"]
+guidance_documents = ["editorial.md", "research.md", "style.md", "review.md", "categories.md", "extensions.md", "templates.md", "visual_subjects.md"]
 
 [authoring]
 require_short_description = true
@@ -18,7 +18,7 @@ require_straight_quotes = true
 
 [citations]
 use_named_references = true
-leave_archive_fields_blank = true
+leave_archive_fields_blank = false
 
 [[citations.preferred_templates]]
 family = "web"
@@ -63,7 +63,12 @@ reason = "Aggregator data may be volatile or methodology-dependent; verify the e
 [[citations.source_review_rules]]
 label = "Urban Dictionary"
 host = "urbandictionary.com"
-reason = "User-submitted definitions lack editorial control; use only when the entry itself is the primary artifact under discussion."
+reason = "Reference-tier source for dates and leads. User-submitted definitions lack editorial control; do not rest a consequential claim on it alone."
+
+[[citations.source_review_rules]]
+label = "Remilia Wiki"
+host = "wiki.remilia.org"
+reason = "A retrieval aid, not independent confirmation: inspect its underlying citations and cite them, unless the wiki page itself is the artifact under discussion."
 
 [templates]
 
@@ -94,6 +99,18 @@ template_title = "Template:Infobox concept"
 [[templates.infobox_preferences]]
 subject_type = "Exhibition"
 template_title = "Template:Infobox exhibition"
+
+[[templates.infobox_preferences]]
+subject_type = "Meme"
+template_title = "Template:Infobox meme"
+
+[[templates.infobox_preferences]]
+subject_type = "Online community"
+template_title = "Template:Infobox online community"
+
+[[templates.infobox_preferences]]
+subject_type = "Term"
+template_title = "Template:Infobox term"
 
 [[templates.infobox_preferences]]
 subject_type = "General/Other"

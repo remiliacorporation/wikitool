@@ -1,0 +1,87 @@
+# Remilia Wiki style guide
+
+This document supplements [editorial policy](editorial.md). It sets the voice and structure of an article. The aim is an encyclopedic article that reads at least as well as Wikipedia's article on the same subject.
+
+## Voice
+
+- Name the subject first. The first sentence says what the subject is, in the subject's terms.
+- Use plain past tense for history. Use present tense for what is still true.
+- Prefer one fact per sentence. Split a sentence when its clauses need different sources.
+- State a disputed point once, with who disputes it. Do not repeat the dispute in every paragraph.
+- Write lore as plain declarative sentences. See [Lore](editorial.md#lore).
+- Use at most one block quote per section. Quote only wording that is distinctive, and say who wrote it.
+- Say what happened, who did it, and when. Leave the judgment of importance to the reader and the sources.
+
+## Words to watch
+
+These words are signals to re-read a sentence, not bans. Keep one only when the sentence would be false or unclear without it.
+
+| Word | Why it is a problem |
+|---|---|
+| adjacent | Names a relation without saying what it is. Say what links the two subjects, or drop the link. |
+| lineage | Implies a traced descent that is usually not sourced. Name the actual predecessor. |
+| ironic detachment | A label for a tone, not a fact. Show the behavior that you mean. |
+| broader | Points at a larger context without naming it. Name the context. |
+| notably | Asks the reader to find a fact important. Put the fact in the sentence. |
+| significant | A judgment with no measure. Give the number, the date, or the source that says so. |
+| pivotal | Claims a turning point. Say what changed before and after. |
+| landscape | Abstract noun that stands in for a place or a scene. Name the scene. |
+| ecosystem | Abstract noun that stands in for a set of projects or people. Name them. |
+| ethos | Abstract noun for a set of values. State the values, or quote the people who held them. |
+
+## Headings
+
+Headings are specific to the subject and its type. Use sentence case. Avoid "Background", "Overview", "Legacy", and "Influence" unless a source supports the claim that the heading makes. "Background" appears on 187 pages, and on most of them it says nothing about the subject.
+
+Start from the set for the subject's type, and drop any section the evidence cannot fill. A short article may have no sections at all.
+
+| Type | Headings |
+|---|---|
+| Meme | Origin, Spread, Variants, Usage, Reception |
+| Online community | History, Platforms, Culture, Notable events, Reception |
+| Website | History, Features, Users, Reception |
+| Person | Early life, Career, Works, Reception |
+| Term | Origin, Meaning, Usage, Related terms |
+| Concept | Origin, Definition, Applications, Criticism |
+| Event | Background, Events, Aftermath |
+| NFT collection | Creation, Mint, Traits, Market |
+| Organization | History, Activities, Reception |
+| Artwork | Creation, Description, Exhibition, Reception |
+
+Event keeps "Background" because there it names the lead-up to a dated event. Drop it when there is nothing to lead up to.
+
+## Worked examples
+
+Both examples come from existing pages. The "After" text shows the form only: each fact in it still needs a citation in the live article.
+
+### The lead of 4chan
+
+Before:
+
+> '''4chan''' is an anonymous English-language imageboard website founded in 2003 by Christopher Poole, known online as "moot." Structured around topic-specific boards where users post images and text without registering an account, 4chan became one of the most influential forces in the development of internet culture, meme production, and online subculture through the 2000s and 2010s. It is the originating environment for a significant portion of the aesthetic and cultural vocabulary that circulates in communities adjacent to [[Remilia Corporation]], including anonymous posting culture, ironic detachment, and the pipeline from niche subcultural interest to mainstream meme diffusion.
+
+After:
+
+> '''4chan''' is an English-language imageboard where users post images and text without registering an account. Christopher Poole, known online as "moot", launched it on October 1, 2003, and modeled it on the Japanese imageboard Futaba Channel. Its topic-specific boards include /b/ (Random), /a/ (Anime and Manga), and /v/ (Video Games). Hiroyuki Nishimura, the founder of 2channel, bought the site in 2015 and has operated it since.
+
+What changed:
+
+- The first sentence says what the site is and how it works. "Influential" and "internet culture" are gone, because the history sections show the influence.
+- The Remilia sentence left the lead. It had no source outside Remilia's channels. "Adjacent" and "ironic detachment" went with it.
+- The dates, names, and boards that the old lead left for later are now in the lead.
+
+### The closing paragraph of Pepe the Frog
+
+Before (the last paragraph of "Interpretation and influence", with the page's `Category:Remilia`):
+
+> Pepe is also a reference point for [[Remilia Corporation]] and the [[New Net Art]] movement. The Rare Pepe cards described above prefigured the profile-picture NFT projects that [[Milady Maker]] later developed, and [[Charlotte Fang]] has described New Net Art as art unafraid to engage the internet, in contrast with "artists [who] cowered in irrelevance scared to engage the internet because they got cancelled for knowing what pepe is." The Miya corpus, which preceded Remilia, uses egregore language for Pepe [...]
+
+After: delete the paragraph and remove `Category:Remilia`. End the section on the sourced history instead:
+
+> Furie started a "Save Pepe" campaign, killed the character off in 2017, and took legal action over several uses. The image stayed in circulation.
+
+What changed:
+
+- The deleted paragraph cited only a Remilia Wiki page for a Remilia founder's view. Remilia's channels are primary sources for Remilia's own acts, and this is not one.
+- No source outside Remilia connects Pepe to Remilia, and Remilia did not make Pepe. Under the [due weight rule](editorial.md#article-object-and-framing), the mention goes.
+- The article now ends on its subject. The Rare Pepe section already covers the link to NFTs, with a citation.
