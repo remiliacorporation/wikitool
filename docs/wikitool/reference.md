@@ -335,7 +335,7 @@ Usage: wikitool ontology [OPTIONS] <COMMAND>
 
 Commands:
   export    Export an ontology checkout into the vendored copy and regenerate the module
-  generate  Generate Module:Ontology/data from the vendored copy and the wiki's own terms
+  generate  Generate Module:Ontology/data from the vendored copy
   help      Print this message or the help of the given subcommand(s)
 
 Options:
@@ -366,7 +366,7 @@ Options:
 ## ontology generate
 
 ```text
-Generate Module:Ontology/data from the vendored copy and the wiki's own terms
+Generate Module:Ontology/data from the vendored copy
 
 Usage: wikitool ontology generate [OPTIONS]
 

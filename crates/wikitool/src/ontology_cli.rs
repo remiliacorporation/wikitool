@@ -21,9 +21,7 @@ enum OntologySubcommand {
         about = "Export an ontology checkout into the vendored copy and regenerate the module"
     )]
     Export(ExportArgs),
-    #[command(
-        about = "Generate Module:Ontology/data from the vendored copy and the wiki's own terms"
-    )]
+    #[command(about = "Generate Module:Ontology/data from the vendored copy")]
     Generate(GenerateArgs),
 }
 
@@ -70,9 +68,7 @@ pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Resu
                 &export_path,
                 &(serde_json::to_string_pretty(&export)? + "\n"),
             )?;
-            let merged =
-                ontology::merge(export.clone(), ontology::read_local(&paths.project_root)?)?;
-            write(&module_path, &ontology::generate_module(&merged)?)?;
+            write(&module_path, &ontology::generate_module(&export)?)?;
             println!(
                 "exported {} at {} to {} and {}",
                 normalize_path(&args.from),
@@ -86,8 +82,7 @@ pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Resu
                 .with_context(|| format!("failed to read {}", normalize_path(&export_path)))?;
             let export = serde_json::from_str(&text)
                 .with_context(|| format!("failed to parse {}", normalize_path(&export_path)))?;
-            let merged = ontology::merge(export, ontology::read_local(&paths.project_root)?)?;
-            let module = ontology::generate_module(&merged)?;
+            let module = ontology::generate_module(&export)?;
             if args.check {
                 let current = fs::read_to_string(&module_path).unwrap_or_default();
                 if current != module {
