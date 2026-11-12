@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
 use clap::{Args, Subcommand};
 use wikitool_core::ontology;
+use wikitool_core::site::adapter::load_site_adapter;
 
 use crate::RuntimeOptions;
 use crate::cli_support::{normalize_path, resolve_runtime_paths};
@@ -37,9 +38,9 @@ struct ExportArgs {
     #[arg(
         long,
         value_name = "NAME",
-        help = "The wiki's product name in the ontology's product-uses.tsv"
+        help = "The wiki's product name in the ontology's product-uses.tsv; defaults to the site adapter's"
     )]
-    product: String,
+    product: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -54,7 +55,17 @@ pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Resu
     let module_path = paths.project_root.join(ontology::MODULE_PATH);
     match args.command {
         OntologySubcommand::Export(args) => {
-            let export = ontology::export(&args.from, &args.product)?;
+            let rules = load_site_adapter(&paths)?.ontology;
+            let product = args
+                .product
+                .or_else(|| rules.as_ref().map(|rules| rules.product.clone()))
+                .context("pass --product, or name the ontology in the site adapter's [ontology]")?;
+            let mut export = ontology::export(&args.from, &product)?;
+            if let Some(rules) = rules {
+                export["source"]["ontology"] = rules.source.into();
+                export["source"]["local"] =
+                    serde_json::json!({ rules.local_prefix: rules.local_namespace });
+            }
             write(
                 &export_path,
                 &(serde_json::to_string_pretty(&export)? + "\n"),

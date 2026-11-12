@@ -351,13 +351,13 @@ Options:
 ```text
 Export an ontology checkout into the vendored copy and regenerate the module
 
-Usage: wikitool ontology export [OPTIONS] --from <PATH> --product <NAME>
+Usage: wikitool ontology export [OPTIONS] --from <PATH>
 
 Options:
       --from <PATH>          The ontology directory (with registry/ and mappings.sssom.tsv) in a clean git checkout
       --project-root <PATH>
       --data-dir <PATH>
-      --product <NAME>       The wiki's product name in the ontology's product-uses.tsv
+      --product <NAME>       The wiki's product name in the ontology's product-uses.tsv; defaults to the site adapter's
       --config <PATH>
       --diagnostics          Print resolved runtime diagnostics
   -h, --help                 Print help

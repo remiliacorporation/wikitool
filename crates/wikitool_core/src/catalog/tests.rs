@@ -120,6 +120,7 @@ fn test_site_adapter() -> SiteAdapter {
             citation_needed: crate::site::LintRuleLevel::Ignore,
         },
         extension_contracts: Vec::new(),
+        ontology: None,
         resolved_at: "1739000000".to_string(),
     }
 }

@@ -204,3 +204,11 @@ name = "D3Chart"
 provider = "local"
 syntax = "module_invoke"
 body_required = false
+
+# The Remilia ontology types the wiki's pages and infobox fields (RSV-D867).
+# The wiki's own terms use the wiki: namespace until an intake moves them.
+[ontology]
+product = "remilia-wiki"
+source = "https://ontology.remilia.org/"
+local_prefix = "wiki"
+local_namespace = "https://wiki.remilia.org/ns/"
