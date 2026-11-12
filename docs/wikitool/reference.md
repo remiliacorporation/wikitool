@@ -334,8 +334,8 @@ Vendor the pinned ontology and generate Module:Ontology/data
 Usage: wikitool ontology [OPTIONS] <COMMAND>
 
 Commands:
-  export    Export a clean remilia-sdk checkout of the ontology into the vendored copy
-  generate  Generate Module:Ontology/data from the vendored copy
+  export    Export an ontology checkout into the vendored copy and regenerate the module
+  generate  Generate Module:Ontology/data from the vendored copy and the wiki's own terms
   help      Print this message or the help of the given subcommand(s)
 
 Options:
@@ -349,14 +349,15 @@ Options:
 ## ontology export
 
 ```text
-Export a clean remilia-sdk checkout of the ontology into the vendored copy
+Export an ontology checkout into the vendored copy and regenerate the module
 
-Usage: wikitool ontology export [OPTIONS] --from <PATH>
+Usage: wikitool ontology export [OPTIONS] --from <PATH> --product <NAME>
 
 Options:
-      --from <PATH>          The packages/ontology directory of a clean remilia-sdk checkout
+      --from <PATH>          The ontology directory (with registry/ and mappings.sssom.tsv) in a clean git checkout
       --project-root <PATH>
       --data-dir <PATH>
+      --product <NAME>       The wiki's product name in the ontology's product-uses.tsv
       --config <PATH>
       --diagnostics          Print resolved runtime diagnostics
   -h, --help                 Print help
@@ -365,12 +366,12 @@ Options:
 ## ontology generate
 
 ```text
-Generate Module:Ontology/data from the vendored copy
+Generate Module:Ontology/data from the vendored copy and the wiki's own terms
 
 Usage: wikitool ontology generate [OPTIONS]
 
 Options:
-      --check                Fail if the module differs from the vendored copy, without writing
+      --check                Fail if the module is out of date, without writing
       --project-root <PATH>
       --data-dir <PATH>
       --config <PATH>

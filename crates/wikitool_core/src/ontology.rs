@@ -1,11 +1,13 @@
-//! The pinned ontology that the wiki types its pages with.
+//! The ontology that the wiki types its pages with.
 //!
-//! `export` reads a checkout of `@remilia/ontology` (remilia-sdk) at one commit
-//! and writes a compact JSON export that the wiki repository vendors. The
-//! export holds the registry (classes, families, properties, relations, value
-//! lists), the mappings, the renames, and the labels of the outside terms the
-//! wiki uses. `generate` turns that export into `Module:Ontology/data`, a Lua
-//! table that infoboxes load with `mw.loadData`.
+//! `export` reads an ontology directory in a git checkout at one commit and
+//! writes a compact JSON copy that the wiki project vendors: the registry
+//! (classes, families, properties, relations, value lists), the mappings, the
+//! renames, and the labels of the outside terms that `product-uses.tsv` lists
+//! for the wiki's product. The wiki's own terms live beside it in `ontology/`,
+//! in the same registry and SSSOM forms. `generate` merges the two into
+//! `Module:Ontology/data`, a Lua table that infoboxes load with `mw.loadData`.
+//! A local term is marked `local = true`, and it may not redefine a vendored one.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -15,26 +17,108 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 use serde_json::{Map, Value, json};
 
-/// Where the wiki repository keeps the vendored export.
+/// Where the wiki project keeps the vendored copy.
 pub const EXPORT_PATH: &str = "vendor/ontology/ontology.json";
+/// Where the wiki project keeps its own terms: `registry/*.jsonld` and
+/// `mappings.sssom.tsv`.
+pub const LOCAL_PATH: &str = "ontology";
 /// Where the generated module lives; it syncs as `Module:Ontology/data`.
 pub const MODULE_PATH: &str = "templates/ontology/Module_Ontology/data.lua";
-/// The product name of the wiki in the ontology's `product-uses.tsv`.
-pub const PRODUCT: &str = "remilia-wiki";
-const SOURCE_REPOSITORY: &str = "remiliacorporation/remilia-sdk";
-const SOURCE_PATH: &str = "packages/ontology";
 const NO_TERM: &str = "sssom:NoTermFound";
+const SECTIONS: [&str; 5] = ["classes", "families", "properties", "relations", "schemes"];
 
-/// Build the export from an ontology directory inside a git checkout.
-pub fn export(ontology_dir: &Path) -> Result<Value> {
+/// Build the vendored copy from an ontology directory inside a git checkout.
+/// `product` names the wiki in the ontology's `product-uses.tsv`.
+pub fn export(ontology_dir: &Path, product: &str) -> Result<Value> {
     let commit = clean_commit(ontology_dir)?;
-    let mut sections: BTreeMap<&str, Map<String, Value>> = BTreeMap::new();
-    for kind in ["classes", "families", "properties", "relations", "schemes"] {
-        sections.insert(kind, Map::new());
-    }
+    let mut out = read_registry(&ontology_dir.join("registry"))?;
+    out.insert(
+        "mappings".into(),
+        read_mappings(&ontology_dir.join("mappings.sssom.tsv"))?,
+    );
 
-    let registry = ontology_dir.join("registry");
-    let mut files: Vec<PathBuf> = fs::read_dir(&registry)
+    // Renames of legacy RemiliaNET names (rn:, rns:) never reach the wiki.
+    let mut renames = Map::new();
+    for row in read_tsv(&ontology_dir.join("renames.sssom.tsv"))? {
+        let (Some(subject), Some(object)) = (row.get("subject_id"), row.get("object_id")) else {
+            continue;
+        };
+        if subject.starts_with("rn:") || subject.starts_with("rns:") {
+            continue;
+        }
+        renames.insert(subject.clone(), Value::String(object.clone()));
+    }
+    out.insert("renames".into(), Value::Object(renames));
+    out.insert(
+        "external".into(),
+        Value::Object(external_terms(ontology_dir, product)?),
+    );
+    out.insert(
+        "source".into(),
+        json!({ "commit": commit, "product": product }),
+    );
+    Ok(canonical(Value::Object(out)))
+}
+
+/// Read the wiki's own terms from `ontology/` in the project, if it exists.
+pub fn read_local(project_root: &Path) -> Result<Option<Value>> {
+    let dir = project_root.join(LOCAL_PATH);
+    if !dir.exists() {
+        return Ok(None);
+    }
+    let registry = dir.join("registry");
+    let mut out = if registry.exists() {
+        read_registry(&registry)?
+    } else {
+        SECTIONS
+            .iter()
+            .map(|kind| (kind.to_string(), Value::Object(Map::new())))
+            .collect()
+    };
+    let mappings = dir.join("mappings.sssom.tsv");
+    out.insert(
+        "mappings".into(),
+        if mappings.exists() {
+            read_mappings(&mappings)?
+        } else {
+            Value::Object(Map::new())
+        },
+    );
+    Ok(Some(Value::Object(out)))
+}
+
+/// Add the wiki's own terms to the vendored copy, marking each `local`.
+pub fn merge(mut export: Value, local: Option<Value>) -> Result<Value> {
+    let Some(Value::Object(local)) = local else {
+        return Ok(export);
+    };
+    for (section, entries) in local {
+        let Value::Object(entries) = entries else {
+            continue;
+        };
+        let target = export
+            .get_mut(&section)
+            .and_then(Value::as_object_mut)
+            .with_context(|| format!("the vendored copy has no {section}"))?;
+        for (id, mut entry) in entries {
+            if target.contains_key(&id) {
+                bail!("{LOCAL_PATH}/ redefines {id}, which the vendored ontology already defines");
+            }
+            if section != "mappings"
+                && let Some(entry) = entry.as_object_mut()
+            {
+                entry.insert("local".into(), Value::Bool(true));
+            }
+            target.insert(id, entry);
+        }
+    }
+    Ok(canonical(export))
+}
+
+fn read_registry(registry: &Path) -> Result<Map<String, Value>> {
+    let mut sections: BTreeMap<&str, Map<String, Value>> =
+        SECTIONS.iter().map(|kind| (*kind, Map::new())).collect();
+    let mut files: Vec<PathBuf> = fs::read_dir(registry)
         .with_context(|| format!("failed to read {}", registry.display()))?
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
         .filter(|path| path.extension().is_some_and(|ext| ext == "jsonld"))
@@ -68,14 +152,21 @@ pub fn export(ontology_dir: &Path) -> Result<Value> {
             }
             entry.insert("members".into(), Value::Object(keyed));
         }
-        sections
-            .get_mut(section)
-            .expect("section exists")
-            .insert(id, Value::Object(entry));
+        let section = sections.get_mut(section).expect("section exists");
+        if section.contains_key(&id) {
+            bail!("{}: {id} is defined twice", path.display());
+        }
+        section.insert(id, Value::Object(entry));
     }
+    Ok(sections
+        .into_iter()
+        .map(|(kind, entries)| (kind.to_string(), Value::Object(entries)))
+        .collect())
+}
 
+fn read_mappings(path: &Path) -> Result<Value> {
     let mut mappings: BTreeMap<String, Vec<Value>> = BTreeMap::new();
-    for row in read_tsv(&ontology_dir.join("mappings.sssom.tsv"))? {
+    for row in read_tsv(path)? {
         let (Some(subject), Some(predicate), Some(object)) = (
             row.get("subject_id"),
             row.get("predicate_id"),
@@ -91,52 +182,23 @@ pub fn export(ontology_dir: &Path) -> Result<Value> {
             .or_default()
             .push(json!({ "predicate": predicate, "object": object }));
     }
-
-    // Renames of legacy RemiliaNET names (rn:, rns:) never reach the wiki.
-    let mut renames = Map::new();
-    for row in read_tsv(&ontology_dir.join("renames.sssom.tsv"))? {
-        let (Some(subject), Some(object)) = (row.get("subject_id"), row.get("object_id")) else {
-            continue;
-        };
-        if subject.starts_with("rn:") || subject.starts_with("rns:") {
-            continue;
-        }
-        renames.insert(subject.clone(), Value::String(object.clone()));
-    }
-
-    let external = external_terms(ontology_dir)?;
-
-    let mut out = Map::new();
-    out.insert(
-        "source".into(),
-        json!({ "repository": SOURCE_REPOSITORY, "path": SOURCE_PATH, "commit": commit }),
-    );
-    for (kind, entries) in sections {
-        out.insert(kind.into(), Value::Object(entries));
-    }
-    out.insert(
-        "mappings".into(),
-        Value::Object(
-            mappings
-                .into_iter()
-                .map(|(key, rows)| (key, Value::Array(rows)))
-                .collect(),
-        ),
-    );
-    out.insert("renames".into(), Value::Object(renames));
-    out.insert("external".into(), Value::Object(external));
-    Ok(canonical(Value::Object(out)))
+    Ok(Value::Object(
+        mappings
+            .into_iter()
+            .map(|(key, rows)| (key, Value::Array(rows)))
+            .collect(),
+    ))
 }
 
 /// The labels and definitions of the outside terms the wiki uses, read from
 /// the pinned extracts that `product-uses.tsv` names for the wiki.
-fn external_terms(ontology_dir: &Path) -> Result<Map<String, Value>> {
+fn external_terms(ontology_dir: &Path, product: &str) -> Result<Map<String, Value>> {
     let imports = ontology_dir.join("v0.1.0/imports");
     let uses_path = imports.join("product-uses.tsv");
     let curie_map = read_curie_map(&uses_path)?;
     let mut wanted: BTreeMap<String, (String, String)> = BTreeMap::new();
     for row in read_tsv(&uses_path)? {
-        if row.get("product").map(String::as_str) != Some(PRODUCT) {
+        if row.get("product").map(String::as_str) != Some(product) {
             continue;
         }
         let (Some(curie), Some(pin)) = (row.get("iri"), row.get("pin")) else {
@@ -305,10 +367,10 @@ pub fn generate_module(export: &Value) -> Result<String> {
         .context("the export has no source commit")?;
     let mut out = String::new();
     out.push_str(
-        "-- Generated by `wikitool ontology generate` from vendor/ontology/ontology.json.\n",
+        "-- Generated by `wikitool ontology generate` from vendor/ontology/ontology.json\n",
     );
     out.push_str(&format!(
-        "-- Source: {SOURCE_REPOSITORY} {SOURCE_PATH} at {commit}. Do not edit by hand.\n"
+        "-- at ontology commit {commit} and the wiki's own terms in ontology/. Do not edit by hand.\n"
     ));
     out.push_str("return ");
     write_lua(&mut out, export, 0);
@@ -413,6 +475,28 @@ mod tests {
         assert!(body.contains("[\"label\"] = \"line\\nbreak\""));
         assert!(body.contains("{\"x\", \"y\\\"z\"}"));
         assert!(!body.contains("skip"));
+    }
+
+    #[test]
+    fn merge_marks_local_terms_and_refuses_redefinition() {
+        let export = json!({
+            "source": { "commit": "abc" },
+            "properties": { "wdt:P136": { "label": "Genre" } },
+            "mappings": {},
+        });
+        let local = json!({
+            "properties": { "wiki:chain": { "label": "Chain" } },
+            "mappings": { "wiki:chain": [{ "predicate": "skos:closeMatch", "object": "wdt:P400" }] },
+        });
+        let merged = merge(export.clone(), Some(local)).expect("merge");
+        assert_eq!(merged["properties"]["wiki:chain"]["local"], json!(true));
+        assert!(merged["properties"]["wdt:P136"].get("local").is_none());
+        assert_eq!(
+            merged["mappings"]["wiki:chain"][0]["object"],
+            json!("wdt:P400")
+        );
+        let clash = json!({ "properties": { "wdt:P136": { "label": "Genre" } } });
+        assert!(merge(export, Some(clash)).is_err());
     }
 
     #[test]
