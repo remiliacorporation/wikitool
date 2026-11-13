@@ -161,18 +161,46 @@ The findings are warnings unless `[lint] ontology_typing` says `error` or `ignor
 | `ontology.unknown_field` | a class-template field that the display module does not give a category (other than `wikidata`) |
 | `ontology.malformed_wikidata_id` | `wikidata=` is not `Q` and digits |
 | `ontology.unknown_type` | an infobox renders a kind of page the display module does not define |
-| `ontology.property_not_applicable` | a filled field's property does not apply to the kind's class or its ancestors (`appliesTo`, or a relation's `domainClasses`); a term without either is not reported |
+| `ontology.property_not_applicable` | a field's property, as the kind of page states it, does not apply to the kind's class or its ancestors (`appliesTo`, or a relation's `domainClasses`); a term without either is not reported. The display module causes it, so `ontology check` reports it once per kind and field, and on an article it is always a suggestion |
 | `ontology.value_type_mismatch` | a value does not parse as its property's `date`, `quantity` (with a unit from `allowedUnits`), `controlled-term` (a value-list member by id or label), `external-id` or `text`; other types are not checked |
 | `ontology.unresolved_field_property` | a field's property is in neither module |
 | `ontology.unmapped_local_term` | a local term the article uses has no `mappings` entry |
 | `ontology.local_shadows_shared` | a local term the article uses is also a shared term |
 
 Values are read as a reader sees them: links as their labels, templates, `<ref>` tags and
-comments as nothing, `<br>` and, for a property with cardinality `many`, `;` as separators. A
-field counts only where the kind of page lists it.
+comments as nothing, `<br>` and, for a property with cardinality `many`, `;` as separators.
+Class-template ids and `wikidata=` are compared the same way, so a comment beside an id does
+not change it. Positional arguments follow MediaWiki: `n=` sets position n, a later argument
+for a position wins, and the list ends at the first missing or blank position. A quantity's
+unit may be the UCUM code the ontology lists (`MBy`, `[in_i]`) or its common spelling (`MB`,
+`in`).
 
-`wikitool ontology check` runs the module checks over every local term and display field, for
-CI, and fails on a finding or a missing module.
+#### The module contract
+
+Wikitool reads the same shape of modules that the wiki's infobox module reads, under fixed
+titles:
+
+- `Module:Ontology/local` returns a table whose `classes`, `properties`, `relations`,
+  `families` and `schemes` map ids to terms (`label`, `subClassOf`, `valueType`,
+  `cardinality`, `appliesTo`, `domainClasses`, `valueScheme`, `allowedUnits`), and whose
+  `mappings` maps an id to a list of `{ predicate = ..., object = ... }` rows. A shared term
+  in the vendored copy wins over a local term with the same id.
+- `Module:Ontology/display` returns `fields`, mapping each infobox field name to a table whose
+  `property` is the term it states, and `types`, mapping each lower-case kind of page to a
+  table with a `class` and `sections`. Each section's `fields` lists field names, or tables
+  `{ field = name, property = ... }` whose `property` overrides the field's own for that kind
+  of page. A field with a `category` is a relation field that the class template accepts as a
+  named argument.
+- The class template takes class ids as positional arguments and the subject's Wikidata item
+  as `wikidata=`.
+
+A field counts only where the kind of page lists it.
+
+`wikitool ontology check` runs the module checks over every local term and display field, and
+each field every kind of page lists, for CI. It fails on a finding or a missing module. It also
+exits non-zero with status `not_ready` on a wiki without `[ontology]` or a vendored copy:
+running it in CI means the wiki expects an ontology, so a missing one is a configuration error
+for CI to catch, as `ontology generate --check` treats a missing copy.
 
 `wikitool ontology report` is the evidence for an intake that moves the wiki's terms into the
 shared ontology or proposes new properties: the ontology is provisional, and the wiki's pages
