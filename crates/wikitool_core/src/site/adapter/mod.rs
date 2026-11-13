@@ -346,7 +346,7 @@ fn load_adapter_document(
     let content = fs::read_to_string(&absolute)
         .with_context(|| format!("failed to read site adapter {}", absolute.display()))?;
     let document = AdapterSourceDocument {
-        relative_path: display_source_path(paths, &absolute),
+        relative_path: resolved.project_relative,
         content_hash: compute_sha256(&content),
     };
     let adapter_dir = absolute
@@ -382,9 +382,38 @@ fn load_guidance_document(
     let content = fs::read_to_string(&absolute)
         .with_context(|| format!("failed to read adapter guidance {}", absolute.display()))?;
     Ok(AdapterSourceDocument {
-        relative_path: display_source_path(paths, &absolute),
+        relative_path: project_relative_source_path(paths, &absolute)?,
         content_hash: compute_sha256(&content),
     })
+}
+
+/// Name a document inside the project as a portable project-relative path.
+///
+/// `path` descends from the canonical adapter directory, which carries the
+/// platform's canonical form (on Windows a `\\?\` verbatim prefix, elsewhere
+/// resolved symlinks), so it is compared with the canonical project root
+/// rather than the root as the user spelled it.
+fn project_relative_source_path(paths: &ResolvedPaths, path: &Path) -> Result<String> {
+    let project_root = fs::canonicalize(&paths.project_root).with_context(|| {
+        format!(
+            "failed to canonicalize project root {}",
+            normalize_path(&paths.project_root)
+        )
+    })?;
+    let relative = path.strip_prefix(&project_root).with_context(|| {
+        format!(
+            "site-adapter document is outside the project root: {}",
+            normalize_path(path)
+        )
+    })?;
+    Ok(relative
+        .components()
+        .filter_map(|component| match component {
+            Component::Normal(part) => Some(part.to_string_lossy()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/"))
 }
 
 fn resolve_guidance_path(adapter_dir: &Path, relative_path: &str) -> Result<PathBuf> {
@@ -410,12 +439,6 @@ fn resolve_guidance_path(adapter_dir: &Path, relative_path: &str) -> Result<Path
         );
     }
     Ok(absolute)
-}
-
-fn display_source_path(paths: &ResolvedPaths, path: &Path) -> String {
-    path.strip_prefix(&paths.project_root)
-        .map(normalize_path)
-        .unwrap_or_else(|_| normalize_path(path))
 }
 
 #[cfg(test)]
@@ -487,6 +510,64 @@ mod tests {
 
         assert_eq!(first.policy_sha256.len(), 64);
         assert_ne!(first.policy_sha256, second.policy_sha256);
+    }
+
+    #[test]
+    fn same_adapter_content_has_one_identity_under_any_project_root() {
+        // An acceptance recorded on one machine must verify on another: the policy
+        // hash and the reported source paths may not depend on where the project lives
+        // or how its root is spelled.
+        let temp = tempdir().expect("tempdir");
+        let install = |root: &Path| {
+            let adapter_dir = root.join("site-adapter");
+            fs::create_dir_all(adapter_dir.join("guides")).expect("adapter dir");
+            fs::write(
+                adapter_dir.join("site-adapter.toml"),
+                EMBEDDED_GENERIC_ADAPTER.replace(
+                    "guidance_documents = []",
+                    "guidance_documents = [\"guides/editorial.md\"]",
+                ),
+            )
+            .expect("policy");
+            fs::write(adapter_dir.join("guides/editorial.md"), "# Editorial\n").expect("guidance");
+        };
+        let first_root = temp.path().join("first");
+        install(&first_root);
+        // A root spelled with `..` is not canonical on any platform; on Windows every
+        // spelled root differs from its canonical `\\?\` form.
+        install(&temp.path().join("second"));
+        let second_root = temp.path().join("second").join("..").join("second");
+        let config = WikiConfig {
+            adapter: crate::config::AdapterSection {
+                path: Some("site-adapter/site-adapter.toml".to_string()),
+            },
+            ..WikiConfig::default()
+        };
+
+        let resolve = |root: &Path| {
+            let paths = paths(root);
+            let adapter = load_site_adapter_with_config(&paths, &config).expect("adapter");
+            let identity =
+                publication_policy_identity_with_config(&paths, &config).expect("identity");
+            let sources = adapter
+                .source_documents
+                .into_iter()
+                .map(|document| document.relative_path)
+                .collect::<Vec<_>>();
+            (identity.policy_sha256, sources)
+        };
+        let (first_hash, first_sources) = resolve(&first_root);
+        let (second_hash, second_sources) = resolve(&second_root);
+
+        assert_eq!(first_hash, second_hash);
+        assert_eq!(
+            first_sources,
+            [
+                "site-adapter/site-adapter.toml",
+                "site-adapter/guides/editorial.md"
+            ]
+        );
+        assert_eq!(second_sources, first_sources);
     }
 
     #[test]
