@@ -1,3 +1,5 @@
+use rusqlite::OptionalExtension;
+
 use super::*;
 
 pub fn pull_from_remote_with_api<A: WikiReadApi>(
@@ -99,6 +101,8 @@ fn pull_selected_pages<A: WikiReadApi>(
     }
     let mut ledger_by_title = load_sync_ledger_map(&connection, true)?;
     let mut refreshed_baseline_titles = BTreeSet::new();
+    // Pages kept for local edits whose recorded base is proven to belong to this wiki.
+    let mut verified_skipped_titles = BTreeSet::new();
 
     let mut max_timestamp: Option<String> = None;
     let namespace_mapper = NamespaceMapper::load(paths)?;
@@ -120,12 +124,15 @@ fn pull_selected_pages<A: WikiReadApi>(
         let page = match content_by_title.get(&key) {
             Some(page) => page,
             None if explicit_titles.is_some() => {
+                let detail = if ledger_by_title.contains_key(&key) {
+                    "page does not exist on the wiki; the baseline an earlier pull recorded is kept and is now stale"
+                } else {
+                    "page does not exist on the wiki; no baseline recorded"
+                };
                 report.pages.push(PullPageResult {
                     title: title.clone(),
                     action: "missing_remote".to_string(),
-                    detail: Some(
-                        "page does not exist on the wiki; no baseline recorded".to_string(),
-                    ),
+                    detail: Some(detail.to_string()),
                 });
                 continue;
             }
@@ -233,6 +240,11 @@ fn pull_selected_pages<A: WikiReadApi>(
         }
 
         if local_modified && !options.overwrite_local {
+            if let Some(entry) = &ledger_entry
+                && skipped_page_has_verified_base(&connection, api, entry, &remote_hash)?
+            {
+                verified_skipped_titles.insert(key.clone());
+            }
             report.skipped += 1;
             report.pages.push(PullPageResult {
                 title: page.title.clone(),
@@ -313,9 +325,15 @@ fn pull_selected_pages<A: WikiReadApi>(
     }
 
     report.request_count = api.request_count();
-    let baseline_complete = pages_to_pull
+    let uncovered_titles = pages_to_pull
         .iter()
-        .all(|title| refreshed_baseline_titles.contains(&normalized_title_key(title)));
+        .filter(|title| {
+            let key = normalized_title_key(title);
+            !refreshed_baseline_titles.contains(&key) && !verified_skipped_titles.contains(&key)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let baseline_complete = uncovered_titles.is_empty();
     if report.errors.is_empty() {
         if baseline_complete && authoritative_global_pull {
             reconcile_global_baseline_ledger(
@@ -329,10 +347,11 @@ fn pull_selected_pages<A: WikiReadApi>(
             mark_global_baseline_established(paths, &mut connection, target)?;
             report.global_baseline_established = true;
         } else if !baseline_was_established && authoritative_global_pull {
-            report.errors.push(
-                "pull did not establish a complete global sync baseline because one or more discovered pages were skipped without prior revision identity"
-                    .to_string(),
-            );
+            report.errors.push(format!(
+                "pull did not establish a complete global sync baseline: {} page(s) were neither refreshed nor backed by a recorded revision verified on this wiki: {}. Pull them with --overwrite-local to take the remote text, or resolve their open mutation receipts, then pull again",
+                uncovered_titles.len(),
+                uncovered_titles.join(", ")
+            ));
         }
     }
     report.changed_paths.sort_by(|left, right| {
@@ -343,6 +362,46 @@ fn pull_selected_pages<A: WikiReadApi>(
     report.changed_paths.dedup();
     report.success = report.errors.is_empty();
     Ok(report)
+}
+
+/// Whether a page skipped for its local edits still has a usable recorded base
+/// on this wiki, so the skip does not leave a hole in global coverage. A ledger
+/// row carries no target of its own (rows migrated from a legacy store may
+/// predate target binding), so it counts only when its content equals the
+/// current remote text, or when its recorded revision, fetched from this wiki by
+/// ID, has exactly the recorded content. An operator-invalidated title never
+/// counts. Push still checks the page against that base revision.
+fn skipped_page_has_verified_base<A: WikiReadApi>(
+    connection: &Connection,
+    api: &mut A,
+    entry: &SyncLedgerEntry,
+    remote_hash: &str,
+) -> Result<bool> {
+    if storage::invalidated_sync_title(connection, &entry.title)?.is_some() {
+        return Ok(false);
+    }
+    if entry.content_hash == remote_hash {
+        return Ok(true);
+    }
+    let revision_id = connection
+        .query_row(
+            "SELECT revision_id FROM sync_ledger_pages WHERE title = ?1",
+            [&entry.title],
+            |row| row.get::<_, Option<i64>>(0),
+        )
+        .optional()
+        .context("failed to read the recorded base revision")?
+        .flatten();
+    let Some(revision_id) = revision_id else {
+        return Ok(false);
+    };
+    let Some(recorded) = api.get_revision_by_id(revision_id)? else {
+        return Ok(false);
+    };
+    Ok(
+        normalized_title_key(&recorded.title) == normalized_title_key(&entry.title)
+            && compute_wiki_sync_hash(&recorded.content) == entry.content_hash,
+    )
 }
 
 fn reconcile_global_baseline_ledger(

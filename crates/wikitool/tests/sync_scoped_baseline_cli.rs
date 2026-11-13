@@ -108,3 +108,47 @@ fn single_title_pull_unlocks_read_only_status_and_diff_but_not_push() {
         .assert_json("/plan/scope/unbaselined_local", json!([]))
         .assert_json_item("/plan/changes", "/title", "Beta");
 }
+
+#[test]
+fn global_pull_keeps_an_edited_title_pulled_page_and_still_establishes_the_baseline() {
+    let wiki = FakeWiki::from_file(fixture("mediawiki.json"));
+    wiki.set_page(MediaWikiPage {
+        title: "Alpha".to_string(),
+        namespace: 0,
+        page_id: 900,
+        revision_id: 9001,
+        timestamp: "2026-01-01T00:00:00Z".to_string(),
+        content: "Alpha v1\n".to_string(),
+    });
+    let wt = Project::with_wiki(env!("CARGO_BIN_EXE_wikitool"), &wiki);
+    wt.run(&[
+        "init",
+        "--no-network",
+        "--wiki-url",
+        "http://127.0.0.1",
+        "--api-url",
+        wiki.api_url(),
+    ])
+    .assert_code(0);
+    wt.run(&["pull", "--title", "Alpha"]).assert_code(0);
+    fs::write(
+        wt.path().join("wiki_content/Main/Alpha.wiki"),
+        "Alpha local edit\n",
+    )
+    .expect("edit Alpha");
+
+    // The edit stays in place: Alpha's recorded revision is this wiki's, so the
+    // skipped page still counts toward global coverage.
+    let pull = wt.run(&["pull", "--full", "--all", "--format", "json"]);
+    pull.assert_code(0)
+        .assert_json("/report/success", true)
+        .assert_json("/report/global_baseline_established", true);
+    pull.assert_json_item("/report/pages", "/title", "Alpha");
+    wt.assert_file_contains("wiki_content/Main/Alpha.wiki", "Alpha local edit");
+
+    wt.run(&["status", "--format", "json"])
+        .assert_code(0)
+        .assert_json("/plan/scope/kind", "global")
+        .assert_json("/plan/modified_local", 1)
+        .assert_json_item("/plan/changes", "/title", "Alpha");
+}
