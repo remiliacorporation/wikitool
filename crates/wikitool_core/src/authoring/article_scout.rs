@@ -1,14 +1,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::catalog::model::AuthoringContextPacket;
-use crate::site::SiteAdapter;
+use crate::site::{SiteAdapter, TemplateCatalog, resolve_template_catalog_entry};
 use crate::support::{compute_hash, compute_sha256};
 
 use super::model::{
     ArticleContextProfile, ArticleScoutIntent, ArticleScoutResult, CategorySurfaceEntry,
-    ContextCoverageItem, ContextRef, ContextSurfaceSource, LinkSurfaceEntry, LocalExistenceState,
-    LocalIntegrationLane, QueryTermCoverage, RequiredTemplate, ResearchContextLane,
-    SectionCandidate, SubjectTypeHint, TemplateSurfaceEntry,
+    ContextCoverageItem, ContextRef, ContextSurfaceSource, InfoboxAvailabilityCheck,
+    LinkSurfaceEntry, LocalExistenceState, LocalIntegrationLane, QueryTermCoverage,
+    RequiredTemplate, ResearchContextLane, SectionCandidate, SubjectTypeHint, TemplateSurfaceEntry,
+    UnavailableInfoboxPreference,
 };
 
 #[derive(Debug, Default)]
@@ -89,9 +90,23 @@ fn build_comparable_scope(pack: &AuthoringContextPacket) -> ComparableScope {
     }
 }
 
+/// Build the scout without a template catalog. Adapter infobox preferences are
+/// then listed unverified (`infobox_availability: not_checked`).
 pub fn build_article_scout(
     pack: &AuthoringContextPacket,
     adapter: &SiteAdapter,
+    intent: ArticleScoutIntent,
+) -> ArticleScoutResult {
+    build_article_scout_with_template_catalog(pack, adapter, None, intent)
+}
+
+/// Build the scout, checking adapter infobox preferences against the local
+/// template catalog when one is loaded. A preference the catalog lacks is not
+/// offered as available; it is listed in `unavailable_infobox_preferences`.
+pub fn build_article_scout_with_template_catalog(
+    pack: &AuthoringContextPacket,
+    adapter: &SiteAdapter,
+    template_catalog: Option<&TemplateCatalog>,
     intent: ArticleScoutIntent,
 ) -> ArticleScoutResult {
     let comparable_scope = build_comparable_scope(pack);
@@ -163,8 +178,10 @@ pub fn build_article_scout(
     let contract_parameter_keys = build_contract_parameter_key_map(pack);
     let required_templates = build_required_templates(adapter, &contract_parameter_keys);
     let subject_type_hints = build_subject_type_hints(pack, adapter, &comparable_scope);
-    let available_infoboxes =
+    let mut available_infoboxes =
         build_available_infoboxes(pack, adapter, &contract_parameter_keys, &comparable_scope);
+    let (infobox_availability, unavailable_infobox_preferences) =
+        check_infobox_preferences(adapter, template_catalog, &mut available_infoboxes);
     let citation_templates_seen =
         build_citation_templates(pack, adapter, &contract_parameter_keys, &comparable_scope);
     let template_surface = build_template_surface(pack, adapter, &contract_parameter_keys);
@@ -181,6 +198,8 @@ pub fn build_article_scout(
         required_templates,
         subject_type_hints,
         available_infoboxes,
+        infobox_availability,
+        unavailable_infobox_preferences,
         citation_templates_seen,
         template_surface,
         observed_categories,
@@ -734,6 +753,67 @@ fn build_available_infoboxes(
             .then_with(|| left.template_title.cmp(&right.template_title))
     });
     out
+}
+
+/// Check adapter infobox preferences against the local template catalog.
+///
+/// Without a catalog nothing is removed and the result says so. With one, an
+/// adapter-sourced entry the catalog lacks is removed from the available list
+/// (lint would reject its invocation as `template.unavailable`), and every
+/// missing preference is reported with its subject type in adapter order.
+/// Available adapter entries take the catalog's spelling of the title and, when
+/// the contract index had none, the catalog's parameter names.
+fn check_infobox_preferences(
+    adapter: &SiteAdapter,
+    template_catalog: Option<&TemplateCatalog>,
+    available_infoboxes: &mut Vec<TemplateSurfaceEntry>,
+) -> (InfoboxAvailabilityCheck, Vec<UnavailableInfoboxPreference>) {
+    let Some(catalog) = template_catalog else {
+        return (InfoboxAvailabilityCheck::NotChecked, Vec::new());
+    };
+
+    let mut unavailable = Vec::<UnavailableInfoboxPreference>::new();
+    for preference in &adapter.templates.infobox_preferences {
+        let template_title = normalize_template_title(&preference.template_title);
+        if template_title.is_empty()
+            || resolve_template_catalog_entry(catalog, &template_title).is_some()
+            || unavailable
+                .iter()
+                .any(|entry| entry.template_title.eq_ignore_ascii_case(&template_title))
+        {
+            continue;
+        }
+        unavailable.push(UnavailableInfoboxPreference {
+            template_title,
+            subject_type: preference.subject_type.clone(),
+        });
+    }
+
+    available_infoboxes.retain_mut(|entry| {
+        if !matches!(
+            entry.source,
+            ContextSurfaceSource::Adapter | ContextSurfaceSource::Both
+        ) {
+            return true;
+        }
+        let Some(found) = resolve_template_catalog_entry(catalog, &entry.template_title) else {
+            return false;
+        };
+        entry.template_title = normalize_template_title(&found.template_title);
+        if entry.parameter_keys.is_empty() {
+            entry.parameter_keys = found
+                .parameters
+                .iter()
+                .map(|parameter| parameter.name.clone())
+                .collect();
+        }
+        true
+    });
+
+    (
+        InfoboxAvailabilityCheck::CheckedAgainstTemplateCatalog,
+        unavailable,
+    )
 }
 
 fn build_citation_templates(

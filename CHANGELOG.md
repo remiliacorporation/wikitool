@@ -21,6 +21,8 @@ The release workflow extracts the section for the requested version and fails if
 
 ### Fixed
 
+- `article scout` no longer offers an adapter's preferred infobox as available when the local template catalog lacks it, so a draft is not steered into a `template.unavailable` lint error. Such preferences are listed in the new `local_integration.unavailable_infobox_preferences` field with their subject type, in adapter order, so the writer can fall back to the next applicable preference. The new `infobox_availability` field reads `checked_against_template_catalog`, or `not_checked` when the project has no local templates and preferences are listed unverified. The interview's infobox candidates follow the same check.
+- Adapter template titles now match the template catalog as MediaWiki titles do: `_` equals a space and the first letter is case-insensitive. Article scout offers a matched preference under the catalog's spelling, which lint accepts, and the catalog's recommendation tags no longer depend on exact spelling.
 - `mutation reconcile` on an edit or delete receipt that `mutation close` already closed now reports status `operator_closed` and exits successfully instead of failing with "unsupported terminal phase/outcome"; it contacts no wiki and leaves the receipt, the closure record and the title's write block unchanged. A receipt resolved before the sync store recorded terminal outcomes reports `outcome_not_recorded`.
 
 ## [0.12.0] - 2026-09-29

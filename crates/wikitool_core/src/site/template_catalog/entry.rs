@@ -274,18 +274,29 @@ fn merge_examples(
 }
 
 fn recommendation_tags(template_title: &str, adapter: &SiteAdapter) -> Vec<String> {
+    let same = |configured: &str| template_titles_equivalent(configured, template_title);
     let mut tags = Vec::new();
-    if adapter.authoring.article_quality_template.as_deref() == Some(template_title) {
+    if adapter
+        .authoring
+        .article_quality_template
+        .as_deref()
+        .is_some_and(same)
+    {
         tags.push("required_quality_banner".to_string());
     }
-    if adapter.authoring.references_template.as_deref() == Some(template_title) {
+    if adapter
+        .authoring
+        .references_template
+        .as_deref()
+        .is_some_and(same)
+    {
         tags.push("required_references_template".to_string());
     }
     if adapter
         .citations
         .preferred_templates
         .iter()
-        .any(|rule| rule.template_title == template_title)
+        .any(|rule| same(&rule.template_title))
     {
         tags.push("preferred_citation_template".to_string());
     }
@@ -293,7 +304,7 @@ fn recommendation_tags(template_title: &str, adapter: &SiteAdapter) -> Vec<Strin
         .templates
         .infobox_preferences
         .iter()
-        .any(|rule| rule.template_title == template_title)
+        .any(|rule| same(&rule.template_title))
     {
         tags.push("preferred_infobox_template".to_string());
     }

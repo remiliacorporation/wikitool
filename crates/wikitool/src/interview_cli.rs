@@ -561,11 +561,11 @@ fn build_interview_scout(
     title: &str,
     intent: WikiInterviewIntentArg,
 ) -> Result<Option<InterviewScoutContext>> {
-    use wikitool_core::authoring::article_scout::build_article_scout;
+    use wikitool_core::authoring::article_scout::build_article_scout_with_template_catalog;
     use wikitool_core::catalog::authoring::{
         AuthoringContextOptions, AuthoringContextOutcome, build_authoring_context,
     };
-    use wikitool_core::site::load_site_adapter;
+    use wikitool_core::site::{load_local_template_catalog, load_site_adapter};
 
     let pack = build_authoring_context(
         paths,
@@ -577,7 +577,13 @@ fn build_interview_scout(
         return Ok(None);
     };
     let adapter = load_site_adapter(paths)?;
-    let article_scout = build_article_scout(&report, &adapter, intent.into_article_scout_intent());
+    let template_catalog = load_local_template_catalog(paths, &adapter)?;
+    let article_scout = build_article_scout_with_template_catalog(
+        &report,
+        &adapter,
+        template_catalog.as_ref(),
+        intent.into_article_scout_intent(),
+    );
 
     let local_state = serde_json::to_value(&article_scout.local_state)
         .ok()
