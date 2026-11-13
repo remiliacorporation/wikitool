@@ -14,7 +14,8 @@ pub(super) fn write_private_session_file(path: &Path, content: &[u8]) -> Result<
         .with_context(|| "failed to create a private source-session staging file")?;
 
     // Establish and verify privacy before secret bytes enter the file. On Windows this is an
-    // explicit protected DACL; on Unix it is mode 0600 plus current effective-user ownership.
+    // explicit current-user owner and protected DACL; on Unix it is mode 0600 plus current
+    // effective-user ownership.
     secure_session_file(temporary.path())
         .context("failed to secure a source-session staging file")?;
     temporary
@@ -230,6 +231,27 @@ mod windows {
         if status != ERROR_SUCCESS {
             return Err(io::Error::from_raw_os_error(status as i32))
                 .context("failed to apply a protected current-user DACL");
+        }
+
+        // Take ownership explicitly. With an elevated administrator token, Windows assigns new
+        // objects to BUILTIN\Administrators when the "default owner for objects created by
+        // members of the Administrators group" policy says so (the Windows Server default), and
+        // the verification below requires the current user to own the storage. This runs after
+        // the DACL change because only the new DACL is sure to grant WRITE_OWNER.
+        let status = unsafe {
+            SetNamedSecurityInfoW(
+                wide_path.as_ptr(),
+                SE_FILE_OBJECT,
+                OWNER_SECURITY_INFORMATION,
+                sid,
+                ptr::null_mut(),
+                ptr::null(),
+                ptr::null(),
+            )
+        };
+        if status != ERROR_SUCCESS {
+            return Err(io::Error::from_raw_os_error(status as i32))
+                .context("failed to make the current user own source-session storage");
         }
 
         verify_current_user_acl_with_sid(&wide_path, sid, directory)

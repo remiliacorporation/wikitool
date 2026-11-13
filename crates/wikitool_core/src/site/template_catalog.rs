@@ -104,6 +104,21 @@ pub fn build_template_catalog_with_adapter(
     })
 }
 
+/// The local template catalog that article lint checks invocations against,
+/// or `None` when the project has no local templates. Lint and article scout
+/// share this so a template the scout offers is one lint accepts.
+pub fn load_local_template_catalog(
+    paths: &ResolvedPaths,
+    adapter: &SiteAdapter,
+) -> Result<Option<TemplateCatalog>> {
+    let built = build_template_catalog_with_adapter(paths, adapter)?;
+    Ok(if built.entries.is_empty() {
+        None
+    } else {
+        Some(built)
+    })
+}
+
 pub fn sync_template_catalog_with_adapter(
     paths: &ResolvedPaths,
     adapter: &SiteAdapter,
@@ -184,6 +199,51 @@ pub fn find_template_catalog_entry(
     TemplateCatalogEntryLookup::TemplateMissing {
         template_title: normalized,
     }
+}
+
+/// Find a catalog entry for a title written by an adapter or an author, also
+/// accepting a different case of the first letter, as MediaWiki does under its
+/// default first-letter capitalization. The returned entry carries the
+/// catalog's own spelling, which `find_template_catalog_entry` (and so lint)
+/// accepts exactly.
+pub fn resolve_template_catalog_entry(
+    catalog: &TemplateCatalog,
+    template_title: &str,
+) -> Option<Box<TemplateCatalogEntry>> {
+    if let TemplateCatalogEntryLookup::Found(entry) =
+        find_template_catalog_entry(catalog, template_title)
+    {
+        return Some(entry);
+    }
+    let folded = first_letter_template_title(template_title)?;
+    match find_template_catalog_entry(catalog, &folded) {
+        TemplateCatalogEntryLookup::Found(entry) => Some(entry),
+        _ => None,
+    }
+}
+
+/// Whether two template titles name the same page: namespace prefix optional,
+/// `_` and space alike, and the first letter of the name case-insensitive.
+pub(crate) fn template_titles_equivalent(left: &str, right: &str) -> bool {
+    match (
+        first_letter_template_title(left),
+        first_letter_template_title(right),
+    ) {
+        (Some(left), Some(right)) => left == right,
+        _ => false,
+    }
+}
+
+fn first_letter_template_title(template_title: &str) -> Option<String> {
+    let normalized = normalize_template_lookup_title(template_title);
+    let body = normalized.strip_prefix("Template:")?;
+    let mut chars = body.chars();
+    let first = chars.next()?;
+    Some(format!(
+        "Template:{}{}",
+        first.to_uppercase(),
+        chars.as_str()
+    ))
 }
 
 impl TemplateCatalog {

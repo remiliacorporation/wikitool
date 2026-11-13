@@ -1046,3 +1046,270 @@ fn detects_suspicious_html_tags_even_when_they_are_not_known_extensions() {
     let report = lint_article(&paths, &article_path).expect("lint");
     assert!(has_rule(&report, "capability.unsupported_extension_tag"));
 }
+
+const MECHANICS_LINT_KEYS: &str = "[lint]\nheading_leading_article = \"warning\"\nheading_trailing_punctuation = \"warning\"\nheading_markup = \"warning\"\nheading_repeats_title = \"warning\"\nconsecutive_blank_lines = \"warning\"\nlead_paragraph_limit = \"warning\"\nmax_lead_paragraphs = 2\n";
+
+/// The test adapter with every heading and spacing rule enabled at warning.
+fn write_mechanics_adapter(paths: &ResolvedPaths) {
+    write_adapter_with(paths, |source| {
+        source.replacen("[lint]\n", MECHANICS_LINT_KEYS, 1)
+    });
+}
+
+fn write_adapter_with(paths: &ResolvedPaths, edit: impl Fn(&str) -> String) {
+    let source = include_str!("../../testdata/site-adapter.toml");
+    let edited = edit(source);
+    assert_ne!(edited, source, "adapter edit must change the test adapter");
+    write_file(
+        &paths.project_root.join("site-adapter/site-adapter.toml"),
+        &edited,
+    );
+    write_file(
+        &paths.config_path,
+        "[adapter]\npath = \"site-adapter/site-adapter.toml\"\n",
+    );
+}
+
+fn article_with_body(body: &str) -> String {
+    format!(
+        "{{{{SHORTDESC:Alpha}}}}\n{{{{Article quality|unverified}}}}\n\n'''Alpha''' is a page.\n\n{body}\n\n== References ==\n{{{{Reflist}}}}\n"
+    )
+}
+
+fn lint_mechanics(body: &str) -> ArticleLintReport {
+    lint_mechanics_article("Alpha.wiki", &article_with_body(body))
+}
+
+fn lint_mechanics_article(file_name: &str, content: &str) -> ArticleLintReport {
+    let temp = tempdir().expect("tempdir");
+    let project_root = temp.path().join("project");
+    let paths = paths(&project_root);
+    write_mechanics_adapter(&paths);
+    write_common_templates(&paths);
+    let article_path = paths.wiki_content_dir.join("Main").join(file_name);
+    write_file(&article_path, content);
+    lint_article(&paths, &article_path).expect("lint")
+}
+
+fn rule_evidence(report: &ArticleLintReport, rule_id: &str) -> Vec<String> {
+    report
+        .issues
+        .iter()
+        .filter(|issue| issue.rule_id == rule_id)
+        .map(|issue| issue.evidence.clone().unwrap_or_default())
+        .collect()
+}
+
+#[test]
+fn heading_leading_article_warns_and_allows_for_names() {
+    let report = lint_mechanics("== The early years ==\nText.\n\n== Early work ==\nText.");
+    assert_eq!(
+        rule_evidence(&report, "style.heading_leading_article"),
+        vec!["The early years".to_string()]
+    );
+    let issue = report
+        .issues
+        .iter()
+        .find(|issue| issue.rule_id == "style.heading_leading_article")
+        .expect("leading article issue");
+    // A heading such as "The Beatles" is a name; the rule cannot tell, so it
+    // only warns and says the article may stay when it belongs to a name.
+    assert_eq!(issue.severity, ArticleLintSeverity::Warning);
+    assert!(issue.message.contains("unless it is part of a name"));
+
+    let names = lint_mechanics("== ''The Remilia Manifesto'' ==\nText.\n\n== A ==\nText.");
+    assert!(!has_rule(&names, "style.heading_leading_article"));
+}
+
+#[test]
+fn heading_leading_article_cannot_be_configured_as_an_error() {
+    let temp = tempdir().expect("tempdir");
+    let project_root = temp.path().join("project");
+    let paths = paths(&project_root);
+    write_adapter_with(&paths, |source| {
+        source.replacen(
+            "[lint]\n",
+            "[lint]\nheading_leading_article = \"error\"\n",
+            1,
+        )
+    });
+    let article_path = paths.wiki_content_dir.join("Main").join("Alpha.wiki");
+    write_file(&article_path, &article_with_body("== The early years =="));
+    let error = lint_article(&paths, &article_path).expect_err("error level is rejected");
+    assert!(format!("{error:#}").contains("unknown variant `error`"));
+}
+
+#[test]
+fn heading_trailing_punctuation_skips_quoted_titles_and_name_abbreviations() {
+    let report = lint_mechanics(
+        "== Reception: ==\nText.\n\n== Why it spread? ==\nText.\n\n== \"Who Is Milady?\" ==\nText.\n\n== ''Who Is Milady?'' ==\nText.\n\n== Remilia Corporation Inc. ==\nText.\n\n== U.S. ==\nText.\n\n== Legacy ==\nText.",
+    );
+    assert_eq!(
+        rule_evidence(&report, "style.heading_trailing_punctuation"),
+        vec!["Reception:".to_string(), "Why it spread?".to_string()]
+    );
+}
+
+#[test]
+fn heading_markup_finds_templates_refs_and_math_but_not_commented_or_literal_headings() {
+    let report = lint_mechanics(
+        "== Sales {{As of|2024}} ==\nText.\n\n== History<ref>Source.</ref> ==\nText.\n\n== Formula <math>x</math> ==\nText.\n\n== Plain heading ==\nText.\n\n<!--\n== Draft {{Note}} ==\n-->\n<pre>\n== Example {{Note}} ==\n</pre>",
+    );
+    assert_eq!(
+        rule_evidence(&report, "style.heading_markup"),
+        vec![
+            "Sales {{As of|2024}}".to_string(),
+            "History<ref>Source.</ref>".to_string(),
+            "Formula <math>x</math>".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn heading_repeats_title_matches_whole_words_only() {
+    let report = lint_mechanics_article(
+        "Alpha_Beta_(band).wiki",
+        "{{SHORTDESC:Alpha}}\n{{Article quality|unverified}}\n\n'''Alpha Beta''' is a band.\n\n== History of Alpha Beta ==\nText.\n\n== Alpha Betamax ==\nText.\n\n== Neo-alpha beta ==\nText.\n\n== Alpha Beta Foundation ==\nText.\n\n== Alpha Beta 2 ==\nText.\n\n== Alpha beta and the scene ==\nText.\n\n== Members ==\nText.\n\n== References ==\n{{Reflist}}\n",
+    );
+    // "Alpha Beta Foundation" and "Alpha Beta 2" name other subjects that
+    // contain the title; "Neo-alpha" is a compound word.
+    assert_eq!(
+        rule_evidence(&report, "style.heading_repeats_title"),
+        vec![
+            "History of Alpha Beta".to_string(),
+            "Alpha beta and the scene".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn consecutive_blank_lines_ignore_literal_blocks_templates_and_the_page_end() {
+    let temp = tempdir().expect("tempdir");
+    let project_root = temp.path().join("project");
+    let paths = paths(&project_root);
+    write_mechanics_adapter(&paths);
+    write_common_templates(&paths);
+    let article_path = paths.wiki_content_dir.join("Main").join("Alpha.wiki");
+    write_file(
+        &article_path,
+        "{{SHORTDESC:Alpha}}\n{{Article quality|unverified}}\n\n'''Alpha''' is a page.\n\n\n\nSecond paragraph.\n\n== Code ==\n<pre>\na\n\n\nb\n</pre>\n<syntaxhighlight lang=\"lua\">\nx\n\n\ny\n</syntaxhighlight>\n<nowiki>\np\n\n\nq\n</nowiki>\n<!--\n\n\n-->\n{{Quote|text=one\n\n\ntwo}}\n\n== References ==\n{{Reflist}}\n\n\n\n",
+    );
+
+    let report = lint_article(&paths, &article_path).expect("lint");
+    let issues = report
+        .issues
+        .iter()
+        .filter(|issue| issue.rule_id == "style.consecutive_blank_lines")
+        .collect::<Vec<_>>();
+    assert_eq!(issues.len(), 1, "{issues:#?}");
+    assert_eq!(issues[0].evidence.as_deref(), Some("lines 5-7"));
+    assert_eq!(issues[0].severity, ArticleLintSeverity::Warning);
+
+    let fixed = fix_article(&paths, &article_path, ArticleFixApplyMode::Safe).expect("safe fix");
+    assert!(fixed.changed);
+    let content = fs::read_to_string(&article_path).expect("read article");
+    assert!(content.contains("'''Alpha''' is a page.\n\nSecond paragraph."));
+    assert!(content.contains("a\n\n\nb"), "literal blocks are untouched");
+    assert!(!has_rule(
+        &fixed.remaining_report,
+        "style.consecutive_blank_lines"
+    ));
+}
+
+#[test]
+fn lead_paragraph_limit_counts_prose_paragraphs_only() {
+    // Two prose paragraphs plus header templates, a multi-line infobox with a
+    // blank line inside, a comment and a behavior switch stay within a limit of two.
+    let within = lint_mechanics_article(
+        "Alpha.wiki",
+        "{{SHORTDESC:Alpha}}\n{{Article quality|unverified}}\n__NOTOC__\n{{Infobox NFT collection\n| name = Alpha\n\n| parent_group = Beta\n}}\n<!-- editor note -->\n\n'''Alpha''' is a page.<ref>Source.</ref>\n\nIt has a second paragraph.\n\n== History ==\nText.\n\n== References ==\n{{Reflist}}\n",
+    );
+    assert!(!has_rule(&within, "structure.lead_paragraph_limit"));
+
+    let over = lint_mechanics_article(
+        "Alpha.wiki",
+        "{{SHORTDESC:Alpha}}\n{{Article quality|unverified}}\n\n'''Alpha''' is a page.\n\nSecond.\n\nThird.\n\n== History ==\nText.\n\n== References ==\n{{Reflist}}\n",
+    );
+    let issue = over
+        .issues
+        .iter()
+        .find(|issue| issue.rule_id == "structure.lead_paragraph_limit")
+        .expect("lead issue");
+    assert_eq!(issue.evidence.as_deref(), Some("paragraphs=3 max=2"));
+    assert_eq!(issue.span.as_ref().map(|span| span.line), Some(8));
+
+    // Lines holding only an HTML wrapper are not paragraphs.
+    let wrapped = lint_mechanics_article(
+        "Alpha.wiki",
+        "{{SHORTDESC:Alpha}}\n<div class=\"license\">\n\n'''Alpha''' is a page.\n\nSecond.\n\n</div>\n[[Category:Pages]]\n",
+    );
+    assert!(!has_rule(&wrapped, "structure.lead_paragraph_limit"));
+
+    // A stub with no headings is all lead; its category and file lines are not paragraphs.
+    let stub = lint_mechanics_article(
+        "Alpha.wiki",
+        "{{SHORTDESC:Alpha}}\n{{Article quality|unverified}}\n\n'''Alpha''' is a page.\n\n[[File:Alpha.png|thumb|A [[Beta]] caption]]\n\nSecond.\n\n[[Category:Pages]]\n[[Category:Stubs]]\n",
+    );
+    assert!(!has_rule(&stub, "structure.lead_paragraph_limit"));
+}
+
+#[test]
+fn heading_and_spacing_rules_are_off_for_the_generic_adapter() {
+    let temp = tempdir().expect("tempdir");
+    let project_root = temp.path().join("project");
+    let paths = paths(&project_root);
+    let article_path = paths.wiki_content_dir.join("Main").join("Alpha.wiki");
+    write_file(
+        &article_path,
+        "'''Alpha''' is a page.\n\n\n\nTwo.\n\nThree.\n\nFour.\n\nFive.\n\n== The history of Alpha: {{Note}} ==\nText.\n",
+    );
+
+    let report = lint_article(&paths, &article_path).expect("lint");
+    for rule_id in [
+        "style.heading_leading_article",
+        "style.heading_trailing_punctuation",
+        "style.heading_markup",
+        "style.heading_repeats_title",
+        "style.consecutive_blank_lines",
+        "structure.lead_paragraph_limit",
+    ] {
+        assert!(!has_rule(&report, rule_id), "{rule_id} must be off");
+    }
+}
+
+#[test]
+fn authoring_preferences_gate_the_rules_they_name() {
+    let body =
+        "== Early Life And Career ==\nText with \u{201c}curly\u{201d} quotes.\n\n## History\nText.";
+
+    // The test adapter states each preference, so each rule fires.
+    let enabled = lint_mechanics(body);
+    assert!(has_rule(&enabled, "style.sentence_case_heading"));
+    assert!(has_rule(&enabled, "style.curly_quotes"));
+    assert!(has_rule(&enabled, "structure.markdown_heading"));
+
+    // Turning a preference off silences its rule. The curly-quote rule stays on
+    // while either key that states it is on.
+    let temp = tempdir().expect("tempdir");
+    let project_root = temp.path().join("project");
+    let paths = paths(&project_root);
+    write_adapter_with(&paths, |source| {
+        source
+            .replace(
+                "prefer_sentence_case_headings = true",
+                "prefer_sentence_case_headings = false",
+            )
+            .replace("forbid_markdown = true", "forbid_markdown = false")
+            .replace("forbid_curly_quotes = true", "forbid_curly_quotes = false")
+    });
+    write_common_templates(&paths);
+    let article_path = paths.wiki_content_dir.join("Main").join("Alpha.wiki");
+    write_file(&article_path, &article_with_body(body));
+    let disabled = lint_article(&paths, &article_path).expect("lint");
+    assert!(!has_rule(&disabled, "style.sentence_case_heading"));
+    assert!(!has_rule(&disabled, "structure.markdown_heading"));
+    assert!(
+        has_rule(&disabled, "style.curly_quotes"),
+        "require_straight_quotes alone keeps the curly-quote rule on"
+    );
+}

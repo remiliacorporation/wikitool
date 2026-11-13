@@ -11,8 +11,9 @@ use crate::support::{compute_sha256, normalize_path, table_exists, unix_timestam
 pub use crate::support::{compute_wiki_sync_hash, normalize_wiki_content, parse_redirect};
 pub use mediawiki_protocol::{
     DeleteLogEntry, DeleteOutcome, DeleteReceipt, EditConstraint, EditReceipt, NS_CATEGORY,
-    NS_MAIN, NS_MEDIAWIKI, NS_MODULE, NS_TEMPLATE, NS_USER, PageTimestampInfo, RemotePage,
-    RevisionLineageEntry, WikiReadApi, WikiWriteApi,
+    NS_MAIN, NS_MEDIAWIKI, NS_MODULE, NS_TEMPLATE, NS_USER, PageTimestampInfo,
+    RemoteFileObservation, RemoteFileVersion, RemotePage, RevisionLineageEntry, UploadOutcome,
+    UploadRequest, UploadWarning, WikiReadApi, WikiUploadApi, WikiWriteApi,
 };
 pub use workspace::{
     Namespace, NamespaceMapper, ScanOptions, ScanStats, ScannedFile, SyncNamespace,
@@ -23,6 +24,7 @@ pub use workspace::{
 };
 
 mod diff;
+mod lifecycle;
 mod model;
 mod mutations;
 mod namespaces;
@@ -34,6 +36,7 @@ mod storage;
 mod store;
 mod support;
 mod timestamps;
+mod upload;
 mod workspace;
 
 pub use diff::diff_local_against_sync;
@@ -54,6 +57,7 @@ pub use store::{
     SyncStateError, SyncStoreMigrationReport, SyncStoreMigrationStatus, SyncTargetIdentity,
     preserve_legacy_sync_state, verify_established_sync_target,
 };
+pub use upload::{RemoteUploadError, apply_remote_upload_with_api, plan_remote_upload_with_api};
 
 /// Generic, serializable evidence returned by a publication preflight. Sync
 /// carries this receipt to its plan/write reports but never interprets it.

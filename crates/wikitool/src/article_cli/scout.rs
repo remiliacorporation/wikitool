@@ -3,10 +3,11 @@ use std::path::PathBuf;
 use anyhow::{Result, bail};
 use clap::{Args, ValueEnum};
 use serde::Serialize;
-use wikitool_core::authoring::article_scout::build_article_scout;
+use wikitool_core::authoring::article_scout::build_article_scout_with_template_catalog;
 use wikitool_core::authoring::model::{
     ArticleScoutIntent, ArticleScoutResult, ContextCoverageItem, ContextSurfaceSource,
-    LocalExistenceState, RequiredTemplate, SectionCandidate, TemplateSurfaceEntry,
+    InfoboxAvailabilityCheck, LocalExistenceState, RequiredTemplate, SectionCandidate,
+    TemplateSurfaceEntry, UnavailableInfoboxPreference,
 };
 use wikitool_core::catalog::authoring::{
     AuthoringContextOptions, AuthoringContextOutcome, AuthoringContractProfile,
@@ -14,7 +15,7 @@ use wikitool_core::catalog::authoring::{
 };
 use wikitool_core::catalog::status::{CatalogReadiness, catalog_status};
 use wikitool_core::filesystem::validate_scoped_path;
-use wikitool_core::site::load_site_adapter;
+use wikitool_core::site::{load_local_template_catalog, load_site_adapter};
 use wikitool_core::wiki_interview::{
     InterviewBriefSummary, InterviewValidationReport, InterviewValidationStatus,
     validate_interview_brief,
@@ -300,7 +301,13 @@ pub(crate) fn run_article_scout(runtime: &RuntimeOptions, args: ArticleScoutArgs
         },
         AuthoringContextOutcome::Found(report) => {
             let adapter = load_site_adapter(&paths)?;
-            let article_scout = build_article_scout(&report, &adapter, args.intent.into());
+            let template_catalog = load_local_template_catalog(&paths, &adapter)?;
+            let article_scout = build_article_scout_with_template_catalog(
+                &report,
+                &adapter,
+                template_catalog.as_ref(),
+                args.intent.into(),
+            );
             ArticleScoutOutput {
                 docs_profile_requested: status.docs_profile_requested.clone(),
                 readiness: status.readiness.clone(),
@@ -404,6 +411,20 @@ pub(crate) fn run_article_scout(runtime: &RuntimeOptions, args: ArticleScoutArgs
                     .available_infoboxes
                     .iter()
                     .map(|entry| entry.template_title.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            println!(
+                "article_scout.infobox_availability: {}",
+                infobox_availability_label(article_scout.local_integration.infobox_availability)
+            );
+            println!(
+                "article_scout.unavailable_infobox_preferences: {}",
+                article_scout
+                    .local_integration
+                    .unavailable_infobox_preferences
+                    .iter()
+                    .map(|entry| format!("{} ({})", entry.template_title, entry.subject_type))
                     .collect::<Vec<_>>()
                     .join(", ")
             );
@@ -547,6 +568,8 @@ struct ArticleScoutIntegrationCard<'a> {
     closest_comparable_outline: Option<&'a wikitool_core::authoring::model::ComparableOutline>,
     required_templates: Vec<RequiredTemplateCard<'a>>,
     available_infoboxes: Vec<TemplateSurfaceCard<'a>>,
+    infobox_availability: InfoboxAvailabilityCheck,
+    unavailable_infobox_preferences: &'a [UnavailableInfoboxPreference],
     citation_templates_seen: Vec<&'a str>,
     template_surface: Vec<&'a str>,
     observed_categories: Vec<ObservedCategoryCard<'a>>,
@@ -843,6 +866,10 @@ fn build_article_scout_brief<'a>(output: &'a ArticleScoutOutput) -> ArticleScout
                         .take(4)
                         .map(template_surface_card)
                         .collect(),
+                    infobox_availability: article_scout.local_integration.infobox_availability,
+                    unavailable_infobox_preferences: &article_scout
+                        .local_integration
+                        .unavailable_infobox_preferences,
                     citation_templates_seen: article_scout
                         .local_integration
                         .citation_templates_seen
@@ -1027,6 +1054,15 @@ fn required_template_card(template: &RequiredTemplate) -> RequiredTemplateCard<'
         template_title: &template.template_title,
         reason: &template.reason,
         parameter_keys: capped_strings(&template.parameter_keys, 12),
+    }
+}
+
+fn infobox_availability_label(check: InfoboxAvailabilityCheck) -> &'static str {
+    match check {
+        InfoboxAvailabilityCheck::CheckedAgainstTemplateCatalog => {
+            "checked_against_template_catalog"
+        }
+        InfoboxAvailabilityCheck::NotChecked => "not_checked",
     }
 }
 

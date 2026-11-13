@@ -79,6 +79,24 @@ pub struct TemplateSurfaceEntry {
     pub parameter_keys: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum InfoboxAvailabilityCheck {
+    /// Every adapter preference in `available_infoboxes` exists in the local
+    /// template catalog that lint checks invocations against.
+    CheckedAgainstTemplateCatalog,
+    /// No local template catalog was loaded, so adapter preferences were not
+    /// verified to exist on the wiki.
+    #[default]
+    NotChecked,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UnavailableInfoboxPreference {
+    pub template_title: String,
+    pub subject_type: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CategorySurfaceEntry {
     pub category_title: String,
@@ -173,6 +191,15 @@ pub struct LocalIntegrationLane {
     pub required_templates: Vec<RequiredTemplate>,
     pub subject_type_hints: Vec<SubjectTypeHint>,
     pub available_infoboxes: Vec<TemplateSurfaceEntry>,
+    /// Whether `available_infoboxes` was checked against the local template
+    /// catalog. Without a catalog, adapter preferences are listed unverified.
+    #[serde(default)]
+    pub infobox_availability: InfoboxAvailabilityCheck,
+    /// Adapter infobox preferences the local template catalog does not contain,
+    /// in adapter order. Fall back to the next applicable preference that is
+    /// available rather than invoking one of these.
+    #[serde(default)]
+    pub unavailable_infobox_preferences: Vec<UnavailableInfoboxPreference>,
     pub citation_templates_seen: Vec<TemplateSurfaceEntry>,
     pub template_surface: Vec<TemplateSurfaceEntry>,
     pub observed_categories: Vec<CategorySurfaceEntry>,

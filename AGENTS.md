@@ -11,9 +11,9 @@ This file owns project instructions for Claude Code and other agents.
 Select skills by the requested outcome:
 
 - `wikitool`: retrieval, templates, mechanical checks and revision-bound sync.
-- `wiki-writing`: new or substantially revised sourced encyclopedic prose.
+- `wiki-writing`: new or substantially revised sourced encyclopedic prose,
+  including missing human knowledge, source leads and exclusions.
 - `prose-review`: independent editorial assessment.
-- `wiki-interview`: missing human knowledge, sources or exclusions.
 - `contextmink`: bounded repository discovery and large reads.
 - `papertiger`: durable planning and resuming recorded work.
 

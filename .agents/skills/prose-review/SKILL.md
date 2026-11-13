@@ -19,11 +19,25 @@ sampling and inaccessible sources; none can establish complete independent cover
 
 Use the relevant references:
 - [Source fidelity](references/source-fidelity.md): entailment, citation coverage,
-  attribution, compression and source roles.
-- [Reader value](references/reader-value.md): subject, structure and due weight.
+  attribution and over-attribution, compression and source roles.
+- [Reader value](references/reader-value.md): subject, structure, due weight
+  and register.
 - [Sensitive claims](references/blp-sensitive.md): required when living-person,
   private, health, crime, identity or reputational claims appear or are implied.
 - [Frozen packets](references/frozen-packet.md): closed evaluation inputs only.
+
+Read the site adapter's guidance before judging attribution. Where it makes the
+wiki a first-party record of its own subject, content its contributors supplied
+as fact is the record: [Source fidelity](references/source-fidelity.md) says
+when to report it and treats needless hedging as a defect. Missing attribution
+on an allegation about a named person is the opposite defect and is reported
+under [Sensitive claims](references/blp-sensitive.md).
+
+The references set default source-support thresholds, including the higher one
+for sensitive claims. Where the site adapter sets its own, apply the adapter's:
+a missing citation is then a finding only if the adapter makes it one. Limits
+that are not about sourcing (attribution of allegations, privacy, exact bytes)
+stay unless the adapter removes them by name.
 
 Reconstruct material claims, including infoboxes, captions, headings and category
 placement. Check category scope and browsing value under the site's policy, not
@@ -39,10 +53,16 @@ unverified.
 
 Write the review as a file the author and the deciding human can read, for
 example `.wikitool/reviews/TITLE.md`, containing: the candidate identity (path
-or page and revision, content hash when available), sources checked and not
-reachable, coverage and sampling, findings ordered by severity with location,
-evidence and the smallest repair, and the disposition. That file is the review
-record; it is not a human acceptance decision.
+or page and revision, and the full SHA-256 of the bytes reviewed), sources
+checked and not reachable, coverage and sampling, findings ordered by severity
+with location, evidence and the smallest repair, and the disposition. That file
+is the review record; it is not a human acceptance decision. A disposition
+covers only the recorded hash: a candidate whose bytes later differ, even by a
+wording or attribution change, has not been reviewed.
+
+Quote candidate and source text exactly. Before reporting a finding, confirm
+that the quoted words are in the file at the stated location; drop a finding
+whose quotation cannot be found.
 
 Give findings with location, supporting evidence and the smallest useful repair:
 - P0: acute privacy, fabrication, safety or destructive-operation risk; stop.

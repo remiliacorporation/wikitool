@@ -18,6 +18,8 @@ use crate::{
     SyncPathEffectKind, SyncProjectPaths, SyncTargetIdentity,
 };
 
+mod upload;
+
 #[derive(Default)]
 struct MockApi {
     all_pages_by_namespace: BTreeMap<i32, Vec<String>>,
@@ -44,6 +46,7 @@ struct MockApi {
     delete_log_entries: Vec<DeleteLogEntry>,
     delete_hook: Option<Box<dyn FnMut()>>,
     delete_postread_page: Option<RemotePage>,
+    upload: upload::UploadFake,
     login_required: bool,
     logged_in: bool,
     request_count: usize,
@@ -2632,6 +2635,259 @@ fn operator_close_prepares_and_revalidates_a_bound_delete_backup() {
     .expect("closed delete receipt");
     assert_eq!(shown.local_effect_status.as_deref(), Some("backup_ready"));
     assert!(shown.closure.is_some());
+}
+
+/// Every durable fact operator closure recorded for one receipt: its lifecycle
+/// columns, its closure row and the baseline invalidation of its title.
+fn closed_receipt_state(paths: &SyncProjectPaths, table: &str, mutation_id: i64) -> Vec<String> {
+    let connection = super::open_sync_connection(paths).expect("open sync store");
+    let receipt = connection
+        .query_row(
+            &format!(
+                "SELECT phase || '|' || terminal_outcome || '|' || IFNULL(detail, '')
+                        || '|' || updated_at_unix
+                 FROM {table} WHERE mutation_id = ?1"
+            ),
+            [mutation_id],
+            |row| row.get::<_, String>(0),
+        )
+        .expect("closed receipt row");
+    let closure = connection
+        .query_row(
+            "SELECT closure_id || '|' || previous_phase || '|' || actor || '|' || reason
+                    || '|' || closed_at_unix
+             FROM sync_mutation_closures WHERE mutation_id = ?1",
+            [mutation_id],
+            |row| row.get::<_, String>(0),
+        )
+        .expect("closure row");
+    let mut statement = connection
+        .prepare(
+            "SELECT title_key || '|' || closure_id || '|' || invalidated_at_unix
+             FROM sync_invalidated_titles ORDER BY title_key",
+        )
+        .expect("invalidation query");
+    let invalidations = statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .expect("invalidation rows")
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .expect("decode invalidation rows");
+    assert_eq!(invalidations.len(), 1, "closure invalidated one title");
+    let mut state = vec![receipt, closure];
+    state.extend(invalidations);
+    state
+}
+
+fn assert_operator_closed_reconciliation(
+    report: &super::RemoteMutationReconciliationReport,
+    operation: &str,
+) {
+    assert_eq!(
+        report.status,
+        super::RemoteMutationReconciliationStatus::OperatorClosed
+    );
+    assert_eq!(
+        serde_json::to_value(&report.status).expect("serialize status"),
+        serde_json::json!("operator_closed")
+    );
+    assert_eq!(
+        report.detail,
+        format!("{operation} mutation was closed by an operator without a claimed remote outcome")
+    );
+}
+
+#[test]
+fn reconciling_an_operator_closed_edit_reports_it_without_touching_the_closure() {
+    let (_temp, paths, mut api) = modified_alpha_fixture();
+    api.edit_error_after_apply = Some("injected disconnect after apply".to_string());
+    push_to_remote_with_api(
+        &paths,
+        &write_push_options("ambiguous before closure"),
+        &mut api,
+        Some(("bot", "pass")),
+    )
+    .expect("ambiguous push report");
+    api.edit_error_after_apply = None;
+    let mutation_id = super::list_remote_mutations(&paths, &default_target(), true)
+        .expect("pending mutation list")
+        .mutations[0]
+        .mutation_id;
+    super::close_remote_mutation(
+        &paths,
+        &default_target(),
+        super::RemoteMutationOperation::Edit,
+        mutation_id,
+        "Operator Example",
+        "remote outcome cannot be proved",
+    )
+    .expect("operator closure");
+    let closed = closed_receipt_state(&paths, "sync_edit_mutations", mutation_id);
+    let requests_before = api.request_count;
+
+    let report = super::reconcile_remote_mutation_with_api(
+        &paths,
+        &default_target(),
+        &mut api,
+        super::RemoteMutationOperation::Edit,
+        mutation_id,
+    )
+    .expect("reconcile an operator-closed edit");
+    assert_operator_closed_reconciliation(&report, "edit");
+    assert_eq!(report.request_count, requests_before);
+    assert_eq!(api.request_count, requests_before);
+    assert_eq!(
+        closed_receipt_state(&paths, "sync_edit_mutations", mutation_id),
+        closed
+    );
+
+    let mut blocked_options = write_push_options("still blocked after reconcile");
+    blocked_options.force = true;
+    let blocked =
+        push_to_remote_with_api(&paths, &blocked_options, &mut api, Some(("bot", "pass")))
+            .expect("blocked push report");
+    assert!(!blocked.success);
+    assert!(blocked.pages.iter().any(|page| {
+        page.detail
+            .as_deref()
+            .is_some_and(|detail| detail.contains("invalidated by operator closure"))
+    }));
+    assert_eq!(api.edited_pages, vec!["Alpha".to_string()]);
+}
+
+#[test]
+fn reconciling_an_operator_closed_delete_reports_it_without_touching_the_closure() {
+    let (_temp, paths, mut api) = modified_alpha_fixture();
+    let connection = super::open_sync_connection(&paths).expect("open sync store");
+    let intent = super::storage::begin_delete_mutation(
+        &paths,
+        &connection,
+        &default_target(),
+        super::storage::NewDeleteMutation {
+            title: "Alpha",
+            relative_path: Some("wiki_content/Main/Alpha.wiki"),
+            expected_revision_id: 200,
+            reason: "operator closure reconcile test",
+            local_effect_policy: &super::RemoteDeleteLocalEffectPolicy {
+                backup_enabled: false,
+                backup_directory: None,
+                backup_path: None,
+                local_content_sha256: None,
+            },
+        },
+    )
+    .expect("durable pending delete intent");
+    drop(connection);
+    super::close_remote_mutation(
+        &paths,
+        &default_target(),
+        super::RemoteMutationOperation::Delete,
+        intent.mutation_id,
+        "Operator Example",
+        "external audit could not settle the delete",
+    )
+    .expect("operator closure");
+    let closed = closed_receipt_state(&paths, "sync_delete_mutations", intent.mutation_id);
+    let requests_before = api.request_count;
+
+    let report = super::reconcile_remote_mutation_with_api(
+        &paths,
+        &default_target(),
+        &mut api,
+        super::RemoteMutationOperation::Delete,
+        intent.mutation_id,
+    )
+    .expect("reconcile an operator-closed delete");
+    assert_operator_closed_reconciliation(&report, "delete");
+    assert_eq!(report.request_count, requests_before);
+    assert_eq!(api.request_count, requests_before);
+    assert_eq!(
+        closed_receipt_state(&paths, "sync_delete_mutations", intent.mutation_id),
+        closed
+    );
+    assert!(api.deleted_pages.is_empty());
+}
+
+/// Version 3 had no terminal-outcome column, and the v4 table rebuild copies
+/// the phase alone, so a receipt resolved then migrates as resolved with none.
+#[test]
+fn reconciling_a_receipt_resolved_before_terminal_outcomes_reports_it_unrecorded() {
+    let (_temp, paths, mut api) = modified_alpha_fixture();
+    let connection = super::open_sync_connection(&paths).expect("open sync store");
+    connection
+        .execute_batch(
+            "DROP TABLE sync_invalidated_titles;
+             DROP TABLE sync_mutation_closures;
+             DROP TABLE sync_edit_mutations;
+             DROP TABLE sync_delete_mutations;
+             DROP TABLE sync_upload_mutations;",
+        )
+        .expect("remove current receipt tables");
+    connection
+        .execute_batch(crate::store::VERSION_THREE_MUTATION_TABLES)
+        .expect("create literal version-three receipt tables");
+    let target_api_url = default_target().api_url().to_string();
+    connection
+        .execute(
+            "INSERT INTO sync_edit_mutations (
+                target_api_url, title, namespace, relative_path,
+                intended_content_sha256, intended_normalized_sha256, summary,
+                constraint_kind, expected_revision_id, phase, detail,
+                created_at_unix, updated_at_unix
+             ) VALUES (
+                ?1, 'Alpha', 'Main', 'wiki_content/Main/Alpha.wiki', 'exact',
+                'normalized', 'edit', 'existing_revision', 41, 'resolved',
+                'legacy resolution', 1, 2
+             )",
+            [&target_api_url],
+        )
+        .expect("insert resolved version-three edit");
+    connection
+        .execute(
+            "INSERT INTO sync_delete_mutations (
+                target_api_url, title, relative_path, expected_revision_id,
+                reason, reason_marker, phase, detail, created_at_unix, updated_at_unix
+             ) VALUES (
+                ?1, 'Beta', 'wiki_content/Main/Beta.wiki', 42, 'delete',
+                'wikitool-delete:legacy', 'resolved', 'legacy resolution', 1, 2
+             )",
+            [&target_api_url],
+        )
+        .expect("insert resolved version-three delete");
+    connection
+        .execute_batch("PRAGMA user_version = 3;")
+        .expect("downgrade fixture to schema version 3");
+    drop(connection);
+    let requests_before = api.request_count;
+
+    for (operation, label) in [
+        (super::RemoteMutationOperation::Edit, "edit"),
+        (super::RemoteMutationOperation::Delete, "delete"),
+    ] {
+        let report = super::reconcile_remote_mutation_with_api(
+            &paths,
+            &default_target(),
+            &mut api,
+            operation,
+            1,
+        )
+        .unwrap_or_else(|error| panic!("reconcile legacy resolved {label}: {error:#}"));
+        assert_eq!(
+            serde_json::to_value(&report.status).expect("serialize status"),
+            serde_json::json!("outcome_not_recorded")
+        );
+        assert_eq!(report.request_count, requests_before);
+        let shown = super::show_remote_mutation(&paths, &default_target(), operation, 1)
+            .expect("inspect legacy receipt");
+        assert_eq!(
+            (
+                shown.phase.as_str(),
+                shown.terminal_outcome,
+                shown.detail.as_deref()
+            ),
+            ("resolved", None, Some("legacy resolution"))
+        );
+    }
+    assert_eq!(api.request_count, requests_before);
 }
 
 #[test]

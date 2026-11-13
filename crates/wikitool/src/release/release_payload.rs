@@ -195,6 +195,39 @@ mod tests {
     }
 
     #[test]
+    fn bundled_adapters_carry_every_declared_guidance_document() {
+        let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let output = tempfile::tempdir().expect("output");
+        stage_release_payload(&repo_root, output.path(), None).expect("stage payload");
+        for adapter in ["generic", "remilia-wiki"] {
+            let source_dir = repo_root.join("site_adapters").join(adapter);
+            let bundled_dir = output
+                .path()
+                .join("tools/wikitool/site_adapters")
+                .join(adapter);
+            // The bundled policy resolves its own guidance_documents list,
+            // which fails if any declared document is missing.
+            site_adapter_resource_paths(&bundled_dir.join("site-adapter.toml"))
+                .unwrap_or_else(|error| panic!("bundled {adapter} adapter: {error:#}"));
+            let declared = site_adapter_resource_paths(&source_dir.join("site-adapter.toml"))
+                .expect("source adapter resources");
+            for source in declared {
+                let relative = source.strip_prefix(&source_dir).expect("inside adapter");
+                assert_eq!(
+                    fs::read(bundled_dir.join(relative)).ok(),
+                    Some(fs::read(&source).expect("source resource")),
+                    "{adapter}/{} differs or is missing in the release",
+                    normalize_path(relative)
+                );
+            }
+        }
+        // A vendored ontology and its modules are project content, built by
+        // `ontology export` from a source the release does not contain.
+        assert!(!output.path().join("vendor").exists());
+        assert!(!output.path().join("templates").exists());
+    }
+
+    #[test]
     fn explicit_host_without_an_adapter_fails_packaging() {
         let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let output = tempfile::tempdir().expect("output");

@@ -73,9 +73,9 @@ wikitool article lint .wikitool/drafts/Title.wiki --title "Title" --format json
 
 The writing skill owns source support and the finished draft. Use `article fix
 --apply safe` when its actual repairs are wanted, inspect changes, and repeat
-affected checks. Do not run it merely because a recipe includes it. Use
-`wiki-interview` only for consequential missing human knowledge or exclusions;
-an adequate brief does not require another interview.
+affected checks. Do not run it merely because a recipe includes it. Ask the
+person only for consequential missing knowledge or exclusions, as the skill's
+human-notes reference describes; an adequate brief does not require an interview.
 
 For review of an off-wiki draft, `review --draft-path PATH --title TITLE` skips
 push preview but may report global catalog diagnostics. Its promotion-oriented
@@ -112,11 +112,36 @@ Existing edits use `baserevid`; creates use `createonly`. Deletes recheck the
 revision before requesting deletion, but MediaWiki has no revision-conditional
 delete, leaving a check/request race. `delete` also previews before applying.
 
+`upload` sends one local media file through the same preview/apply workflow:
+
+```text
+wikitool upload --file photo.jpeg --filename "Photo name.jpg" --text-file photo.wiki --summary "Upload photo"
+# inspect title, SHA-1, observed remote state, duplicates and plan_id
+wikitool upload --file photo.jpeg --filename "Photo name.jpg" --text-file photo.wiki --summary "Upload photo" --apply PLAN_ID
+```
+
+The preview only reads: it needs no credentials and does not open the sync store.
+The plan binds the target, title, local path, bytes (SHA-1 and size), observed
+remote file, same-content titles, description text and summary. An existing file
+with different content is refused unless `--replace` is planned; identical content
+is reported as already present and nothing is sent. `--text-file` is required for
+a new file and MediaWiki ignores it for an existing one. Supported content is
+JPEG, PNG, GIF, WebP and PDF, and the target extension must match the bytes.
+Upload warnings such as `exists`, `duplicate` or `badfilename` end the mutation
+as not applied; Wikitool never retries with `ignorewarnings`, which is sent only
+for a planned replacement. Uploaded files are not part of the page mirror:
+nothing is written to `wiki_content/` and the sync baseline is unchanged.
+
 For an uncertain write, inspect `mutation list`, `mutation show` and
 `mutation reconcile`; never repeat the original write to discover its outcome.
+An upload reconciles by comparing the remote file's SHA-1 history with its receipt.
 Operator closure records unresolved truth, invalidates the title's sync authority,
 and requires the documented full-baseline recovery. It is not success or permission
-to discard a local candidate.
+to discard a local candidate. Closure is not available for upload receipts.
+
+Upload receipts use sync-store schema version 8. The first command that opens
+the store with this version migrates it by adding one table; older Wikitool
+builds then refuse that store.
 
 Verify affected live behavior after publication. Template checks must include
 categories on template pages and callers when membership may change. Server-HTML

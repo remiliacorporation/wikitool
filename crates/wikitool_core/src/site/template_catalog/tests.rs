@@ -82,8 +82,10 @@ fn test_adapter() -> SiteAdapter {
             forbid_placeholder_fragments: Vec::new(),
             proper_nouns: Vec::new(),
             citation_needed: crate::site::LintRuleLevel::Ignore,
+            ..LintRules::default()
         },
         extension_contracts: Vec::new(),
+        ontology: None,
         resolved_at: "1".to_string(),
     }
 }

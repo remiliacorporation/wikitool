@@ -10,20 +10,22 @@ use crate::runtime::ResolvedPaths;
 
 pub use mediawiki_protocol::{
     EditConstraint, EditReceipt, MediaWikiClient, MediaWikiClientConfig, NS_CATEGORY, NS_MAIN,
-    NS_MEDIAWIKI, NS_MODULE, NS_TEMPLATE, NS_USER, PageTimestampInfo, RemotePage, WikiReadApi,
-    WikiWriteApi,
+    NS_MEDIAWIKI, NS_MODULE, NS_TEMPLATE, NS_USER, PageTimestampInfo, RemotePage, UploadWarning,
+    WikiReadApi, WikiWriteApi,
 };
 pub use wikitool_sync::{
     DiffBaselineStatus, DiffChange, DiffChangeType, DiffOptions, DiffReport, PreparedPublication,
     PublicationAuthorityBinding, PublicationCandidate, PublicationPreflight, PublicationProvenance,
     PullCoverage, PullOptions, PullPageResult, PullReport, PushOptions, PushPageResult, PushReport,
     RemoteDeleteApplyRequest, RemoteDeleteError, RemoteDeleteLocalEffectPolicy, RemoteDeletePlan,
-    RemoteDeleteReport, RemoteDeleteStatus, RemoteMutationClosureReceipt,
+    RemoteDeleteReport, RemoteDeleteStatus, RemoteFileObservedState, RemoteMutationClosureReceipt,
     RemoteMutationClosureReport, RemoteMutationEffect, RemoteMutationEffectKind,
     RemoteMutationInspection, RemoteMutationListReport, RemoteMutationOperation,
-    RemoteMutationReconciliationReport, RemoteMutationReconciliationStatus, SyncPathEffect,
-    SyncPathEffectKind, SyncPlanChange, SyncPlanOptions, SyncPlanReport, SyncSelection,
-    SyncStateError, SyncStoreMigrationReport, SyncStoreMigrationStatus, SyncTargetIdentity,
+    RemoteMutationReconciliationReport, RemoteMutationReconciliationStatus, RemoteUploadAction,
+    RemoteUploadError, RemoteUploadInput, RemoteUploadPlan, RemoteUploadReport, RemoteUploadStatus,
+    SyncPathEffect, SyncPathEffectKind, SyncPlanChange, SyncPlanOptions, SyncPlanReport,
+    SyncSelection, SyncStateError, SyncStoreMigrationReport, SyncStoreMigrationStatus,
+    SyncTargetIdentity,
 };
 
 fn target_from_config(config: &WikiConfig) -> Result<SyncTargetIdentity> {
@@ -212,6 +214,39 @@ pub fn apply_remote_delete_with_config(
             plan_id: Some(plan_id),
             credentials,
         },
+    )
+}
+
+/// Preview one file upload. This only reads: it neither authenticates nor
+/// opens the durable sync store.
+pub fn plan_remote_upload_with_config(
+    input: &RemoteUploadInput<'_>,
+    config: &WikiConfig,
+) -> Result<RemoteUploadPlan> {
+    let mut client = client_from_wikitool_config(config)?;
+    wikitool_sync::plan_remote_upload_with_api(&target_from_config(config)?, &mut client, input)
+}
+
+pub fn apply_remote_upload_with_config(
+    paths: &ResolvedPaths,
+    input: &RemoteUploadInput<'_>,
+    plan_id: &str,
+    config: &WikiConfig,
+) -> Result<RemoteUploadReport> {
+    let mut client = client_from_wikitool_config(config)?;
+    let username = env::var("WIKITOOL_BOT_USER").ok();
+    let password = env::var("WIKITOOL_BOT_PASS").ok();
+    let credentials = username
+        .as_deref()
+        .zip(password.as_deref())
+        .filter(|(user, password)| !user.trim().is_empty() && !password.trim().is_empty());
+    wikitool_sync::apply_remote_upload_with_api(
+        &sync_project_paths(paths)?,
+        &target_from_config(config)?,
+        &mut client,
+        input,
+        Some(plan_id),
+        credentials,
     )
 }
 

@@ -24,6 +24,7 @@ mod import_cli;
 mod interview_cli;
 mod lsp_cli;
 mod module_cli;
+mod ontology_cli;
 mod quality_cli;
 mod query_cli;
 #[cfg(feature = "maintainer")]
@@ -102,8 +103,12 @@ enum Commands {
     Module(module_cli::ModuleArgs),
     #[command(about = "Export a remote wiki page tree to local files")]
     Export(export_cli::ExportArgs),
+    #[command(about = "Vendor the pinned ontology and generate Module:Ontology/data")]
+    Ontology(ontology_cli::OntologyArgs),
     #[command(about = "Delete a page from the live wiki")]
     Delete(sync_cli::DeleteArgs),
+    #[command(about = "Upload a media file to the live wiki")]
+    Upload(sync_cli::UploadArgs),
     #[command(about = "Inspect and reconcile durable remote mutation receipts")]
     Mutation(sync_cli::MutationArgs),
     #[command(about = "Inspect or reset the local runtime database")]
@@ -170,6 +175,7 @@ fn main() -> Result<()> {
         Some(Commands::Module(args)) => module_cli::run_module(&runtime, args),
         Some(Commands::Export(args)) => export_cli::run_export(&runtime, args),
         Some(Commands::Delete(args)) => sync_cli::run_delete(&runtime, args),
+        Some(Commands::Upload(args)) => sync_cli::run_upload(&runtime, args),
         Some(Commands::Mutation(args)) => sync_cli::run_mutation(&runtime, args),
         Some(Commands::Db(args)) => db_cli::run_db(&runtime, args),
         Some(Commands::Docs(args)) => docs_cli::run_docs(&runtime, args),
@@ -183,6 +189,7 @@ fn main() -> Result<()> {
         Some(Commands::Article(args)) => article_cli::run_article(&runtime, args),
         Some(Commands::Lsp(args)) => lsp_cli::run_lsp(&runtime, args),
         Some(Commands::Companions(args)) => companions_cli::run_companions(args),
+        Some(Commands::Ontology(args)) => ontology_cli::run_ontology(&runtime, args),
         Some(Commands::Skills(args)) => skills_cli::run_skills(&runtime, args),
         #[cfg(feature = "maintainer")]
         Some(Commands::Release(args)) => release::run_release(args),

@@ -72,6 +72,7 @@ pub(crate) fn run_docs_audit(args: DocsAuditArgs) -> Result<()> {
     audit_source_root_skill_routes(&repo_root, &mut checks);
     audit_generic_boundary(&repo_root, &mut checks);
     audit_no_retired_public_terms(&repo_root, &mut checks);
+    audit_no_private_ticket_handles(&repo_root, &mut checks);
     if let Some(host_root) = host_project_root.as_ref() {
         audit_host_project(host_root, &mut checks);
     }
@@ -186,6 +187,7 @@ fn audit_canonical_skills(repo_root: &Path, checks: &mut Vec<DocsAuditCheck>) {
                 "evidence-to-prose.md",
                 "human-notes.md",
                 "mediawiki-structure.md",
+                "interview-ledger.md",
                 "frozen-packet.md",
             ][..],
         ),
@@ -198,7 +200,6 @@ fn audit_canonical_skills(repo_root: &Path, checks: &mut Vec<DocsAuditCheck>) {
                 "frozen-packet.md",
             ][..],
         ),
-        ("wiki-interview", &["interview-ledger.md"][..]),
         (
             "wikitool",
             &[
@@ -427,6 +428,55 @@ fn audit_no_retired_public_terms(repo_root: &Path, checks: &mut Vec<DocsAuditChe
     );
 }
 
+/// Handles from the private issue tracker (`RSV-` and a letter or digit)
+/// mean nothing to public readers. Unlike retired terms, they are refused in
+/// the changelog too, and in TOML files such as the bundled adapter policies.
+fn audit_no_private_ticket_handles(repo_root: &Path, checks: &mut Vec<DocsAuditCheck>) {
+    let mut files = Vec::new();
+    collect_files(repo_root, &mut files, &["md", "toml"]);
+    files.sort();
+    let mut failures = Vec::new();
+    for path in files {
+        let Ok(body) = read_to_string(&path) else {
+            continue;
+        };
+        for handle in private_ticket_handles(&body) {
+            failures.push(format!("{} contains `{handle}`", normalize_path(&path)));
+        }
+    }
+    push_check(
+        checks,
+        "guidance.no_private_ticket_handles",
+        failures.is_empty(),
+        Some(repo_root),
+        if failures.is_empty() {
+            "public files name no private tracker tickets".to_string()
+        } else {
+            failures.join("; ")
+        },
+    );
+}
+
+/// Every `RSV-<letters or digits>` that does not continue a longer word.
+fn private_ticket_handles(body: &str) -> Vec<&str> {
+    const PREFIX: &str = "RSV-";
+    let mut handles = Vec::new();
+    for (start, _) in body.match_indices(PREFIX) {
+        let continues_word = body[..start]
+            .chars()
+            .next_back()
+            .is_some_and(|ch| ch.is_ascii_alphanumeric());
+        let rest = &body[start + PREFIX.len()..];
+        let length = rest
+            .find(|ch: char| !ch.is_ascii_alphanumeric())
+            .unwrap_or(rest.len());
+        if !continues_word && length > 0 {
+            handles.push(&body[start..start + PREFIX.len() + length]);
+        }
+    }
+    handles
+}
+
 fn audit_host_project(host_root: &Path, checks: &mut Vec<DocsAuditCheck>) {
     let (adapter_ok, adapter, adapter_message) = inspect_host_site_adapter(host_root);
     push_check(
@@ -441,11 +491,9 @@ fn audit_host_project(host_root: &Path, checks: &mut Vec<DocsAuditCheck>) {
         ".agents/skills/wikitool/SKILL.md",
         ".agents/skills/wiki-writing/SKILL.md",
         ".agents/skills/prose-review/SKILL.md",
-        ".agents/skills/wiki-interview/SKILL.md",
         ".claude/skills/wikitool/SKILL.md",
         ".claude/skills/wiki-writing/SKILL.md",
         ".claude/skills/prose-review/SKILL.md",
-        ".claude/skills/wiki-interview/SKILL.md",
     ] {
         let path = host_root.join(relative);
         let ok = read_to_string(&path).is_ok_and(|body| {
@@ -467,6 +515,9 @@ fn audit_host_project(host_root: &Path, checks: &mut Vec<DocsAuditCheck>) {
     for relative in [
         ".claude/skills/review.md",
         ".claude/skills/knowledge-interview.md",
+        ".claude/skills/wiki-interview.md",
+        ".claude/skills/wiki-interview",
+        ".agents/skills/wiki-interview",
     ] {
         let path = host_root.join(relative);
         push_check(
@@ -486,7 +537,6 @@ fn audit_host_project(host_root: &Path, checks: &mut Vec<DocsAuditCheck>) {
         ".claude/skills/wikitool.md",
         ".claude/skills/wiki-writing.md",
         ".claude/skills/prose-review.md",
-        ".claude/skills/wiki-interview.md",
     ] {
         let path = host_root.join(relative);
         push_check(
@@ -690,7 +740,44 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    use super::{inspect_host_site_adapter, valid_skill_frontmatter};
+    use super::{
+        audit_no_private_ticket_handles, inspect_host_site_adapter, private_ticket_handles,
+        valid_skill_frontmatter,
+    };
+
+    #[test]
+    fn ticket_handles_are_whole_words_with_an_identifier() {
+        assert_eq!(
+            private_ticket_handles("Fixes RSV-A123 and (RSV-12); not XRSV-3, RSV- or rsv-4."),
+            ["RSV-A123", "RSV-12"]
+        );
+    }
+
+    #[test]
+    fn ticket_handle_audit_covers_markdown_toml_and_the_changelog() {
+        let repo = tempfile::tempdir().expect("repo");
+        fs::write(repo.path().join("README.md"), "No tickets here.\n").expect("readme");
+        let mut checks = Vec::new();
+        audit_no_private_ticket_handles(repo.path(), &mut checks);
+        assert_eq!(checks[0].status, "pass", "{}", checks[0].message);
+
+        fs::write(repo.path().join("CHANGELOG.md"), "- Done (RSV-A1).\n").expect("changelog");
+        fs::create_dir_all(repo.path().join("adapter")).expect("adapter dir");
+        fs::write(
+            repo.path().join("adapter/site-adapter.toml"),
+            "# Tracked as RSV-A123.\n",
+        )
+        .expect("adapter");
+        let mut checks = Vec::new();
+        audit_no_private_ticket_handles(repo.path(), &mut checks);
+        assert_eq!(checks[0].status, "fail");
+        assert!(checks[0].message.contains("CHANGELOG.md contains `RSV-A1`"));
+        assert!(
+            checks[0]
+                .message
+                .contains("adapter/site-adapter.toml contains `RSV-A123`")
+        );
+    }
 
     #[test]
     fn skill_frontmatter_rejects_extra_policy_keys() {

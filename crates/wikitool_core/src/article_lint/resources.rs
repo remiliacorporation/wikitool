@@ -7,8 +7,8 @@ use crate::content_store::parsing::open_indexed_connection;
 use crate::filesystem::{ScanOptions, scan_files};
 use crate::runtime::ResolvedPaths;
 use crate::site::{
-    SiteAdapter, TemplateCatalog, WikiCapabilityManifest, build_template_catalog_with_adapter,
-    load_latest_wiki_capabilities, load_site_adapter, scan_local_asset_titles,
+    SiteAdapter, TemplateCatalog, WikiCapabilityManifest, load_latest_wiki_capabilities,
+    load_local_template_catalog, load_site_adapter, scan_local_asset_titles,
     scan_local_module_functions, scan_local_module_titles,
 };
 
@@ -35,14 +35,7 @@ pub(super) fn load_resources(paths: &ResolvedPaths) -> Result<LoadedResources> {
     } else {
         None
     };
-    let template_catalog = {
-        let built = build_template_catalog_with_adapter(paths, &adapter)?;
-        if built.entries.is_empty() {
-            None
-        } else {
-            Some(built)
-        }
-    };
+    let template_catalog = load_local_template_catalog(paths, &adapter)?;
     let local_module_titles = scan_local_module_titles(paths)?;
     let local_module_functions = scan_local_module_functions(paths)?;
     let local_asset_titles = scan_local_asset_titles(paths)?;

@@ -1,6 +1,11 @@
 use anyhow::{Context, Result, bail};
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
+use crate::lifecycle::{
+    DeleteLocalEffectStatus, DeleteTerminalOutcome, EditTerminalOutcome, MutationPhase, PhaseGuard,
+    PhaseTransition, TerminalReceipt, UnresolvedPhase, decode_delete_lifecycle,
+    decode_edit_lifecycle,
+};
 use crate::remote::{observe_remote_page, reconcile_delete_mutation_with_api};
 use crate::storage::{
     EditMutationIntent, advance_verified_edit_mutation, bind_edit_response,
@@ -10,11 +15,14 @@ use crate::storage::{
 };
 use crate::support::unix_timestamp;
 use crate::support::{compute_sha256, normalize_wiki_content};
+use crate::upload::{
+    load_upload_inspection, load_upload_inspections, reconcile_upload_mutation_with_api,
+};
 use crate::{
     DeleteReconciliationStatus, EditConstraint, EditReceipt, RemoteMutationInspection,
     RemoteMutationListReport, RemoteMutationOperation, RemoteMutationReconciliationReport,
     RemoteMutationReconciliationStatus, RemotePage, SyncProjectPaths, SyncTargetIdentity,
-    WikiWriteApi,
+    WikiUploadApi, WikiWriteApi,
 };
 
 pub fn list_remote_mutations(
@@ -25,6 +33,7 @@ pub fn list_remote_mutations(
     let connection = open_existing_sync_connection(paths, target)?;
     let mut mutations = load_edit_inspections(&connection, unresolved_only)?;
     mutations.extend(load_delete_inspections(&connection, unresolved_only)?);
+    mutations.extend(load_upload_inspections(&connection, unresolved_only)?);
     mutations.sort_by_key(|item| (item.mutation_id, operation_sort_key(item.operation)));
     Ok(RemoteMutationListReport {
         target_api_url: target.api_url().to_string(),
@@ -46,6 +55,7 @@ pub fn show_remote_mutation(
     let inspection = match operation {
         RemoteMutationOperation::Edit => load_edit_inspection(&connection, mutation_id)?,
         RemoteMutationOperation::Delete => load_delete_inspection(&connection, mutation_id)?,
+        RemoteMutationOperation::Upload => load_upload_inspection(&connection, mutation_id)?,
     };
     if inspection.target_api_url != target.api_url() {
         bail!(
@@ -59,7 +69,7 @@ pub fn show_remote_mutation(
     Ok(inspection)
 }
 
-pub fn reconcile_remote_mutation_with_api<A: WikiWriteApi>(
+pub fn reconcile_remote_mutation_with_api<A: WikiUploadApi>(
     paths: &SyncProjectPaths,
     target: &SyncTargetIdentity,
     api: &mut A,
@@ -92,6 +102,12 @@ pub fn reconcile_remote_mutation_with_api<A: WikiWriteApi>(
                 DeleteReconciliationStatus::RemotePresent => {
                     RemoteMutationReconciliationStatus::ReconciliationRequired
                 }
+                DeleteReconciliationStatus::OperatorClosed => {
+                    RemoteMutationReconciliationStatus::OperatorClosed
+                }
+                DeleteReconciliationStatus::OutcomeNotRecorded => {
+                    RemoteMutationReconciliationStatus::OutcomeNotRecorded
+                }
             };
             Ok(RemoteMutationReconciliationReport {
                 mutation_id: report.mutation_id,
@@ -105,7 +121,18 @@ pub fn reconcile_remote_mutation_with_api<A: WikiWriteApi>(
                 request_count: report.request_count,
             })
         }
+        RemoteMutationOperation::Upload => {
+            reconcile_upload_mutation_with_api(paths, target, api, mutation_id)
+        }
     }
+}
+
+/// Operator closure invalidates a page-sync baseline, which uploaded files do
+/// not have, and the closure ledger only admits edit and delete receipts.
+fn upload_closure_unsupported() -> anyhow::Error {
+    anyhow::anyhow!(
+        "operator closure is not supported for upload mutations; reconcile the receipt against the remote file's SHA-1 instead"
+    )
 }
 
 pub fn close_remote_mutation(
@@ -128,10 +155,10 @@ pub fn close_remote_mutation(
         bail!("operator closure requires a non-empty reason");
     }
     let connection = open_existing_sync_connection(paths, target)?;
-    let (title, stored_target, previous_phase, mut local_effect_status) = match operation {
+    let (title, stored_target, previous_phase) = match operation {
         RemoteMutationOperation::Edit => connection
             .query_row(
-                "SELECT title, target_api_url, phase, NULL
+                "SELECT title, target_api_url, phase
                  FROM sync_edit_mutations WHERE mutation_id = ?1",
                 [mutation_id],
                 |row| {
@@ -139,14 +166,13 @@ pub fn close_remote_mutation(
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
                         row.get::<_, String>(2)?,
-                        row.get::<_, Option<String>>(3)?,
                     ))
                 },
             )
             .with_context(|| format!("edit mutation {mutation_id} does not exist"))?,
         RemoteMutationOperation::Delete => connection
             .query_row(
-                "SELECT title, target_api_url, phase, local_effect_status
+                "SELECT title, target_api_url, phase
                  FROM sync_delete_mutations WHERE mutation_id = ?1",
                 [mutation_id],
                 |row| {
@@ -154,11 +180,11 @@ pub fn close_remote_mutation(
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
                         row.get::<_, String>(2)?,
-                        row.get::<_, Option<String>>(3)?,
                     ))
                 },
             )
             .with_context(|| format!("delete mutation {mutation_id} does not exist"))?,
+        RemoteMutationOperation::Upload => return Err(upload_closure_unsupported()),
     };
     if stored_target != target.api_url() {
         bail!(
@@ -167,7 +193,10 @@ pub fn close_remote_mutation(
             target.api_url()
         );
     }
-    if matches!(previous_phase.as_str(), "state_advanced" | "resolved") {
+    let previous_phase = MutationPhase::parse(&previous_phase)
+        .map_err(|unknown| unknown.in_mutation(operation_label(operation), mutation_id))?;
+    let mut local_effect_status = None;
+    if previous_phase.is_terminal() {
         bail!(
             "remote {:?} mutation {mutation_id} is already terminal in phase {previous_phase}",
             operation
@@ -179,10 +208,7 @@ pub fn close_remote_mutation(
             claim_existing_delete_staging(paths, &connection, target, &intent)?.local_effect_status,
         );
     }
-    if matches!(
-        local_effect_status.as_deref(),
-        Some("source_staging" | "source_staged")
-    ) {
+    if local_effect_status.is_some_and(DeleteLocalEffectStatus::owns_staged_source) {
         bail!(
             "delete mutation {mutation_id} owns an in-progress or staged local source; repair its bound backup/staging issue and reconcile it before operator closure"
         );
@@ -190,7 +216,7 @@ pub fn close_remote_mutation(
     if operation == RemoteMutationOperation::Delete {
         let mut intent = load_delete_mutation(&connection, mutation_id)?;
         if intent.relative_path.is_some() && intent.backup_enabled {
-            if intent.local_effect_status == "pending" {
+            if intent.local_effect_status == DeleteLocalEffectStatus::Pending {
                 prepare_delete_local_effects(paths, &connection, &intent).with_context(|| {
                     format!(
                         "delete mutation {mutation_id} cannot be operator-closed until its exact bound backup is prepared"
@@ -198,10 +224,10 @@ pub fn close_remote_mutation(
                 })?;
                 intent = load_delete_mutation(&connection, mutation_id)?;
             }
-            if intent.local_effect_status != "backup_ready" {
+            if intent.local_effect_status != DeleteLocalEffectStatus::BackupReady {
                 bail!(
                     "delete mutation {mutation_id} cannot be operator-closed with backup-enabled local effect in status {:?}",
-                    intent.local_effect_status
+                    intent.local_effect_status.as_str()
                 );
             }
             verify_bound_delete_backup(paths, &intent).with_context(|| {
@@ -217,26 +243,31 @@ pub fn close_remote_mutation(
     crate::store::bind_sync_target_for_state_write(paths, &transaction, target)?;
     let now_u64 = unix_timestamp()?;
     let now = i64::try_from(now_u64).context("timestamp does not fit into i64")?;
-    let table = match operation {
-        RemoteMutationOperation::Edit => "sync_edit_mutations",
-        RemoteMutationOperation::Delete => "sync_delete_mutations",
+    let (table, terminal_outcome, local_effect_guard) = match operation {
+        RemoteMutationOperation::Edit => (
+            "sync_edit_mutations",
+            EditTerminalOutcome::OperatorClosedUnresolved.as_str(),
+            String::new(),
+        ),
+        RemoteMutationOperation::Delete => (
+            "sync_delete_mutations",
+            DeleteTerminalOutcome::OperatorClosedUnresolved.as_str(),
+            format!(" AND {}", DeleteLocalEffectStatus::no_staged_source_sql()),
+        ),
+        RemoteMutationOperation::Upload => return Err(upload_closure_unsupported()),
     };
-    let local_effect_guard = match operation {
-        RemoteMutationOperation::Edit => "",
-        RemoteMutationOperation::Delete => {
-            " AND local_effect_status NOT IN ('source_staging', 'source_staged')"
-        }
-    };
+    let transition = PhaseTransition::Resolve;
     let changed = transaction
         .execute(
             &format!(
                 "UPDATE {table}
-                 SET phase = 'resolved', terminal_outcome = 'operator_closed_unresolved',
+                 SET phase = ?3, terminal_outcome = ?4,
                      updated_at_unix = ?1
                  WHERE mutation_id = ?2
-                   AND phase NOT IN ('state_advanced', 'resolved'){local_effect_guard}"
+                   AND {}{local_effect_guard}",
+                transition.guard().sql()
             ),
-            params![now, mutation_id],
+            params![now, mutation_id, transition.target(), terminal_outcome],
         )
         .context("failed to terminalize operator-closed mutation")?;
     if changed != 1 {
@@ -284,8 +315,8 @@ pub fn close_remote_mutation(
         operation,
         target_api_url: target.api_url().to_string(),
         title: title.clone(),
-        previous_phase,
-        terminal_outcome: "operator_closed_unresolved".to_string(),
+        previous_phase: previous_phase.as_str().to_string(),
+        terminal_outcome: terminal_outcome.to_string(),
         actor: actor.to_string(),
         reason: reason.to_string(),
         closed_at_unix: now_u64,
@@ -305,8 +336,8 @@ fn reconcile_edit_mutation_with_api<A: WikiWriteApi>(
     let connection = open_existing_sync_connection(paths, target)?;
     let intent = load_edit_mutation(&connection, mutation_id)?;
     require_edit_target(&intent, target)?;
-    if intent.phase == "state_advanced" || intent.phase == "resolved" {
-        return terminal_edit_report(&intent, target, api.request_count());
+    if let Some(terminal) = intent.phase.terminal_receipt(intent.terminal_outcome) {
+        return terminal_edit_report(&intent, terminal, target, api.request_count());
     }
     if intent.request_started_at_unix.is_none() {
         let detail = "the durable edit intent was never marked request-started; no MediaWiki edit request was issued";
@@ -315,7 +346,7 @@ fn reconcile_edit_mutation_with_api<A: WikiWriteApi>(
             &connection,
             target,
             &intent,
-            "not_applied",
+            EditTerminalOutcome::NotApplied,
             detail,
         )?;
         return Ok(edit_report(
@@ -354,7 +385,7 @@ fn reconcile_edit_mutation_with_api<A: WikiWriteApi>(
                 &connection,
                 target,
                 &intent,
-                "applied_then_changed",
+                EditTerminalOutcome::AppliedThenChanged,
                 &detail,
             )?;
             return Ok(edit_report(
@@ -407,7 +438,7 @@ fn reconcile_edit_mutation_with_api<A: WikiWriteApi>(
             mark_edit_mutation_unresolved(
                 &connection,
                 &intent,
-                "reconciliation_required",
+                UnresolvedPhase::ReconciliationRequired,
                 &detail,
             )?;
             return Ok(edit_report(
@@ -440,7 +471,7 @@ fn reconcile_edit_mutation_with_api<A: WikiWriteApi>(
                 &connection,
                 target,
                 &intent,
-                "applied_then_changed",
+                EditTerminalOutcome::AppliedThenChanged,
                 &detail,
             )?;
             return Ok(edit_report(
@@ -502,7 +533,7 @@ fn reconcile_edit_mutation_with_api<A: WikiWriteApi>(
                 &connection,
                 target,
                 &intent,
-                "not_applied",
+                EditTerminalOutcome::NotApplied,
                 &detail,
             )?;
             Ok(edit_report(
@@ -520,7 +551,12 @@ fn reconcile_edit_mutation_with_api<A: WikiWriteApi>(
             } else {
                 "the page is absent with no visible mutation marker; an applied-then-deleted edit cannot be excluded"
             };
-            mark_edit_mutation_unresolved(&connection, &intent, "outcome_ambiguous", detail)?;
+            mark_edit_mutation_unresolved(
+                &connection,
+                &intent,
+                UnresolvedPhase::OutcomeAmbiguous,
+                detail,
+            )?;
             Ok(edit_report(
                 &intent,
                 target,
@@ -538,7 +574,7 @@ fn reconcile_edit_mutation_with_api<A: WikiWriteApi>(
             mark_edit_mutation_unresolved(
                 &connection,
                 &intent,
-                "reconciliation_required",
+                UnresolvedPhase::ReconciliationRequired,
                 &detail,
             )?;
             Ok(edit_report(
@@ -557,11 +593,7 @@ fn load_edit_inspections(
     connection: &Connection,
     unresolved_only: bool,
 ) -> Result<Vec<RemoteMutationInspection>> {
-    let where_clause = if unresolved_only {
-        " WHERE phase NOT IN ('state_advanced', 'resolved')"
-    } else {
-        ""
-    };
+    let where_clause = unresolved_where_clause(unresolved_only);
     let sql = format!(
         "SELECT mutation_id, target_api_url, title, phase,
                 request_started_at_unix, terminal_outcome,
@@ -572,33 +604,41 @@ fn load_edit_inspections(
     let rows = statement.query_map([], decode_edit_inspection)?;
     let mut inspections = rows
         .collect::<rusqlite::Result<Vec<_>>>()
-        .context("failed to decode edit mutation list")?;
+        .context("failed to decode edit mutation list")?
+        .into_iter()
+        .collect::<Result<Vec<_>>>()?;
     attach_closure_receipts(connection, &mut inspections)?;
     Ok(inspections)
+}
+
+fn unresolved_where_clause(unresolved_only: bool) -> String {
+    if unresolved_only {
+        format!(" WHERE {}", PhaseGuard::Unresolved.sql())
+    } else {
+        String::new()
+    }
 }
 
 fn load_delete_inspections(
     connection: &Connection,
     unresolved_only: bool,
 ) -> Result<Vec<RemoteMutationInspection>> {
-    let where_clause = if unresolved_only {
-        " WHERE phase NOT IN ('state_advanced', 'resolved')"
-    } else {
-        ""
-    };
+    let where_clause = unresolved_where_clause(unresolved_only);
     let sql = format!(
         "SELECT mutation_id, target_api_url, title, phase,
                 request_started_at_unix, terminal_outcome,
                 expected_revision_id, response_log_id, detail, relative_path,
                 backup_enabled, backup_directory, backup_path,
-                local_content_sha256, local_effect_status
+                local_content_sha256, local_effect_status, response_kind
          FROM sync_delete_mutations{where_clause}"
     );
     let mut statement = connection.prepare(&sql)?;
     let rows = statement.query_map([], decode_delete_inspection)?;
     let mut inspections = rows
         .collect::<rusqlite::Result<Vec<_>>>()
-        .context("failed to decode delete mutation list")?;
+        .context("failed to decode delete mutation list")?
+        .into_iter()
+        .collect::<Result<Vec<_>>>()?;
     attach_closure_receipts(connection, &mut inspections)?;
     Ok(inspections)
 }
@@ -617,7 +657,7 @@ fn load_edit_inspection(
             decode_edit_inspection,
         )
         .optional()?
-        .with_context(|| format!("edit mutation {mutation_id} does not exist"))?;
+        .with_context(|| format!("edit mutation {mutation_id} does not exist"))??;
     inspection.closure = load_closure_receipt(
         connection,
         RemoteMutationOperation::Edit,
@@ -636,13 +676,13 @@ fn load_delete_inspection(
                     request_started_at_unix, terminal_outcome,
                     expected_revision_id, response_log_id, detail, relative_path,
                     backup_enabled, backup_directory, backup_path,
-                    local_content_sha256, local_effect_status
+                    local_content_sha256, local_effect_status, response_kind
              FROM sync_delete_mutations WHERE mutation_id = ?1",
             [mutation_id],
             decode_delete_inspection,
         )
         .optional()?
-        .with_context(|| format!("delete mutation {mutation_id} does not exist"))?;
+        .with_context(|| format!("delete mutation {mutation_id} does not exist"))??;
     inspection.closure = load_closure_receipt(
         connection,
         RemoteMutationOperation::Delete,
@@ -651,49 +691,79 @@ fn load_delete_inspection(
     Ok(inspection)
 }
 
-fn decode_edit_inspection(row: &rusqlite::Row<'_>) -> rusqlite::Result<RemoteMutationInspection> {
-    Ok(RemoteMutationInspection {
-        mutation_id: row.get(0)?,
+fn decode_edit_inspection(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<Result<RemoteMutationInspection>> {
+    let mutation_id = row.get(0)?;
+    let lifecycle = decode_edit_lifecycle(
+        mutation_id,
+        &row.get::<_, String>(3)?,
+        row.get::<_, Option<String>>(5)?.as_deref(),
+    );
+    let (phase, terminal_outcome) = match lifecycle {
+        Ok(lifecycle) => lifecycle,
+        Err(error) => return Ok(Err(error)),
+    };
+    Ok(Ok(RemoteMutationInspection {
+        mutation_id,
         operation: RemoteMutationOperation::Edit,
         target_api_url: row.get(1)?,
         title: row.get(2)?,
         relative_path: Some(row.get(9)?),
-        phase: row.get(3)?,
+        phase: phase.as_str().to_string(),
         request_started: row.get::<_, Option<i64>>(4)?.is_some(),
-        terminal_outcome: row.get(5)?,
+        terminal_outcome: terminal_outcome.map(|outcome| outcome.as_str().to_string()),
         expected_revision_id: row.get(6)?,
         response_revision_id: row.get(7)?,
         deletion_log_id: None,
+        file_sha1: None,
         local_effect_policy: None,
         local_effect_status: None,
         detail: row.get(8)?,
         closure: None,
-    })
+    }))
 }
 
-fn decode_delete_inspection(row: &rusqlite::Row<'_>) -> rusqlite::Result<RemoteMutationInspection> {
-    Ok(RemoteMutationInspection {
-        mutation_id: row.get(0)?,
+fn decode_delete_inspection(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<Result<RemoteMutationInspection>> {
+    let mutation_id = row.get(0)?;
+    let lifecycle = decode_delete_lifecycle(
+        mutation_id,
+        &row.get::<_, String>(3)?,
+        row.get::<_, Option<String>>(15)?.as_deref(),
+        row.get::<_, Option<String>>(5)?.as_deref(),
+        &row.get::<_, String>(14)?,
+    );
+    let lifecycle = match lifecycle {
+        Ok(lifecycle) => lifecycle,
+        Err(error) => return Ok(Err(error)),
+    };
+    Ok(Ok(RemoteMutationInspection {
+        mutation_id,
         operation: RemoteMutationOperation::Delete,
         target_api_url: row.get(1)?,
         title: row.get(2)?,
         relative_path: row.get(9)?,
-        phase: row.get(3)?,
+        phase: lifecycle.phase.as_str().to_string(),
         request_started: row.get::<_, Option<i64>>(4)?.is_some(),
-        terminal_outcome: row.get(5)?,
+        terminal_outcome: lifecycle
+            .terminal_outcome
+            .map(|outcome| outcome.as_str().to_string()),
         expected_revision_id: row.get(6)?,
         response_revision_id: None,
         deletion_log_id: row.get(7)?,
+        file_sha1: None,
         local_effect_policy: Some(crate::RemoteDeleteLocalEffectPolicy {
             backup_enabled: row.get::<_, i64>(10)? != 0,
             backup_directory: row.get(11)?,
             backup_path: row.get(12)?,
             local_content_sha256: row.get(13)?,
         }),
-        local_effect_status: row.get(14)?,
+        local_effect_status: Some(lifecycle.local_effect_status.as_str().to_string()),
         detail: row.get(8)?,
         closure: None,
-    })
+    }))
 }
 
 fn attach_closure_receipts(
@@ -721,22 +791,31 @@ fn load_closure_receipt(
             params![operation_label(operation), mutation_id],
             |row| {
                 let closed_at = row.get::<_, i64>(6)?;
-                Ok(crate::RemoteMutationClosureReceipt {
+                let previous_phase = match MutationPhase::parse(&row.get::<_, String>(3)?) {
+                    Ok(phase) => phase,
+                    Err(unknown) => {
+                        return Ok(Err(
+                            unknown.in_mutation(operation_label(operation), mutation_id)
+                        ));
+                    }
+                };
+                Ok(Ok(crate::RemoteMutationClosureReceipt {
                     closure_id: row.get(0)?,
                     mutation_id,
                     operation,
                     target_api_url: row.get(1)?,
                     title: row.get(2)?,
-                    previous_phase: row.get(3)?,
+                    previous_phase: previous_phase.as_str().to_string(),
                     actor: row.get(4)?,
                     reason: row.get(5)?,
                     closed_at_unix: u64::try_from(closed_at)
                         .map_err(|_| rusqlite::Error::IntegralValueOutOfRange(6, closed_at))?,
-                })
+                }))
             },
         )
         .optional()
-        .context("failed to load operator mutation closure receipt")
+        .context("failed to load operator mutation closure receipt")?
+        .transpose()
 }
 
 fn verify_edit_revision(
@@ -779,31 +858,40 @@ fn require_edit_target(intent: &EditMutationIntent, target: &SyncTargetIdentity)
     Ok(())
 }
 
+/// Report a terminal receipt without contacting the wiki or writing the store.
 fn terminal_edit_report(
     intent: &EditMutationIntent,
+    terminal: TerminalReceipt<EditTerminalOutcome>,
     target: &SyncTargetIdentity,
     request_count: usize,
 ) -> Result<RemoteMutationReconciliationReport> {
-    let (status, detail) = match (intent.phase.as_str(), intent.terminal_outcome.as_deref()) {
-        ("state_advanced", _) => (
+    let (status, detail) = match terminal {
+        TerminalReceipt::StateAdvanced => (
             RemoteMutationReconciliationStatus::StateAdvanced,
-            "edit mutation already advanced sync state".to_string(),
+            "edit mutation already advanced sync state",
         ),
-        ("resolved", Some("not_applied")) => (
+        TerminalReceipt::Resolved(EditTerminalOutcome::NotApplied) => (
             RemoteMutationReconciliationStatus::NotApplied,
-            "edit mutation was already resolved as not applied".to_string(),
+            "edit mutation was already resolved as not applied",
         ),
-        ("resolved", Some("applied_then_changed")) => (
+        TerminalReceipt::Resolved(EditTerminalOutcome::AppliedThenChanged) => (
             RemoteMutationReconciliationStatus::AppliedThenChanged,
-            "edit mutation was already resolved as applied then changed".to_string(),
+            "edit mutation was already resolved as applied then changed",
         ),
-        _ => bail!(
-            "edit mutation {} has unsupported terminal phase/outcome {}/{:?}",
-            intent.mutation_id,
-            intent.phase,
-            intent.terminal_outcome
+        TerminalReceipt::Resolved(EditTerminalOutcome::OperatorClosedUnresolved) => (
+            RemoteMutationReconciliationStatus::OperatorClosed,
+            "edit mutation was closed by an operator without a claimed remote outcome",
+        ),
+        TerminalReceipt::ResolvedWithoutOutcome => (
+            RemoteMutationReconciliationStatus::OutcomeNotRecorded,
+            "edit mutation was resolved before the sync store recorded terminal outcomes; its remote outcome was not recorded",
+        ),
+        TerminalReceipt::Resolved(EditTerminalOutcome::StateAdvanced) => bail!(
+            "edit mutation {} is resolved with terminal outcome state_advanced, which only a receipt in phase state_advanced records",
+            intent.mutation_id
         ),
     };
+    let detail = detail.to_string();
     Ok(RemoteMutationReconciliationReport {
         mutation_id: intent.mutation_id,
         operation: RemoteMutationOperation::Edit,
@@ -842,6 +930,7 @@ fn operation_sort_key(operation: RemoteMutationOperation) -> u8 {
     match operation {
         RemoteMutationOperation::Edit => 0,
         RemoteMutationOperation::Delete => 1,
+        RemoteMutationOperation::Upload => 2,
     }
 }
 
@@ -849,5 +938,6 @@ fn operation_label(operation: RemoteMutationOperation) -> &'static str {
     match operation {
         RemoteMutationOperation::Edit => "edit",
         RemoteMutationOperation::Delete => "delete",
+        RemoteMutationOperation::Upload => "upload",
     }
 }

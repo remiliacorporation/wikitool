@@ -21,7 +21,10 @@ or everything, never a single title. To check whether a page exists, use
 `source wiki-search TERM --what nearmatch`; some wikis reject `--what title`.
 Exported files carry a metadata header; `article lint` reads only paths under
 `wiki_content/`, `templates/` or `.wikitool/`, so copy a candidate to
-`.wikitool/drafts/TITLE.wiki` and pass `--title`.
+`.wikitool/drafts/TITLE.wiki` and pass `--title`. Batch selectors (`--path`,
+`--titles-file`, `--changed`) cover `wiki_content/` only; lint an off-mirror
+draft one path at a time. `export --urls-file` writes Markdown only; export
+several pages as wikitext with one `export PAGE_URL` call each.
 
 For template parameters, start with `templates show NAME --format json --view brief` and follow
 its full-view command when all parameters are needed. This is local catalog
@@ -49,8 +52,8 @@ Load the procedure that applies:
 - [macOS release trust](references/macos-release-trust.md): first-run Gatekeeper
   quarantine on unsigned macOS releases.
 
-Use the selected adapter for site policy. `wiki-writing` owns substantial prose,
-`prose-review` editorial assessment, and `wiki-interview` missing human knowledge.
+Use the selected adapter for site policy. `wiki-writing` owns substantial prose
+and the human knowledge it needs, and `prose-review` editorial assessment.
 Mechanical checks and safe fixes do not certify prose or authorize new categories.
 Verify suspected missing pages and redirect failures against the intended live API.
 

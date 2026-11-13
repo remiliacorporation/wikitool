@@ -84,7 +84,37 @@ pub enum LintRuleLevel {
     Error,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+impl LintRuleLevel {
+    pub fn is_ignore(&self) -> bool {
+        matches!(self, Self::Ignore)
+    }
+}
+
+/// The level of a rule that cannot tell a style fault from a name it matches,
+/// such as a heading that begins with "The" because a band is called that.
+/// Such a rule can only warn; an adapter cannot make it block acceptance.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LintAdvisoryLevel {
+    #[default]
+    Ignore,
+    Warning,
+}
+
+impl LintAdvisoryLevel {
+    pub fn is_ignore(&self) -> bool {
+        matches!(self, Self::Ignore)
+    }
+}
+
+/// Lead paragraphs allowed when `lead_paragraph_limit` is enabled without
+/// `max_lead_paragraphs`.
+pub const DEFAULT_MAX_LEAD_PARAGRAPHS: usize = 4;
+
+/// Style rule levels default to off and are omitted from the serialized policy
+/// while off, so adding a rule leaves the publication policy hash of an adapter
+/// that does not enable it unchanged.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct LintRules {
     pub forbid_curly_quotes: bool,
@@ -97,6 +127,57 @@ pub struct LintRules {
     /// target wiki. MediaWiki itself does not impose this editorial policy.
     #[serde(default)]
     pub citation_needed: LintRuleLevel,
+    /// `style.heading_leading_article`: a heading begins with "The", "A" or "An".
+    #[serde(default, skip_serializing_if = "LintAdvisoryLevel::is_ignore")]
+    pub heading_leading_article: LintAdvisoryLevel,
+    /// `style.heading_trailing_punctuation`: a heading ends in punctuation.
+    #[serde(default, skip_serializing_if = "LintAdvisoryLevel::is_ignore")]
+    pub heading_trailing_punctuation: LintAdvisoryLevel,
+    /// `style.heading_markup`: a heading contains a template, a ref or math.
+    #[serde(default, skip_serializing_if = "LintRuleLevel::is_ignore")]
+    pub heading_markup: LintRuleLevel,
+    /// `style.heading_repeats_title`: a heading repeats the article title.
+    #[serde(default, skip_serializing_if = "LintAdvisoryLevel::is_ignore")]
+    pub heading_repeats_title: LintAdvisoryLevel,
+    /// `style.consecutive_blank_lines`: two or more blank lines in a row.
+    #[serde(default, skip_serializing_if = "LintRuleLevel::is_ignore")]
+    pub consecutive_blank_lines: LintRuleLevel,
+    /// `structure.lead_paragraph_limit`: the lead has more paragraphs than
+    /// `max_lead_paragraphs`.
+    #[serde(default, skip_serializing_if = "LintRuleLevel::is_ignore")]
+    pub lead_paragraph_limit: LintRuleLevel,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_lead_paragraphs: Option<usize>,
+}
+
+/// The ontology a wiki types its pages and infobox fields with. The adapter
+/// names it so `wikitool ontology` needs no flags for the adapter's wiki.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct OntologyRules {
+    /// The wiki's product name in the ontology's `product-uses.tsv`.
+    pub product: String,
+    /// An identifier for the ontology, recorded in the export's metadata.
+    /// Wikitool never fetches it, so it need not resolve.
+    pub source: String,
+    /// The prefix of the wiki's own terms, such as `wiki`.
+    pub local_prefix: String,
+    /// The namespace IRI of the wiki's own terms.
+    pub local_namespace: String,
+    /// The directory holding `product-uses.tsv` and the pinned extracts,
+    /// relative to the ontology directory, such as `v0.1.0/imports`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imports: Option<String>,
+    /// CURIE prefixes whose renames are left out of the export, matched
+    /// exactly against the part before the colon.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude_rename_prefixes: Vec<String>,
+    /// The top-level export sections that `generate` writes into
+    /// `Module:Ontology/data`, such as `["classes", "schemes"]`. Omitted
+    /// means every section. `source` is always written. The vendored export
+    /// stays complete either way.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub module_sections: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -116,6 +197,8 @@ pub struct SiteAdapter {
     pub lint: LintRules,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extension_contracts: Vec<ExtensionContractRule>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ontology: Option<OntologyRules>,
     pub resolved_at: String,
 }
 

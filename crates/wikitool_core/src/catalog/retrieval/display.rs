@@ -243,11 +243,7 @@ pub(super) fn chunk_allowed_for_audience(
     }
 
     let prose_tail = normalize_spaces(strip_leading_authoring_metadata(&normalized));
-    if prose_tail.is_empty() || chunk_word_like_count(&prose_tail) < 5 {
-        return false;
-    }
-
-    true
+    !prose_tail.is_empty() && chunk_word_like_count(&prose_tail) >= 5
 }
 
 pub(super) fn sanitize_chunk_for_audience(

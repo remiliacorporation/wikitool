@@ -1,6 +1,6 @@
 ---
 name: wiki-writing
-description: Draft or substantially revise sourced encyclopedic MediaWiki prose.
+description: Draft or substantially revise sourced encyclopedic MediaWiki prose, including asking a person for the knowledge it needs.
 ---
 
 # Wiki writing
@@ -18,21 +18,43 @@ reads only the local index and reports `likely_missing` for a page that exists.
 Write an off-wiki draft to `.wikitool/drafts/TITLE.wiki`, named as the page
 title, and pass `--title` to `article lint` and `review --draft-path`. Content
 under `wiki_content/` is the synced mirror, not a drafting area. When an
-interview ledger exists, read it and its open items before writing; ledger
-text under human notes is testimony to attribute, not sourced fact.
+interview ledger exists, read it and its open items before writing.
 
 Establish support for material claims before asserting them. Keep sources,
-human testimony, interpretation and unresolved claims distinct. Use the site's
-adapter guidance and inspect local templates when integration matters; retrieval
-neighbors do not determine article structure or approve category membership.
+human testimony, interpretation and unresolved claims distinct in your working
+record; the published voice is a separate decision that site policy makes.
+Read the site adapter's guidance, then follow [Human notes](references/human-notes.md)
+for how supplied knowledge reaches the page. On a wiki that is a first-party
+record of its own subject, what the contributor supplies as fact goes into the
+wiki's voice, whoever they are. Elsewhere, publish testimony with attribution
+or hold it as a lead. Where the adapter sets its own source-support
+thresholds, they replace the defaults in the references.
+
+Doubt is a question, not a hedge. When a supplied statement is implausible on
+its face, contradicts an inspected source or another statement, or alleges
+something about an identifiable person or outside organization, ask the contributor
+for its basis before writing, then write what is resolved. Inspect local
+templates when integration matters; retrieval neighbors do not determine
+article structure or approve category membership.
+
+Write in a plain, confident encyclopedic register: concrete actors, actions
+and dates, no hedge on an established or first-party fact, no stacked
+qualifiers. Attribution is information: use it for quotations, opinions,
+interpretations, disputed claims and allegations. A single-source account such
+as a memoir needs one frame per passage. An allegation about a named person,
+such as one pleaded in a lawsuit, keeps its attribution in every paragraph that
+states it.
 
 Choose detail for the work:
 - [Evidence to prose](references/evidence-to-prose.md): research, attribution,
   claim support, quotations and source limits.
-- [Human notes](references/human-notes.md): supplied accounts, drafts or private
-  context that must survive editing without becoming unsourced fact.
+- [Human notes](references/human-notes.md): supplied accounts, drafts and
+  firsthand knowledge, asking for what is missing, how it reaches the published
+  voice, and private context.
 - [MediaWiki structure](references/mediawiki-structure.md): templates, categories,
   references and article integration.
+- [Interview ledger](references/interview-ledger.md): a durable record of what a
+  person told you, only when it must outlast the session.
 - [Frozen packets](references/frozen-packet.md): only when a supplied evaluation
   explicitly limits inputs and deliverables.
 
@@ -44,8 +66,12 @@ A small sourced revision need not manufacture a separate research dossier.
 Lint the exact candidate and inspect any mechanical repairs. For a finished new
 or substantially revised article, obtain an independent `prose-review` invocation
 from the exact candidate and sources, without supplying an intended verdict.
-Resolve material findings and re-review substantive changes. If independent review
-is unavailable, deliver the completed draft with that limit; self-review cannot
+Resolve material findings and re-review substantive changes. A page edited
+after its review, including a change of voice or attribution, goes back for
+re-review or is reported as unreviewed. Hand off for acceptance with the hash
+the final review recorded, and pass it as `article accept --content-sha256`
+so Wikitool refuses any bytes other than those reviewed. If independent review is
+unavailable, deliver the completed draft with that limit; self-review cannot
 satisfy it.
 
 A draft request ends with the draft and its evidence/review limits. Publication

@@ -10,6 +10,7 @@ For every sensitive claim:
 - inspect the exact source passage;
 - prefer high-quality reporting, official records within their scope, or direct on-record statements;
 - require explicit attribution for allegations, opinion, diagnosis, or contested characterization;
+- for allegations drawn from a complaint or other one-sided filing, require that attribution in every paragraph that states what a named person did or said, including messages the filing quotes; a framing sentence at the head of the section does not cover later paragraphs;
 - preserve legal status and time: allegation, charge, plea, conviction, dismissal, settlement, or later correction are not interchangeable;
 - avoid inference from images, usernames, social graphs, transaction proximity, deleted posts, or community repetition;
 - confirm that inclusion is necessary and proportionate to an encyclopedic account.
@@ -26,6 +27,10 @@ Block publication when:
 - private information is unnecessary to the article;
 - a correction, acquittal, dismissal, or material update is omitted;
 - the only rationale for inclusion is notoriety, shock, or a local relationship.
+
+## What is not a sensitive claim
+
+On a wiki whose site policy treats its contributors as first-party sources, a person's own statement of their work, credits, roles and intentions, and a contributor's account of the community's culture and terminology, are not allegations or contested characterizations. They need no hedge. Apply this procedure to what such statements say about other identifiable people, not to the person's account of themselves.
 
 ## Tone and placement
 

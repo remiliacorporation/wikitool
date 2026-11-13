@@ -5,11 +5,14 @@ use std::path::{Path, PathBuf};
 use tempfile::tempdir;
 
 use crate::authoring::{
-    article_scout::build_article_scout,
+    article_scout::{build_article_scout, build_article_scout_with_template_catalog},
     contract_traversal::{
         AuthoringContractPlanOptions, build_authoring_contract_plan_for_connection,
     },
-    model::{ArticleScoutIntent, ContextSurfaceSource, LocalExistenceState},
+    model::{
+        ArticleScoutIntent, ContextSurfaceSource, InfoboxAvailabilityCheck, LocalExistenceState,
+        UnavailableInfoboxPreference,
+    },
 };
 use crate::catalog::authoring::{
     AuthoringContextOptions, AuthoringContextOutcome, AuthoringContractProfile,
@@ -40,7 +43,8 @@ use crate::filesystem::{Namespace, ScanOptions};
 use crate::runtime::{ResolvedPaths, ValueSource};
 use crate::site::{
     AuthoringRules, CategoryRules, CitationRules, CitationTemplateRule, InfoboxPreference,
-    LintRules, SiteAdapter, TemplateRules, sync_template_catalog_with_adapter,
+    LintRules, SiteAdapter, TemplateRules, load_local_template_catalog,
+    sync_template_catalog_with_adapter,
 };
 
 fn write_file(path: &Path, content: &str) {
@@ -118,8 +122,10 @@ fn test_site_adapter() -> SiteAdapter {
             forbid_placeholder_fragments: Vec::new(),
             proper_nouns: Vec::new(),
             citation_needed: crate::site::LintRuleLevel::Ignore,
+            ..LintRules::default()
         },
         extension_contracts: Vec::new(),
+        ontology: None,
         resolved_at: "1739000000".to_string(),
     }
 }
@@ -1973,6 +1979,171 @@ fn build_article_scout_uses_neutral_surfaces_without_forced_type() {
             .all(|entry| {
                 entry.source == ContextSurfaceSource::Adapter && entry.supporting_pages.is_empty()
             })
+    );
+}
+
+fn hyperstition_scout_report(
+    paths: &ResolvedPaths,
+) -> crate::catalog::model::AuthoringContextPacket {
+    write_file(
+        &paths
+            .wiki_content_dir
+            .join("Main")
+            .join("Hyperstition_concept.wiki"),
+        "'''Hyperstition concept''' is a concept page.\n== Philosophy ==\nHyperstition concept grounding text.",
+    );
+    rebuild_index(paths, &ScanOptions::default()).expect("rebuild");
+    match build_authoring_context(
+        paths,
+        Some("Hyperstition"),
+        None,
+        &AuthoringContextOptions::default(),
+    )
+    .expect("authoring pack")
+    {
+        AuthoringContextOutcome::Found(report) => *report,
+        other => panic!("expected found authoring pack, got {other:?}"),
+    }
+}
+
+fn infobox_titles(article_scout: &crate::authoring::model::ArticleScoutResult) -> Vec<&str> {
+    article_scout
+        .local_integration
+        .available_infoboxes
+        .iter()
+        .map(|entry| entry.template_title.as_str())
+        .collect()
+}
+
+#[test]
+fn article_scout_withholds_preferred_infobox_the_template_catalog_lacks() {
+    let temp = tempdir().expect("tempdir");
+    let project_root = temp.path().join("project");
+    fs::create_dir_all(&project_root).expect("create project root");
+    let paths = paths(&project_root);
+    write_file(
+        &paths
+            .templates_dir
+            .join("infobox")
+            .join("Template_Infobox_concept.wiki"),
+        "{| class=\"infobox\"\n! {{{name|}}}\n|-\n| {{{founder|}}}\n|}",
+    );
+    let report = hyperstition_scout_report(&paths);
+    let adapter = test_site_adapter();
+
+    // No catalog: preferences are still listed, but the report says they were not checked.
+    let unchecked = build_article_scout(&report, &adapter, ArticleScoutIntent::New);
+    assert_eq!(
+        unchecked.local_integration.infobox_availability,
+        InfoboxAvailabilityCheck::NotChecked
+    );
+    assert_eq!(
+        infobox_titles(&unchecked),
+        vec!["Template:Infobox concept", "Template:Infobox organization"]
+    );
+    assert!(
+        unchecked
+            .local_integration
+            .unavailable_infobox_preferences
+            .is_empty()
+    );
+
+    let catalog = load_local_template_catalog(&paths, &adapter)
+        .expect("build catalog")
+        .expect("catalog has the concept template");
+    let checked = build_article_scout_with_template_catalog(
+        &report,
+        &adapter,
+        Some(&catalog),
+        ArticleScoutIntent::New,
+    );
+    assert_eq!(
+        checked.local_integration.infobox_availability,
+        InfoboxAvailabilityCheck::CheckedAgainstTemplateCatalog
+    );
+    assert_eq!(infobox_titles(&checked), vec!["Template:Infobox concept"]);
+    assert_eq!(
+        checked.local_integration.unavailable_infobox_preferences,
+        vec![UnavailableInfoboxPreference {
+            template_title: "Template:Infobox organization".to_string(),
+            subject_type: "organization".to_string(),
+        }]
+    );
+    let concept = &checked.local_integration.available_infoboxes[0];
+    assert!(
+        concept.parameter_keys.contains(&"name".to_string()),
+        "catalog parameters fill an adapter entry the contract index left empty: {:?}",
+        concept.parameter_keys
+    );
+    let serialized = serde_json::to_value(&checked).expect("serialize scout");
+    assert_eq!(
+        serialized["local_integration"]["unavailable_infobox_preferences"][0]["template_title"],
+        "Template:Infobox organization"
+    );
+    assert_eq!(
+        serialized["local_integration"]["infobox_availability"],
+        "checked_against_template_catalog"
+    );
+}
+
+#[test]
+fn article_scout_offers_preferred_infobox_the_template_catalog_has_under_mediawiki_title_rules() {
+    let temp = tempdir().expect("tempdir");
+    let project_root = temp.path().join("project");
+    fs::create_dir_all(&project_root).expect("create project root");
+    let paths = paths(&project_root);
+    for name in [
+        "Template_Infobox_concept.wiki",
+        "Template_Infobox_organization.wiki",
+    ] {
+        write_file(
+            &paths.templates_dir.join("infobox").join(name),
+            "{| class=\"infobox\"\n! {{{name|}}}\n|}",
+        );
+    }
+    let report = hyperstition_scout_report(&paths);
+    // An adapter may spell a title with a lowercase first letter or underscores;
+    // MediaWiki treats both as the same page.
+    let mut adapter = test_site_adapter();
+    adapter.templates.infobox_preferences[1].template_title =
+        "Template:infobox_organization".to_string();
+
+    let catalog = load_local_template_catalog(&paths, &adapter)
+        .expect("build catalog")
+        .expect("catalog has both templates");
+    let checked = build_article_scout_with_template_catalog(
+        &report,
+        &adapter,
+        Some(&catalog),
+        ArticleScoutIntent::New,
+    );
+
+    assert_eq!(
+        infobox_titles(&checked),
+        vec!["Template:Infobox concept", "Template:Infobox organization"]
+    );
+    assert!(
+        checked
+            .local_integration
+            .unavailable_infobox_preferences
+            .is_empty()
+    );
+    // The offered spelling is the catalog's, which lint's exact lookup accepts.
+    for title in infobox_titles(&checked) {
+        assert!(matches!(
+            crate::site::find_template_catalog_entry(&catalog, title),
+            crate::site::TemplateCatalogEntryLookup::Found(_)
+        ));
+    }
+    let organization = catalog
+        .entries
+        .iter()
+        .find(|entry| entry.template_title == "Template:Infobox organization")
+        .expect("organization entry");
+    assert!(
+        organization
+            .recommendation_tags
+            .contains(&"preferred_infobox_template".to_string())
     );
 }
 

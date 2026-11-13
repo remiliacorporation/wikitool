@@ -64,6 +64,9 @@ pub(crate) fn run_mutation(runtime: &RuntimeOptions, args: MutationArgs) -> Resu
                     "local_effect_status: {}",
                     receipt.local_effect_status.as_deref().unwrap_or("<none>")
                 );
+                if let Some(file_sha1) = &receipt.file_sha1 {
+                    println!("file_sha1: {file_sha1}");
+                }
                 println!("detail: {}", receipt.detail.as_deref().unwrap_or("<none>"));
                 if let Some(closure) = receipt.closure {
                     println!("closure_id: {}", closure.closure_id);
@@ -85,11 +88,20 @@ pub(crate) fn run_mutation(runtime: &RuntimeOptions, args: MutationArgs) -> Resu
                 mutation_id,
                 &config,
             )?;
-            let terminal = !matches!(
-                report.status,
+            // Only an open receipt fails the command; reconciling again cannot
+            // change a terminal one, however it ended.
+            let terminal = match report.status {
                 RemoteMutationReconciliationStatus::StillAmbiguous
-                    | RemoteMutationReconciliationStatus::ReconciliationRequired
-            );
+                | RemoteMutationReconciliationStatus::ReconciliationRequired => false,
+                RemoteMutationReconciliationStatus::StateAdvanced
+                | RemoteMutationReconciliationStatus::Applied
+                | RemoteMutationReconciliationStatus::NotApplied
+                | RemoteMutationReconciliationStatus::AppliedThenChanged
+                | RemoteMutationReconciliationStatus::AppliedThenRecreated
+                | RemoteMutationReconciliationStatus::RemotePresentAfterMissing
+                | RemoteMutationReconciliationStatus::OperatorClosed
+                | RemoteMutationReconciliationStatus::OutcomeNotRecorded => true,
+            };
             if format.is_json() {
                 println!("{}", serde_json::to_string_pretty(&report)?);
             } else {

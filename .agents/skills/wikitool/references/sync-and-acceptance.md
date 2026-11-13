@@ -22,10 +22,19 @@ come from `WIKITOOL_BOT_USER` and `WIKITOOL_BOT_PASS` and are checked at apply.
 Delete also previews first. Inspect endpoint, title, observed revision, reason,
 local effect, and plan ID before applying the exact plan.
 
+`upload --file PATH --filename "Name.jpg" --text-file PATH --summary TEXT`
+previews one media upload without credentials. Inspect endpoint, title, SHA-1,
+observed remote file, duplicate titles, and plan ID before applying the exact
+plan. An existing file with different content needs a planned `--replace`;
+identical content is already present and nothing is sent. An upload warning
+means nothing was stored: report its keys and do not work around it. Uploads
+stay outside `wiki_content/` and the sync baseline.
+
 ## Ambiguous outcomes
 
 Never replay an uncertain write. Inspect `mutation list` and `mutation show`,
-then use `mutation reconcile` for the edit or delete. If remote truth remains
+then use `mutation reconcile` for the edit, delete or upload; an upload settles
+by the remote file's SHA-1 and has no operator closure. If remote truth remains
 permanently unavailable, explicit operator closure records uncertainty rather
 than success, invalidates that title's baseline, and requires `pull --full --all`
 before another write. Local drift may additionally require deliberate
@@ -40,9 +49,18 @@ does not establish that absence or clear the invalidation.
 
 Follow the project's human publication policy. Never invent a human decision
 or self-attest to satisfy it. `article accept` binds the exact bytes, target, and
-adapter policy to a named decision. A coherent multi-article decision can use
+adapter policy to a named decision. Pass `--content-sha256` with the hash of the
+bytes the human read, or that the review recorded; accept then refuses, writing
+nothing, if the file no longer has that hash. The hash covers the raw file
+bytes; `article lint PATH --format json` reports it as `content_sha256` without
+recording anything. A coherent multi-article decision can use
 `article changeset prepare` then `article changeset accept`; later byte changes
-invalidate individual members. Prose, target, or policy changes invalidate
+invalidate individual members. `prepare` freezes each member's hash and lint
+result with one truthful `--prose-origin` in the manifest named by `--output`.
+`accept` refuses while any member has a lint error and, by default, a warning;
+`--warnings accept` records the human's decision to accept warnings. The
+manifest's hashes are the bytes to compare with any independent review record
+before asking for the decision. Prose, target, or policy changes invalidate
 acceptance. Legacy JSON ledgers cannot authorize publication.
 
 The editor name is self-reported and unauthenticated. Inspect acceptance

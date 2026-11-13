@@ -1,0 +1,345 @@
+//! Mechanical article lifecycle in an isolated project: explicit adapter initialization,
+//! deterministic lint and safe fixes, the exact-content acceptance store, draft promotion, and
+//! refusal to promote a draft that changed after acceptance.
+//!
+//! Ported from `wikitest/scenarios/mechanical/article-lifecycle/scenario.json`; comments name
+//! the scenario's step IDs. One test, because each stage acts on the draft the previous stage
+//! left behind.
+
+use std::path::PathBuf;
+
+use wikitest::harness::Project;
+
+fn fixture(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../wikitest/scenarios/mechanical/article-lifecycle/fixtures")
+        .join(name)
+}
+
+const DRAFT: &str = ".wikitool/drafts/Example_Draft.wiki";
+const PROMOTED: &str = "wiki_content/Main/Example_Draft.wiki";
+const ACCEPTED_SHA256: &str = "c9c8787e616a883af5913ff71b17bd19b1e364fe957c01cfb5c0fef115a61cfe";
+
+#[test]
+fn lint_fix_accept_promote_and_refuse_stale_acceptance() {
+    let wt = Project::new(env!("CARGO_BIN_EXE_wikitool"));
+
+    // --- Initialize generically, then with an explicit site adapter ---
+
+    // initialize-generic
+    wt.run(&[
+        "init",
+        "--templates",
+        "--api-url",
+        "https://wikitest.invalid/api.php",
+        "--no-network",
+    ])
+    .assert_code(0);
+    wt.assert_file_exists(".wikitool/config.toml");
+    wt.assert_file_exists(".wikitool/parser-config.json");
+
+    // install-adapter
+    wt.install(
+        fixture("site-adapter.toml"),
+        "site-adapter/site-adapter.toml",
+    );
+
+    // initialize-adapter
+    wt.run(&[
+        "init",
+        "--templates",
+        "--no-network",
+        "--api-url",
+        "https://wikitest.invalid/api.php",
+        "--force",
+        "--adapter-path",
+        "site-adapter/site-adapter.toml",
+    ])
+    .assert_code(0);
+    wt.assert_file_contains(".wikitool/config.toml", "site-adapter/site-adapter.toml");
+
+    // install-quality-template, install-reflist-template, install-cite-template,
+    // install-broken-draft
+    wt.install(
+        fixture("Template_Article_quality.wiki"),
+        "templates/misc/Template_Article_quality.wiki",
+    );
+    wt.install(
+        fixture("Template_Reflist.wiki"),
+        "templates/misc/Template_Reflist.wiki",
+    );
+    wt.install(
+        fixture("Template_Cite_web.wiki"),
+        "templates/cite/Template_Cite_web.wiki",
+    );
+    wt.install(fixture("broken-draft.wiki"), DRAFT);
+
+    // --- Lint and safe fixes ---
+
+    // lint-broken-draft
+    wt.run(&[
+        "article",
+        "lint",
+        DRAFT,
+        "--title",
+        "Example Draft",
+        "--strict",
+        "--format",
+        "json",
+    ])
+    .assert_code(1)
+    .assert_json("/schema_version", "article_lint_v3")
+    .assert_json_at_least("/errors", 1)
+    .assert_json_item("/issues", "/rule_id", "structure.markdown_heading")
+    .assert_json_item("/issues", "/rule_id", "structure.require_reflist")
+    .assert_json_item("/issues", "/rule_id", "citation.after_punctuation")
+    .assert_json_item("/issues", "/rule_id", "citation.source_review")
+    .assert_stderr_contains("article lint found");
+
+    // apply-safe-fixes
+    wt.run(&[
+        "article",
+        "fix",
+        DRAFT,
+        "--title",
+        "Example Draft",
+        "--apply",
+        "safe",
+        "--format",
+        "json",
+    ])
+    .assert_code(0)
+    .assert_json("/schema_version", "article_fix_v2")
+    .assert_json("/changed", true)
+    .assert_json_at_least("/applied_fix_count", 3)
+    .assert_json("/remaining_report/errors", 0);
+    wt.assert_file_contains(DRAFT, "== History ==");
+    wt.assert_file_contains(DRAFT, "{{Reflist}}");
+    wt.assert_file_contains(DRAFT, "scenario.<ref>");
+
+    // lint-fixed-draft
+    wt.run(&[
+        "article",
+        "lint",
+        DRAFT,
+        "--title",
+        "Example Draft",
+        "--format",
+        "json",
+    ])
+    .assert_code(0)
+    .assert_json("/errors", 0)
+    .assert_json_item("/issues", "/rule_id", "citation.source_review");
+
+    // --- Accept the exact bytes and promote them ---
+
+    // record-fixture-acceptance
+    wt.run(&[
+        "article",
+        "accept",
+        DRAFT,
+        "--title",
+        "Example Draft",
+        "--human-editor",
+        "Wikitest fixture identity",
+        "--prose-origin",
+        "agent-draft",
+        "--allow-warnings",
+        "--format",
+        "json",
+    ])
+    .assert_code(0)
+    .assert_json("/schema_version", "article_accept_v3")
+    .assert_json("/decision", "accepted_for_main_namespace_promotion")
+    .assert_json("/editor_identity_assurance", "self_reported_unverified")
+    .assert_json("/prose_origin", "agent_draft")
+    .assert_json("/content_sha256", ACCEPTED_SHA256)
+    .assert_json(
+        "/publication_authority/target_api_url",
+        "https://wikitest.invalid/api.php",
+    )
+    .assert_json("/publication_authority/site_adapter_id", "wikitest-wiki")
+    .assert_json(
+        "/publication_authority/publication_policy_sha256",
+        "1f281c51187b9b8c34b9ab95cdbf45a43b37303311f2db3cc0130bf6e571cd69",
+    )
+    .assert_json("/warnings_explicitly_accepted", true);
+
+    // promote-accepted-draft
+    wt.run(&[
+        "article",
+        "promote",
+        DRAFT,
+        "--title",
+        "Example Draft",
+        "--format",
+        "json",
+    ])
+    .assert_code(0)
+    .assert_json("/schema_version", "article_promote_v4")
+    .assert_json("/source_preserved", true)
+    .assert_json("/editor_identity_assurance", "self_reported_unverified")
+    .assert_json("/prose_origin", "agent_draft")
+    .assert_json("/content_sha256", ACCEPTED_SHA256);
+    wt.assert_file_exists(PROMOTED);
+    wt.assert_file_contains(
+        PROMOTED,
+        "fictional archive used for an isolated Wikitest scenario",
+    );
+
+    // --- A draft changed after acceptance is not promoted ---
+
+    // mutate-accepted-draft
+    wt.install(fixture("mutated-draft.wiki"), DRAFT);
+
+    // reject-stale-acceptance
+    wt.run(&[
+        "article",
+        "promote",
+        DRAFT,
+        "--title",
+        "Example Draft",
+        "--overwrite",
+        "--format",
+        "json",
+    ])
+    .assert_code(1)
+    .assert_stderr_contains("changed after the recorded acceptance decision");
+    wt.assert_file_contains(
+        PROMOTED,
+        "fictional archive used for an isolated Wikitest scenario",
+    );
+    wt.assert_file_lacks(PROMOTED, "deliberately changed");
+}
+
+const ACCEPTANCE_STORE: &str = ".wikitool/acceptance/acceptance.sqlite3";
+
+fn accept_args<'a>(extra: &[&'a str]) -> Vec<&'a str> {
+    let mut args = vec![
+        "article",
+        "accept",
+        DRAFT,
+        "--title",
+        "Example Draft",
+        "--human-editor",
+        "Wikitest fixture identity",
+        "--prose-origin",
+        "agent-draft",
+        "--allow-warnings",
+        "--format",
+        "json",
+    ];
+    args.extend_from_slice(extra);
+    args
+}
+
+fn lint_hash(wt: &Project<'_>) -> String {
+    wt.run(&[
+        "article",
+        "lint",
+        DRAFT,
+        "--title",
+        "Example Draft",
+        "--format",
+        "json",
+    ])
+    .assert_code(0)
+    .assert_json("/errors", 0)
+    .json_str("/content_sha256")
+}
+
+/// A caller binds acceptance to the bytes the human read by passing their hash; bytes that
+/// changed before accept ran are refused without writing, and omitting the hash keeps the
+/// record-what-is-there behavior.
+#[test]
+fn accept_refuses_bytes_other_than_the_reviewed_hash() {
+    let wt = Project::new(env!("CARGO_BIN_EXE_wikitool"));
+    wt.install(
+        fixture("site-adapter.toml"),
+        "site-adapter/site-adapter.toml",
+    );
+    wt.run(&[
+        "init",
+        "--templates",
+        "--no-network",
+        "--api-url",
+        "https://wikitest.invalid/api.php",
+        "--adapter-path",
+        "site-adapter/site-adapter.toml",
+    ])
+    .assert_code(0);
+    wt.install(
+        fixture("Template_Article_quality.wiki"),
+        "templates/misc/Template_Article_quality.wiki",
+    );
+    wt.install(
+        fixture("Template_Reflist.wiki"),
+        "templates/misc/Template_Reflist.wiki",
+    );
+    wt.install(
+        fixture("Template_Cite_web.wiki"),
+        "templates/cite/Template_Cite_web.wiki",
+    );
+    wt.install(fixture("mutated-draft.wiki"), DRAFT);
+
+    // The human reads these bytes; lint reports their hash without recording anything.
+    let reviewed = lint_hash(&wt);
+    let draft_path = wt.path().join(DRAFT);
+    let reviewed_bytes = std::fs::read(&draft_path).expect("read reviewed draft");
+    assert_eq!(reviewed.len(), 64);
+    wt.assert_missing(ACCEPTANCE_STORE);
+
+    // The file changes between reading and accepting.
+    let mut changed_bytes = reviewed_bytes.clone();
+    changed_bytes.extend_from_slice(b"\nAn unreviewed sentence.\n");
+    std::fs::write(&draft_path, &changed_bytes).expect("change draft");
+    let changed = lint_hash(&wt);
+    assert_ne!(changed, reviewed);
+
+    let refused = wt.run(&accept_args(&["--content-sha256", &reviewed]));
+    refused
+        .assert_code(1)
+        .assert_json("/success", false)
+        .assert_json("/status", "content_mismatch")
+        .assert_json("/expected_content_sha256", reviewed.as_str())
+        .assert_json("/current_content_sha256", changed.as_str())
+        .assert_stderr_contains(&reviewed)
+        .assert_stderr_contains(&changed);
+    wt.assert_missing(ACCEPTANCE_STORE);
+
+    // Restored to the reviewed bytes, the same hash accepts; the hash is case-insensitive.
+    std::fs::write(&draft_path, &reviewed_bytes).expect("restore draft");
+    wt.run(&accept_args(&[
+        "--content-sha256",
+        &reviewed.to_ascii_uppercase(),
+    ]))
+    .assert_code(0)
+    .assert_json("/content_sha256", reviewed.as_str());
+
+    // A later mismatch leaves the earlier decision in place: promotion still names it.
+    std::fs::write(&draft_path, &changed_bytes).expect("change draft again");
+    wt.run(&accept_args(&["--content-sha256", &reviewed]))
+        .assert_code(1)
+        .assert_json("/status", "content_mismatch");
+    wt.run(&[
+        "article",
+        "promote",
+        DRAFT,
+        "--title",
+        "Example Draft",
+        "--format",
+        "json",
+    ])
+    .assert_code(1)
+    .assert_stderr_contains(&format!("accepted {reviewed}, current {changed}"));
+    wt.assert_missing(PROMOTED);
+
+    // A malformed hash is a usage error, not a refusal of the content.
+    wt.run(&accept_args(&["--content-sha256", "not-a-digest"]))
+        .assert_code(2);
+
+    // Without the option, accept records whatever bytes the file holds, as before.
+    wt.run(&accept_args(&[]))
+        .assert_code(0)
+        .assert_json("/content_sha256", changed.as_str());
+}

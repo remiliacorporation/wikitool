@@ -48,6 +48,7 @@ The adapter can declare:
 - infobox preferences and category hints;
 - mechanically decidable style constraints and placeholder artifacts;
 - target extension and module availability contracts;
+- the ontology that `wikitool ontology export` vendors, in an `[ontology]` table;
 - relative supplemental guidance documents.
 
 Unknown fields are rejected. Source-review hosts must be normalized lowercase hostnames; URL
@@ -61,6 +62,75 @@ Release packaging places the adapter catalog under `tools/wikitool/site_adapters
 An optional host bundle goes under its `project/` subdirectory after validating the
 policy and copying only declared resources. This supplement remains opt-in; select
 it with a project-relative path in `.wikitool/config.toml`.
+
+## Style lint rules
+
+These `[lint]` keys turn on heading and spacing rules from a site's style guide. Each is off
+when omitted, so the generic adapter and existing adapters lint as before. A rule set to
+`warning` reports a warning; `error` blocks `article changeset accept` until it is fixed.
+
+| Key | Rule ID | Levels | Reports |
+|---|---|---|---|
+| `heading_leading_article` | `style.heading_leading_article` | `ignore`, `warning` | a heading that begins with "The", "A" or "An" |
+| `heading_trailing_punctuation` | `style.heading_trailing_punctuation` | `ignore`, `warning` | a heading that ends in `.`, `,`, `:`, `;`, `!` or `?` outside a quoted title |
+| `heading_markup` | `style.heading_markup` | `ignore`, `warning`, `error` | a template, parser function, ref or `<math>` in a heading |
+| `heading_repeats_title` | `style.heading_repeats_title` | `ignore`, `warning` | a heading that contains the article title as whole words |
+| `consecutive_blank_lines` | `style.consecutive_blank_lines` | `ignore`, `warning`, `error` | two or more blank lines in a row; `article fix` removes the extra lines |
+| `lead_paragraph_limit` | `structure.lead_paragraph_limit` | `ignore`, `warning`, `error` | a lead with more prose paragraphs than `max_lead_paragraphs` (default 4) |
+
+Three rules accept only `ignore` or `warning`: a band called "The Beatles", a work titled
+"Yahoo!" or an organization whose name contains the article title cannot be told from a style
+fault mechanically. Headings and blank lines inside comments and literal tags such as `<pre>`,
+`<nowiki>` and `<syntaxhighlight>` are skipped, as are blank lines inside a template or ref.
+Internal links in headings are not checked.
+
+Three `[authoring]` preferences gate existing rules: `prefer_sentence_case_headings` gates
+`style.sentence_case_heading`, `forbid_markdown` gates `structure.markdown_heading`, and
+`require_straight_quotes` enables `style.curly_quotes` as `[lint] forbid_curly_quotes` does.
+`prefer_wikitext_only` is recorded in the policy but no rule reads it yet.
+
+## Ontology
+
+A wiki may type its pages with an ontology. `wikitool ontology export --from <dir>` reads a
+checkout of the ontology's source repository and vendors it as `vendor/ontology/ontology.json`;
+`wikitool ontology generate` turns that copy into `Module:Ontology/data`. Only `export` needs
+the source checkout. A wiki that does not use an ontology needs neither command, and no other
+command reads the vendored copy.
+
+An optional `[ontology]` table lets `export` run without further flags:
+
+```toml
+[ontology]
+product = "example-wiki"                   # the wiki's name in product-uses.tsv
+source = "https://ontology.example/"       # an identifier recorded as source.ontology
+local_prefix = "wiki"                      # recorded with local_namespace as source.local
+local_namespace = "https://wiki.example/ns/"
+imports = "v1.0.0/imports"                 # product-uses.tsv and pinned extracts
+exclude_rename_prefixes = ["legacy"]       # rename subjects left out of the export
+```
+
+`imports` is relative to the ontology directory and may not leave it; `--imports` overrides
+it, and export fails when neither names it. `exclude_rename_prefixes` is empty by default and
+matches the CURIE prefix before the colon exactly, so `legacy` does not exclude `legacyx:`.
+`--product` overrides `product`. `source` is only recorded in the export's metadata; Wikitool
+never fetches it, so it need not resolve.
+
+`module_sections` narrows `Module:Ontology/data` to the top-level sections the wiki's modules
+read:
+
+```toml
+module_sections = ["classes", "families", "properties", "relations", "schemes"]
+```
+
+Every page that loads the module with `mw.loadData` parses all of it, so sections nothing reads
+at runtime still cost parse time and Lua memory on each such page. Mappings and renames are
+the large ones. The valid names are `classes`, `families`, `properties`, `relations`,
+`schemes`, `mappings`, `renames`, `external` and `source`; an unknown or repeated name is an
+adapter error. `source`, which holds the commit and product, is always written whether listed
+or not. Omitting the key writes every section, exactly as before. Both `export` and `generate`
+write the narrowed module and `generate --check` compares against it, while the vendored copy
+always stays complete. Before narrowing, make sure no module, including a function that is
+rarely called, indexes a section left out: it would read `nil`.
 
 ## Supplemental guidance
 

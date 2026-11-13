@@ -38,6 +38,18 @@ struct ArticleAcceptReport {
     publication_authority: ArticlePublicationAuthority,
 }
 
+#[derive(Debug, Serialize)]
+struct ArticleAcceptRefusal {
+    success: bool,
+    status: &'static str,
+    project_root: String,
+    source_path: String,
+    title: String,
+    expected_content_sha256: String,
+    current_content_sha256: String,
+    detail: String,
+}
+
 pub(super) fn run_article_accept(runtime: &RuntimeOptions, args: ArticleAcceptArgs) -> Result<()> {
     let paths = resolve_runtime_paths(runtime)?;
     let source_absolute = absolute_path(&paths.project_root, &args.path);
@@ -59,6 +71,32 @@ pub(super) fn run_article_accept(runtime: &RuntimeOptions, args: ArticleAcceptAr
         bail!("article accept only supports Main-namespace article titles, got: {title}");
     }
     let lint = lint_article_with_title(&paths, &source_absolute, Some(&title))?;
+    // The ledger records the lint hash: recording rereads the file and refuses
+    // unless its bytes still hash to `lint.content_sha256`, so comparing here
+    // compares the caller's hash with exactly what would be recorded.
+    if let Some(expected) = args.content_sha256.as_deref()
+        && expected != lint.content_sha256
+    {
+        let source_path = normalize_path(&source_absolute);
+        let detail = format!(
+            "article accept refused: expected content SHA-256 {expected}, but {source_path} now has {}; nothing was recorded. Show the human the current bytes and accept with their hash",
+            lint.content_sha256
+        );
+        if args.format.is_json() {
+            let refusal = ArticleAcceptRefusal {
+                success: false,
+                status: "content_mismatch",
+                project_root: normalize_path(&paths.project_root),
+                source_path,
+                title,
+                expected_content_sha256: expected.to_string(),
+                current_content_sha256: lint.content_sha256,
+                detail: detail.clone(),
+            };
+            println!("{}", serde_json::to_string_pretty(&refusal)?);
+        }
+        bail!(detail);
+    }
     let (ledger_entry, store_path) = record_article_acceptance(
         &paths,
         &source_absolute,

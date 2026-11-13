@@ -91,7 +91,11 @@ pub(super) fn lint_curly_quotes(
     resources: &LoadedResources,
     matches: &mut Vec<IssueMatch>,
 ) {
-    if !resources.adapter.lint.forbid_curly_quotes {
+    // `require_straight_quotes` in `[authoring]` states the same rule as
+    // `forbid_curly_quotes` in `[lint]`; either enables it.
+    if !(resources.adapter.lint.forbid_curly_quotes
+        || resources.adapter.authoring.require_straight_quotes)
+    {
         return;
     }
     let mut grouped = BTreeMap::<usize, Vec<(usize, char)>>::new();

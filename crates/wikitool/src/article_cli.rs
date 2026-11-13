@@ -160,12 +160,28 @@ pub(crate) struct ArticleAcceptArgs {
     allow_warnings: bool,
     #[arg(
         long,
+        value_name = "SHA256",
+        value_parser = parse_content_sha256,
+        help = "Refuse, recording nothing, unless the file still has this SHA-256 of the exact bytes the human read: the raw file bytes without line-ending or encoding normalization, as `sha256sum PATH` prints and `article lint PATH --format json` reports in content_sha256"
+    )]
+    content_sha256: Option<String>,
+    #[arg(
+        long,
         value_enum,
         default_value_t = OutputFormat::Text,
         value_name = "FORMAT",
         help = "Output format: text|json"
     )]
     format: OutputFormat,
+}
+
+fn parse_content_sha256(value: &str) -> std::result::Result<String, String> {
+    let normalized = value.trim().to_ascii_lowercase();
+    if normalized.len() == 64 && normalized.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        Ok(normalized)
+    } else {
+        Err("expected a 64-character hexadecimal SHA-256 digest".to_string())
+    }
 }
 
 #[derive(Debug, Args)]

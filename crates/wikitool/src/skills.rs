@@ -12,8 +12,14 @@ use crate::cli_support::normalize_path;
 pub(crate) const SKILLS_MANIFEST_SCHEMA: &str = "wikitool.skills-manifest.v1";
 pub(crate) const SKILLS_INSTALL_SCHEMA: &str = "wikitool.skills-install.v1";
 pub(crate) const SKILLS_INSTALL_RECEIPT: &str = ".wikitool-skills/project-install.json";
-pub(crate) const PUBLIC_SKILL_IDS: [&str; 4] =
-    ["prose-review", "wiki-interview", "wiki-writing", "wikitool"];
+pub(crate) const PUBLIC_SKILL_IDS: [&str; 3] = ["prose-review", "wiki-writing", "wikitool"];
+/// Skills that earlier releases installed. A receipt may still own their files,
+/// so setup can remove them; no manifest may ship them.
+const RETIRED_SKILL_IDS: [&str; 1] = ["wiki-interview"];
+
+fn receipt_skill_ids() -> impl Iterator<Item = &'static str> {
+    PUBLIC_SKILL_IDS.into_iter().chain(RETIRED_SKILL_IDS)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct SkillsManifest {
@@ -539,7 +545,7 @@ fn verify_owned_skill_directories(
 ) -> Result<()> {
     let owned = files.keys().cloned().collect::<BTreeSet<_>>();
     for target_root in [".agents/skills", ".claude/skills"] {
-        for skill in PUBLIC_SKILL_IDS {
+        for skill in receipt_skill_ids() {
             let root = project_root.join(target_root).join(skill);
             if !root.exists() {
                 continue;
@@ -566,7 +572,7 @@ fn validate_managed_skill_path(path: &Path) -> Result<()> {
     if components.len() < 4
         || !matches!(components[0].as_str(), ".agents" | ".claude")
         || components[1] != "skills"
-        || !PUBLIC_SKILL_IDS.contains(&components[2].as_str())
+        || !receipt_skill_ids().any(|skill| skill == components[2])
     {
         bail!(
             "managed skill path is outside the Wikitool skill boundary: {:?}",
@@ -725,7 +731,7 @@ fn collect_regular_files(root: &Path) -> Result<Vec<PathBuf>> {
 
 fn remove_empty_skill_directories(project_root: &Path) -> Result<()> {
     for target_root in [".agents/skills", ".claude/skills"] {
-        for skill in PUBLIC_SKILL_IDS {
+        for skill in receipt_skill_ids() {
             let skill_root = project_root.join(target_root).join(skill);
             prune_empty_directories(&skill_root, &skill_root)?;
         }
@@ -880,6 +886,54 @@ mod tests {
         assert!(!project.path().join(".agents").exists());
         assert!(!project.path().join(".claude").exists());
         assert!(!project.path().join(".wikitool-skills").exists());
+    }
+
+    #[test]
+    fn setup_removes_a_retired_skill_owned_by_an_earlier_receipt() {
+        let skills_root = tempfile::tempdir().expect("skills root");
+        let project = tempfile::tempdir().expect("project");
+        write_test_skills(skills_root.path(), "0.8.0");
+        let skills = load_skills(skills_root.path()).expect("valid skills");
+        let plan = plan_skills_install(project.path(), &skills, &["agents"]).expect("install plan");
+        apply_skills_install(project.path(), plan).expect("install");
+
+        // Reproduce what an earlier release left behind: the retired skill's
+        // files on disk and their entries in the receipt.
+        let receipt_path = project.path().join(SKILLS_INSTALL_RECEIPT);
+        let mut receipt: SkillsInstallReceipt =
+            serde_json::from_slice(&fs::read(&receipt_path).expect("read receipt"))
+                .expect("receipt JSON");
+        let retired_root = project.path().join(".agents/skills/wiki-interview");
+        fs::create_dir_all(retired_root.join("agents")).expect("retired skill directories");
+        for relative in ["SKILL.md", "agents/openai.yaml"] {
+            let bytes = format!("retired {relative}\n").into_bytes();
+            fs::write(retired_root.join(relative), &bytes).expect("retired skill file");
+            receipt.managed_files.push(ManagedSkillFile {
+                path: format!(".agents/skills/wiki-interview/{relative}"),
+                bytes: bytes.len() as u64,
+                sha256: sha256_bytes(&bytes),
+            });
+        }
+        fs::write(
+            &receipt_path,
+            serde_json::to_vec_pretty(&receipt).expect("receipt JSON"),
+        )
+        .expect("write receipt");
+
+        let plan = plan_skills_install(project.path(), &skills, &["agents"]).expect("upgrade plan");
+        assert_eq!(plan.removals.len(), 2);
+        apply_skills_install(project.path(), plan).expect("upgrade");
+
+        assert!(!retired_root.exists());
+        let receipt = verify_skills_install(project.path())
+            .expect("verify upgrade")
+            .expect("receipt");
+        assert!(
+            receipt
+                .managed_files
+                .iter()
+                .all(|file| !file.path.contains("wiki-interview"))
+        );
     }
 
     #[test]

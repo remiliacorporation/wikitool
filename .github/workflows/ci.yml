@@ -34,25 +34,16 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Build default end-user and test binaries
-        run: cargo build --package wikitool --package wikitest
-      - name: Validate manifests and fixture identities
-        run: cargo run --quiet --package wikitest -- validate
-      - name: Public CLI regressions
-        run: cargo run --quiet --package wikitest -- suite wikitool-regressions --require-all
-      - name: Retain replayable regression evidence
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: wikitest-regressions-${{ matrix.os }}
-          path: |
-            .wikitest/runs
-            target/debug/wikitool
-            target/debug/wikitool.exe
-            target/debug/wikitest
-            target/debug/wikitest.exe
-          if-no-files-found: error
-          retention-days: 3
+      # Default features on purpose: these tests launch the end-user binary.
+      # The rust-tests job runs the same tests against the maintainer build.
+      - name: Public CLI regressions against the default binary
+        run: cargo test --package wikitool
+      # rust-tests runs on Linux only; this covers the Windows ACL and ownership
+      # code that protects stored source-session cookies. It also runs after a
+      # failed CLI step, because its panics print the full storage error.
+      - name: Source-session storage tests on Windows
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        run: cargo test --package wikitool_core --lib source::session
 
   rust-lint:
     runs-on: ubuntu-latest

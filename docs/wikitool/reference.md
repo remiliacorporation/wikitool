@@ -28,7 +28,9 @@ Commands:
   review      Run the structured pre-push review gate
   module      Run Lua module linting and related checks
   export      Export a remote wiki page tree to local files
+  ontology    Vendor the pinned ontology and generate Module:Ontology/data
   delete      Delete a page from the live wiki
+  upload      Upload a media file to the live wiki
   mutation    Inspect and reconcile durable remote mutation receipts
   db          Inspect or reset the local runtime database
   docs        Manage and query pinned MediaWiki docs corpora
@@ -324,6 +326,62 @@ Options:
   -h, --help                  Print help
 ```
 
+## ontology
+
+```text
+Vendor the pinned ontology and generate Module:Ontology/data
+
+Usage: wikitool ontology [OPTIONS] <COMMAND>
+
+Commands:
+  export    Export an ontology checkout into the vendored copy and regenerate the module
+  generate  Generate Module:Ontology/data from the vendored copy
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+      --project-root <PATH>
+      --data-dir <PATH>
+      --config <PATH>
+      --diagnostics          Print resolved runtime diagnostics
+  -h, --help                 Print help
+```
+
+## ontology export
+
+```text
+Export an ontology checkout into the vendored copy and regenerate the module
+
+Usage: wikitool ontology export [OPTIONS] --from <PATH>
+
+Options:
+      --from <PATH>          The ontology directory (with registry/ and mappings.sssom.tsv) in a clean git checkout
+      --project-root <PATH>
+      --data-dir <PATH>
+      --product <NAME>       The wiki's product name in the ontology's product-uses.tsv; defaults to the site adapter's
+      --config <PATH>
+      --imports <PATH>       The directory with product-uses.tsv and the pinned extracts, relative to --from; defaults to the site adapter's [ontology] imports
+      --diagnostics          Print resolved runtime diagnostics
+      --format <FORMAT>      Output format: text|json [default: text] [possible values: text, json]
+  -h, --help                 Print help
+```
+
+## ontology generate
+
+```text
+Generate Module:Ontology/data from the vendored copy
+
+Usage: wikitool ontology generate [OPTIONS]
+
+Options:
+      --check                Fail if the module is out of date, without writing
+      --project-root <PATH>
+      --data-dir <PATH>
+      --format <FORMAT>      Output format: text|json [default: text] [possible values: text, json]
+      --config <PATH>
+      --diagnostics          Print resolved runtime diagnostics
+  -h, --help                 Print help
+```
+
 ## delete
 
 ```text
@@ -343,6 +401,28 @@ Options:
       --config <PATH>
       --apply <PLAN_ID>      Apply the exact target/content/revision-bound plan ID; without this option the command only previews
       --diagnostics          Print resolved runtime diagnostics
+      --format <FORMAT>      Output format: text|json [default: text] [possible values: text, json]
+  -h, --help                 Print help
+```
+
+## upload
+
+```text
+Upload a media file to the live wiki
+
+Usage: wikitool upload [OPTIONS] --file <PATH> --filename <NAME> --summary <TEXT>
+
+Options:
+      --file <PATH>          Local media file to upload
+      --project-root <PATH>
+      --data-dir <PATH>
+      --filename <NAME>      Target file name without the File: prefix, including its extension
+      --config <PATH>
+      --text-file <PATH>     Wikitext for the file description page (required when the file is new)
+      --diagnostics          Print resolved runtime diagnostics
+      --summary <TEXT>       Upload comment (required)
+      --replace              Permit planning a new version over an existing file with different content
+      --apply <PLAN_ID>      Apply the exact target/content/remote-state-bound plan ID; without this option the command only previews
       --format <FORMAT>      Output format: text|json [default: text] [possible values: text, json]
   -h, --help                 Print help
 ```
@@ -394,7 +474,7 @@ Show one target-bound remote mutation receipt
 Usage: wikitool mutation show [OPTIONS] <OPERATION> <MUTATION_ID>
 
 Arguments:
-  <OPERATION>    [possible values: edit, delete]
+  <OPERATION>    [possible values: edit, delete, upload]
   <MUTATION_ID>
 
 Options:
@@ -414,7 +494,7 @@ Reconcile one mutation without replaying its write
 Usage: wikitool mutation reconcile [OPTIONS] <OPERATION> <MUTATION_ID>
 
 Arguments:
-  <OPERATION>    [possible values: edit, delete]
+  <OPERATION>    [possible values: edit, delete, upload]
   <MUTATION_ID>
 
 Options:
@@ -435,7 +515,7 @@ Usage: wikitool mutation close [OPTIONS] --actor <ACTOR> --reason <REASON> <OPER
 
 Arguments:
   <OPERATION>
-          [possible values: edit, delete]
+          [possible values: edit, delete, upload]
 
   <MUTATION_ID>
 
@@ -2332,6 +2412,7 @@ Options:
       --prose-origin <ORIGIN>    Prose origin: human-draft|human-revision|agent-draft|collaborative-draft|mechanical-conversion-of-human-prose|human-reviewed-legacy [possible values: human-draft, human-revision, agent-draft, collaborative-draft, mechanical-conversion-of-human-prose, human-reviewed-legacy]
       --allow-warnings           Record explicit caller acceptance of remaining lint warnings
       --diagnostics              Print resolved runtime diagnostics
+      --content-sha256 <SHA256>  Refuse, recording nothing, unless the file still has this SHA-256 of the exact bytes the human read: the raw file bytes without line-ending or encoding normalization, as `sha256sum PATH` prints and `article lint PATH --format json` reports in content_sha256
       --format <FORMAT>          Output format: text|json [default: text] [possible values: text, json]
   -h, --help                     Print help
 ```

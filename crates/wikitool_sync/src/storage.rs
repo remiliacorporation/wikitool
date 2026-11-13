@@ -1,4 +1,9 @@
 use super::*;
+use crate::lifecycle::{
+    DeleteLocalEffectStatus, DeleteResponseKind, DeleteTerminalOutcome, EditTerminalOutcome,
+    MutationPhase, PhaseGuard, PhaseTransition, UnresolvedPhase, decode_delete_lifecycle,
+    decode_edit_lifecycle,
+};
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior};
 use std::io::Write;
 
@@ -278,9 +283,9 @@ pub(super) struct EditMutationIntent {
     pub summary: String,
     pub summary_marker: Option<String>,
     pub constraint: EditConstraint,
-    pub phase: String,
+    pub phase: MutationPhase,
     pub request_started_at_unix: Option<i64>,
-    pub terminal_outcome: Option<String>,
+    pub terminal_outcome: Option<EditTerminalOutcome>,
     pub response_new_revision_id: Option<i64>,
 }
 
@@ -312,16 +317,16 @@ pub(super) struct DeleteMutationIntent {
     pub expected_revision_id: i64,
     pub reason: String,
     pub reason_marker: String,
-    pub phase: String,
-    pub response_kind: Option<String>,
+    pub phase: MutationPhase,
+    pub response_kind: Option<DeleteResponseKind>,
     pub response_log_id: Option<i64>,
     pub request_started_at_unix: Option<i64>,
-    pub terminal_outcome: Option<String>,
+    pub terminal_outcome: Option<DeleteTerminalOutcome>,
     pub backup_enabled: bool,
     pub backup_directory: Option<String>,
     pub backup_path: Option<String>,
     pub local_content_sha256: Option<String>,
-    pub local_effect_status: String,
+    pub local_effect_status: DeleteLocalEffectStatus,
 }
 
 impl DeleteMutationIntent {
@@ -341,17 +346,22 @@ pub(super) struct NewDeleteMutation<'a> {
 pub(super) fn unresolved_remote_mutation(
     connection: &Connection,
     title: &str,
-) -> Result<Option<(String, i64, String)>> {
+) -> Result<Option<(String, i64, MutationPhase)>> {
+    let unresolved = PhaseGuard::Unresolved.sql();
     let mut statement = connection
-        .prepare(
+        .prepare(&format!(
             "SELECT 'edit', mutation_id, title, phase
              FROM sync_edit_mutations
-             WHERE phase NOT IN ('state_advanced', 'resolved')
+             WHERE {unresolved}
              UNION ALL
              SELECT 'delete', mutation_id, title, phase
              FROM sync_delete_mutations
-             WHERE phase NOT IN ('state_advanced', 'resolved')",
-        )
+             WHERE {unresolved}
+             UNION ALL
+             SELECT 'upload', mutation_id, title, phase
+             FROM sync_upload_mutations
+             WHERE {unresolved}"
+        ))
         .context("failed to prepare unresolved remote-mutation query")?;
     let rows = statement
         .query_map([], |row| {
@@ -368,6 +378,8 @@ pub(super) fn unresolved_remote_mutation(
         let (operation, mutation_id, stored_title, phase) =
             row.context("failed to decode unresolved remote mutation")?;
         if normalized_title_key(&stored_title) == requested_key {
+            let phase = MutationPhase::parse(&phase)
+                .map_err(|unknown| unknown.in_mutation(&operation, mutation_id))?;
             return Ok(Some((operation, mutation_id, phase)));
         }
     }
@@ -457,7 +469,7 @@ pub(super) fn begin_edit_mutation(
              ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
                 'wikitool-edit:' || lower(hex(randomblob(16))),
-                ?9, ?10, 'intent_persisted', ?11, ?11
+                ?9, ?10, ?12, ?11, ?11
              )",
             params![
                 target.api_url(),
@@ -471,6 +483,7 @@ pub(super) fn begin_edit_mutation(
                 constraint_kind,
                 expected_revision_id,
                 now,
+                MutationPhase::IntentPersisted,
             ],
         )
         .with_context(|| format!("failed to persist edit intent for {}", mutation.title))?;
@@ -497,7 +510,7 @@ pub(super) fn begin_edit_mutation(
         summary: mutation.summary.to_string(),
         summary_marker,
         constraint: mutation.constraint,
-        phase: "intent_persisted".to_string(),
+        phase: MutationPhase::IntentPersisted,
         request_started_at_unix: None,
         terminal_outcome: None,
         response_new_revision_id: None,
@@ -530,7 +543,16 @@ pub(super) fn load_edit_mutation(
                     }
                     _ => return Err(rusqlite::Error::InvalidQuery),
                 };
-                Ok(EditMutationIntent {
+                let lifecycle = decode_edit_lifecycle(
+                    mutation_id,
+                    &row.get::<_, String>(11)?,
+                    row.get::<_, Option<String>>(13)?.as_deref(),
+                );
+                let (phase, terminal_outcome) = match lifecycle {
+                    Ok(lifecycle) => lifecycle,
+                    Err(error) => return Ok(Err(error)),
+                };
+                Ok(Ok(EditMutationIntent {
                     mutation_id: row.get(0)?,
                     target_api_url: row.get(1)?,
                     title: row.get(2)?,
@@ -541,14 +563,14 @@ pub(super) fn load_edit_mutation(
                     summary: row.get(7)?,
                     summary_marker: row.get(8)?,
                     constraint,
-                    phase: row.get(11)?,
+                    phase,
                     request_started_at_unix: row.get(12)?,
-                    terminal_outcome: row.get(13)?,
+                    terminal_outcome,
                     response_new_revision_id: row.get(17)?,
-                })
+                }))
             },
         )
-        .with_context(|| format!("edit mutation {mutation_id} does not exist"))
+        .with_context(|| format!("edit mutation {mutation_id} does not exist"))?
 }
 
 pub(super) fn bind_edit_response(
@@ -559,19 +581,23 @@ pub(super) fn bind_edit_response(
     let now = i64::try_from(unix_timestamp()?).context("timestamp does not fit into i64")?;
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)
         .with_context(|| format!("failed to begin edit-response binding for {}", intent.title))?;
+    let transition = PhaseTransition::BindResponse;
     let changed = transaction
         .execute(
-            "UPDATE sync_edit_mutations
-             SET phase = 'response_bound',
-                 response_title = ?1,
-                 response_page_id = ?2,
-                 response_old_revision_id = ?3,
-                 response_new_revision_id = ?4,
-                 response_new_timestamp = ?5,
-                 detail = NULL,
-                 updated_at_unix = ?6
-             WHERE mutation_id = ?7
-               AND phase IN ('intent_persisted', 'outcome_ambiguous', 'reconciliation_required')",
+            &format!(
+                "UPDATE sync_edit_mutations
+                 SET phase = ?8,
+                     response_title = ?1,
+                     response_page_id = ?2,
+                     response_old_revision_id = ?3,
+                     response_new_revision_id = ?4,
+                     response_new_timestamp = ?5,
+                     detail = NULL,
+                     updated_at_unix = ?6
+                 WHERE mutation_id = ?7
+                   AND {}",
+                transition.guard().sql()
+            ),
             params![
                 response.title,
                 response.page_id,
@@ -580,6 +606,7 @@ pub(super) fn bind_edit_response(
                 response.new_timestamp,
                 now,
                 intent.mutation_id,
+                transition.target(),
             ],
         )
         .with_context(|| format!("failed to bind edit response for {}", intent.title))?;
@@ -603,10 +630,13 @@ pub(super) fn mark_edit_request_started(
     let now = i64::try_from(unix_timestamp()?).context("timestamp does not fit into i64")?;
     let changed = connection
         .execute(
-            "UPDATE sync_edit_mutations
-             SET request_started_at_unix = ?1, updated_at_unix = ?1
-             WHERE mutation_id = ?2 AND phase = 'intent_persisted'
-               AND request_started_at_unix IS NULL",
+            &format!(
+                "UPDATE sync_edit_mutations
+                 SET request_started_at_unix = ?1, updated_at_unix = ?1
+                 WHERE mutation_id = ?2 AND {}
+                   AND request_started_at_unix IS NULL",
+                PhaseGuard::IntentPersisted.sql()
+            ),
             params![now, intent.mutation_id],
         )
         .with_context(|| format!("failed to mark edit request {} started", intent.mutation_id))?;
@@ -623,19 +653,20 @@ pub(super) fn mark_edit_request_started(
 pub(super) fn mark_edit_mutation_unresolved(
     connection: &Connection,
     intent: &EditMutationIntent,
-    phase: &'static str,
+    phase: UnresolvedPhase,
     detail: &str,
 ) -> Result<()> {
-    if !matches!(phase, "outcome_ambiguous" | "reconciliation_required") {
-        anyhow::bail!("invalid unresolved edit-mutation phase {phase}");
-    }
+    let transition = PhaseTransition::MarkUnresolved(phase);
     let now = i64::try_from(unix_timestamp()?).context("timestamp does not fit into i64")?;
     let changed = connection
         .execute(
-            "UPDATE sync_edit_mutations
-             SET phase = ?1, detail = ?2, updated_at_unix = ?3
-             WHERE mutation_id = ?4 AND phase NOT IN ('state_advanced', 'resolved')",
-            params![phase, detail, now, intent.mutation_id],
+            &format!(
+                "UPDATE sync_edit_mutations
+                 SET phase = ?1, detail = ?2, updated_at_unix = ?3
+                 WHERE mutation_id = ?4 AND {}",
+                transition.guard().sql()
+            ),
+            params![transition.target(), detail, now, intent.mutation_id],
         )
         .with_context(|| {
             format!(
@@ -683,9 +714,9 @@ pub(super) fn begin_delete_mutation(
     let local_effect_status = if mutation.relative_path.is_some()
         && mutation.local_effect_policy.local_content_sha256.is_some()
     {
-        "pending"
+        DeleteLocalEffectStatus::Pending
     } else {
-        "not_applicable"
+        DeleteLocalEffectStatus::NotApplicable
     };
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)
         .with_context(|| {
@@ -707,7 +738,7 @@ pub(super) fn begin_delete_mutation(
              ) VALUES (
                 ?1, ?2, ?3, ?4, ?5,
                 'wikitool-delete:' || lower(hex(randomblob(16))),
-                'intent_persisted', ?6, ?7, ?8, ?9, ?10, ?11, ?11
+                ?12, ?6, ?7, ?8, ?9, ?10, ?11, ?11
              )",
             params![
                 target.api_url(),
@@ -725,6 +756,7 @@ pub(super) fn begin_delete_mutation(
                 mutation.local_effect_policy.local_content_sha256,
                 local_effect_status,
                 now,
+                MutationPhase::IntentPersisted,
             ],
         )
         .with_context(|| format!("failed to persist delete intent for {}", mutation.title))?;
@@ -747,7 +779,7 @@ pub(super) fn begin_delete_mutation(
         expected_revision_id: mutation.expected_revision_id,
         reason: mutation.reason.trim().to_string(),
         reason_marker,
-        phase: "intent_persisted".to_string(),
+        phase: MutationPhase::IntentPersisted,
         response_kind: None,
         response_log_id: None,
         request_started_at_unix: None,
@@ -756,7 +788,7 @@ pub(super) fn begin_delete_mutation(
         backup_directory: mutation.local_effect_policy.backup_directory.clone(),
         backup_path: mutation.local_effect_policy.backup_path.clone(),
         local_content_sha256: mutation.local_effect_policy.local_content_sha256.clone(),
-        local_effect_status: local_effect_status.to_string(),
+        local_effect_status,
     })
 }
 
@@ -767,10 +799,13 @@ pub(super) fn mark_delete_request_started(
     let now = i64::try_from(unix_timestamp()?).context("timestamp does not fit into i64")?;
     let changed = connection
         .execute(
-            "UPDATE sync_delete_mutations
-             SET request_started_at_unix = ?1, updated_at_unix = ?1
-             WHERE mutation_id = ?2 AND phase = 'intent_persisted'
-               AND request_started_at_unix IS NULL",
+            &format!(
+                "UPDATE sync_delete_mutations
+                 SET request_started_at_unix = ?1, updated_at_unix = ?1
+                 WHERE mutation_id = ?2 AND {}
+                   AND request_started_at_unix IS NULL",
+                PhaseGuard::IntentPersisted.sql()
+            ),
             params![now, intent.mutation_id],
         )
         .with_context(|| {
@@ -794,20 +829,30 @@ pub(super) fn complete_edit_mutation_without_state_change(
     connection: &Connection,
     target: &store::SyncTargetIdentity,
     intent: &EditMutationIntent,
-    terminal_outcome: &'static str,
+    terminal_outcome: EditTerminalOutcome,
     detail: &str,
 ) -> Result<()> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)
         .context("failed to begin terminal edit reconciliation")?;
     store::bind_sync_target_for_state_write(paths, &transaction, target)?;
     let now = i64::try_from(unix_timestamp()?).context("timestamp does not fit into i64")?;
+    let transition = PhaseTransition::Resolve;
     let changed = transaction
         .execute(
-            "UPDATE sync_edit_mutations
-             SET phase = 'resolved', terminal_outcome = ?1, detail = ?2,
-                 updated_at_unix = ?3
-             WHERE mutation_id = ?4 AND phase NOT IN ('state_advanced', 'resolved')",
-            params![terminal_outcome, detail, now, intent.mutation_id],
+            &format!(
+                "UPDATE sync_edit_mutations
+                 SET phase = ?5, terminal_outcome = ?1, detail = ?2,
+                     updated_at_unix = ?3
+                 WHERE mutation_id = ?4 AND {}",
+                transition.guard().sql()
+            ),
+            params![
+                terminal_outcome,
+                detail,
+                now,
+                intent.mutation_id,
+                transition.target()
+            ],
         )
         .context("failed to complete edit reconciliation")?;
     if changed != 1 {
@@ -823,23 +868,22 @@ pub(super) fn complete_delete_mutation_without_state_change(
     connection: &Connection,
     target: &store::SyncTargetIdentity,
     intent: &DeleteMutationIntent,
-    terminal_outcome: &'static str,
+    terminal_outcome: DeleteTerminalOutcome,
     detail: &str,
 ) -> Result<()> {
     let current = claim_existing_delete_staging(paths, connection, target, intent)?;
-    let local_recovery_detail = matches!(
-        current.local_effect_status.as_str(),
-        "source_staging" | "source_staged"
-    )
-    .then(|| recover_staged_delete_for_retained_state(paths, &current))
-    .transpose()?;
+    let local_recovery_detail = current
+        .local_effect_status
+        .owns_staged_source()
+        .then(|| recover_staged_delete_for_retained_state(paths, &current))
+        .transpose()?;
     let durable_detail = local_recovery_detail
         .as_deref()
         .map_or_else(|| detail.to_string(), |local| format!("{detail}; {local}"));
     let next_local_effect_status = if local_recovery_detail.is_some() {
-        "complete"
+        DeleteLocalEffectStatus::Complete
     } else {
-        current.local_effect_status.as_str()
+        current.local_effect_status
     };
     #[cfg(test)]
     if local_recovery_detail.is_some() {
@@ -849,14 +893,18 @@ pub(super) fn complete_delete_mutation_without_state_change(
         .context("failed to begin terminal delete reconciliation")?;
     store::bind_sync_target_for_state_write(paths, &transaction, target)?;
     let now = i64::try_from(unix_timestamp()?).context("timestamp does not fit into i64")?;
+    let transition = PhaseTransition::Resolve;
     let changed = transaction
         .execute(
-            "UPDATE sync_delete_mutations
-             SET phase = 'resolved', terminal_outcome = ?1, detail = ?2,
-                 local_effect_status = ?3, updated_at_unix = ?4
-             WHERE mutation_id = ?5
-               AND phase NOT IN ('state_advanced', 'resolved')
-               AND local_effect_status = ?6",
+            &format!(
+                "UPDATE sync_delete_mutations
+                 SET phase = ?7, terminal_outcome = ?1, detail = ?2,
+                     local_effect_status = ?3, updated_at_unix = ?4
+                 WHERE mutation_id = ?5
+                   AND {}
+                   AND local_effect_status = ?6",
+                transition.guard().sql()
+            ),
             params![
                 terminal_outcome,
                 durable_detail,
@@ -864,6 +912,7 @@ pub(super) fn complete_delete_mutation_without_state_change(
                 now,
                 current.mutation_id,
                 current.local_effect_status,
+                transition.target(),
             ],
         )
         .context("failed to complete delete reconciliation")?;
@@ -872,8 +921,8 @@ pub(super) fn complete_delete_mutation_without_state_change(
         anyhow::bail!(
             "delete mutation {} changed while terminal local recovery was being recorded: phase {:?}, local-effect status {:?}",
             current.mutation_id,
-            latest.phase,
-            latest.local_effect_status
+            latest.phase.as_str(),
+            latest.local_effect_status.as_str()
         );
     }
     transaction
@@ -896,7 +945,18 @@ pub(super) fn load_delete_mutation(
              WHERE mutation_id = ?1",
             [mutation_id],
             |row| {
-                Ok(DeleteMutationIntent {
+                let lifecycle = decode_delete_lifecycle(
+                    mutation_id,
+                    &row.get::<_, String>(7)?,
+                    row.get::<_, Option<String>>(8)?.as_deref(),
+                    row.get::<_, Option<String>>(13)?.as_deref(),
+                    &row.get::<_, String>(18)?,
+                );
+                let lifecycle = match lifecycle {
+                    Ok(lifecycle) => lifecycle,
+                    Err(error) => return Ok(Err(error)),
+                };
+                Ok(Ok(DeleteMutationIntent {
                     mutation_id: row.get(0)?,
                     target_api_url: row.get(1)?,
                     title: row.get(2)?,
@@ -904,45 +964,46 @@ pub(super) fn load_delete_mutation(
                     expected_revision_id: row.get(4)?,
                     reason: row.get(5)?,
                     reason_marker: row.get(6)?,
-                    phase: row.get(7)?,
-                    response_kind: row.get(8)?,
+                    phase: lifecycle.phase,
+                    response_kind: lifecycle.response_kind,
                     response_log_id: row.get(10)?,
                     request_started_at_unix: row.get(12)?,
-                    terminal_outcome: row.get(13)?,
+                    terminal_outcome: lifecycle.terminal_outcome,
                     backup_enabled: row.get::<_, i64>(14)? != 0,
                     backup_directory: row.get(15)?,
                     backup_path: row.get(16)?,
                     local_content_sha256: row.get(17)?,
-                    local_effect_status: row.get(18)?,
-                })
+                    local_effect_status: lifecycle.local_effect_status,
+                }))
             },
         )
-        .with_context(|| format!("delete mutation {mutation_id} does not exist"))
+        .with_context(|| format!("delete mutation {mutation_id} does not exist"))?
 }
 
 pub(super) fn bind_delete_response(
     connection: &Connection,
     intent: &DeleteMutationIntent,
-    response_kind: &'static str,
+    response_kind: DeleteResponseKind,
     response_title: &str,
     response_log_id: Option<i64>,
     response_log_timestamp: Option<&str>,
 ) -> Result<()> {
-    if !matches!(response_kind, "deleted" | "already_missing") {
-        anyhow::bail!("invalid delete response kind {response_kind}");
-    }
-    if response_kind == "deleted" && response_log_id.is_none() {
+    if response_kind == DeleteResponseKind::Deleted && response_log_id.is_none() {
         anyhow::bail!("deleted response requires a MediaWiki log ID");
     }
     let now = i64::try_from(unix_timestamp()?).context("timestamp does not fit into i64")?;
+    let transition = PhaseTransition::BindResponse;
     let changed = connection
         .execute(
-            "UPDATE sync_delete_mutations
-             SET phase = 'response_bound', response_kind = ?1, response_title = ?2,
-                 response_log_id = ?3, response_log_timestamp = ?4,
-                 detail = NULL, updated_at_unix = ?5
-             WHERE mutation_id = ?6
-               AND phase IN ('intent_persisted', 'outcome_ambiguous', 'reconciliation_required')",
+            &format!(
+                "UPDATE sync_delete_mutations
+                 SET phase = ?7, response_kind = ?1, response_title = ?2,
+                     response_log_id = ?3, response_log_timestamp = ?4,
+                     detail = NULL, updated_at_unix = ?5
+                 WHERE mutation_id = ?6
+                   AND {}",
+                transition.guard().sql()
+            ),
             params![
                 response_kind,
                 response_title,
@@ -950,6 +1011,7 @@ pub(super) fn bind_delete_response(
                 response_log_timestamp,
                 now,
                 intent.mutation_id,
+                transition.target(),
             ],
         )
         .with_context(|| format!("failed to bind delete response for {}", intent.title))?;
@@ -967,19 +1029,20 @@ pub(super) fn bind_delete_response(
 pub(super) fn mark_delete_mutation_unresolved(
     connection: &Connection,
     intent: &DeleteMutationIntent,
-    phase: &'static str,
+    phase: UnresolvedPhase,
     detail: &str,
 ) -> Result<()> {
-    if !matches!(phase, "outcome_ambiguous" | "reconciliation_required") {
-        anyhow::bail!("invalid unresolved delete-mutation phase {phase}");
-    }
+    let transition = PhaseTransition::MarkUnresolved(phase);
     let now = i64::try_from(unix_timestamp()?).context("timestamp does not fit into i64")?;
     let changed = connection
         .execute(
-            "UPDATE sync_delete_mutations
-             SET phase = ?1, detail = ?2, updated_at_unix = ?3
-             WHERE mutation_id = ?4 AND phase NOT IN ('state_advanced', 'resolved')",
-            params![phase, detail, now, intent.mutation_id],
+            &format!(
+                "UPDATE sync_delete_mutations
+                 SET phase = ?1, detail = ?2, updated_at_unix = ?3
+                 WHERE mutation_id = ?4 AND {}",
+                transition.guard().sql()
+            ),
+            params![transition.target(), detail, now, intent.mutation_id],
         )
         .with_context(|| {
             format!(
@@ -1002,18 +1065,13 @@ pub(super) fn prepare_delete_local_effects(
     connection: &Connection,
     intent: &DeleteMutationIntent,
 ) -> Result<()> {
-    if matches!(
-        intent.local_effect_status.as_str(),
-        "not_applicable" | "backup_ready" | "source_staging" | "source_staged" | "complete"
-    ) {
-        return Ok(());
-    }
-    if intent.local_effect_status != "pending" {
-        bail!(
-            "delete mutation {} has unknown local-effect status {:?}",
-            intent.mutation_id,
-            intent.local_effect_status
-        );
+    match intent.local_effect_status {
+        DeleteLocalEffectStatus::Pending => {}
+        DeleteLocalEffectStatus::NotApplicable
+        | DeleteLocalEffectStatus::BackupReady
+        | DeleteLocalEffectStatus::SourceStaging
+        | DeleteLocalEffectStatus::SourceStaged
+        | DeleteLocalEffectStatus::Complete => return Ok(()),
     }
     let relative_path = intent
         .relative_path
@@ -1061,9 +1119,14 @@ pub(super) fn prepare_delete_local_effects(
     let changed = connection
         .execute(
             "UPDATE sync_delete_mutations
-             SET local_effect_status = 'backup_ready', updated_at_unix = ?1
-             WHERE mutation_id = ?2 AND local_effect_status = 'pending'",
-            params![now, intent.mutation_id],
+             SET local_effect_status = ?3, updated_at_unix = ?1
+             WHERE mutation_id = ?2 AND local_effect_status = ?4",
+            params![
+                now,
+                intent.mutation_id,
+                DeleteLocalEffectStatus::BackupReady,
+                DeleteLocalEffectStatus::Pending
+            ],
         )
         .context("failed to persist prepared delete local effects")?;
     if changed != 1 {
@@ -1335,8 +1398,8 @@ fn transition_delete_local_effect_status(
     connection: &Connection,
     target: &store::SyncTargetIdentity,
     mutation_id: i64,
-    expected: &str,
-    next: &str,
+    expected: DeleteLocalEffectStatus,
+    next: DeleteLocalEffectStatus,
 ) -> Result<DeleteMutationIntent> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)
         .context("failed to begin durable local-delete status transition")?;
@@ -1344,11 +1407,14 @@ fn transition_delete_local_effect_status(
     let now = i64::try_from(unix_timestamp()?).context("timestamp does not fit into i64")?;
     let changed = transaction
         .execute(
-            "UPDATE sync_delete_mutations
-             SET local_effect_status = ?1, updated_at_unix = ?2
-             WHERE mutation_id = ?3
-               AND local_effect_status = ?4
-               AND phase NOT IN ('state_advanced', 'resolved')",
+            &format!(
+                "UPDATE sync_delete_mutations
+                 SET local_effect_status = ?1, updated_at_unix = ?2
+                 WHERE mutation_id = ?3
+                   AND local_effect_status = ?4
+                   AND {}",
+                PhaseGuard::Unresolved.sql()
+            ),
             params![next, now, mutation_id, expected],
         )
         .with_context(|| {
@@ -1358,7 +1424,9 @@ fn transition_delete_local_effect_status(
         })?;
     if changed != 1 {
         bail!(
-            "delete mutation {mutation_id} did not retain local-effect status {expected:?} before transition to {next:?}"
+            "delete mutation {mutation_id} did not retain local-effect status {:?} before transition to {:?}",
+            expected.as_str(),
+            next.as_str()
         );
     }
     transaction
@@ -1375,8 +1443,8 @@ pub(super) fn claim_existing_delete_staging(
 ) -> Result<DeleteMutationIntent> {
     let current = load_delete_mutation(connection, intent.mutation_id)?;
     if !matches!(
-        current.local_effect_status.as_str(),
-        "pending" | "backup_ready"
+        current.local_effect_status,
+        DeleteLocalEffectStatus::Pending | DeleteLocalEffectStatus::BackupReady
     ) {
         return Ok(current);
     }
@@ -1409,8 +1477,8 @@ pub(super) fn claim_existing_delete_staging(
         connection,
         target,
         current.mutation_id,
-        &current.local_effect_status,
-        "source_staging",
+        current.local_effect_status,
+        DeleteLocalEffectStatus::SourceStaging,
     )
 }
 
@@ -1421,21 +1489,23 @@ fn stage_delete_local_source(
     intent: &DeleteMutationIntent,
 ) -> Result<Option<StagedDeleteLocalSource>> {
     let mut current = load_delete_mutation(connection, intent.mutation_id)?;
-    if current.local_effect_status == "not_applicable" {
+    if current.local_effect_status == DeleteLocalEffectStatus::NotApplicable {
         return Ok(None);
     }
-    if current.local_effect_status == "pending" {
+    if current.local_effect_status == DeleteLocalEffectStatus::Pending {
         prepare_delete_local_effects(paths, connection, &current)?;
         current = load_delete_mutation(connection, intent.mutation_id)?;
     }
     if !matches!(
-        current.local_effect_status.as_str(),
-        "backup_ready" | "source_staging" | "source_staged"
+        current.local_effect_status,
+        DeleteLocalEffectStatus::BackupReady
+            | DeleteLocalEffectStatus::SourceStaging
+            | DeleteLocalEffectStatus::SourceStaged
     ) {
         bail!(
             "delete mutation {} cannot stage local effects from status {:?}",
             current.mutation_id,
-            current.local_effect_status
+            current.local_effect_status.as_str()
         );
     }
     verify_bound_delete_backup(paths, &current)?;
@@ -1451,21 +1521,21 @@ fn stage_delete_local_source(
     let staging = delete_staging_path(paths, &current, &expected_hash)?;
     validate_sync_state_path(paths, &staging)?;
 
-    if current.local_effect_status == "backup_ready" {
+    if current.local_effect_status == DeleteLocalEffectStatus::BackupReady {
         current = transition_delete_local_effect_status(
             paths,
             connection,
             target,
             current.mutation_id,
-            "backup_ready",
-            "source_staging",
+            DeleteLocalEffectStatus::BackupReady,
+            DeleteLocalEffectStatus::SourceStaging,
         )?;
     }
 
     let source_exists = source.is_file();
     let staging_exists = staging.is_file();
 
-    if current.local_effect_status == "source_staged" {
+    if current.local_effect_status == DeleteLocalEffectStatus::SourceStaged {
         if staging_exists {
             let content = fs::read_to_string(&staging).with_context(|| {
                 format!("failed to read staged delete source {}", staging.display())
@@ -1479,7 +1549,10 @@ fn stage_delete_local_source(
         }));
     }
 
-    debug_assert_eq!(current.local_effect_status, "source_staging");
+    debug_assert_eq!(
+        current.local_effect_status,
+        DeleteLocalEffectStatus::SourceStaging
+    );
     match (source_exists, staging_exists) {
         (true, false) => {
             let content = fs::read_to_string(&source)
@@ -1545,8 +1618,8 @@ fn stage_delete_local_source(
         connection,
         target,
         current.mutation_id,
-        "source_staging",
-        "source_staged",
+        DeleteLocalEffectStatus::SourceStaging,
+        DeleteLocalEffectStatus::SourceStaged,
     )?;
     Ok(Some(StagedDeleteLocalSource {
         path: staging,
@@ -1665,35 +1738,35 @@ pub(super) fn advance_verified_delete_mutation(
     fail_if_injected(SyncStateFaultPoint::AfterLedgerDelete)?;
     remove_sync_snapshot(&transaction, &intent.title)?;
     let now = i64::try_from(unix_timestamp()?).context("timestamp does not fit into i64")?;
-    let (next_phase, terminal_outcome, local_effect_status, detail) = if staged_source.is_some() {
+    let transition = PhaseTransition::AdvanceDelete {
+        local_source_staged: staged_source.is_some(),
+    };
+    let (terminal_outcome, local_effect_status, detail) = if staged_source.is_some() {
         let detail = if preserved_source {
             "remote absence and sync-state removal are verified; the staged original still requires unlink completion, and a concurrently present local source was preserved"
         } else {
             "remote absence and sync-state removal are verified; staged local source still requires unlink completion"
         };
-        (
-            "reconciliation_required",
-            None,
-            "source_staged",
-            Some(detail),
-        )
+        (None, DeleteLocalEffectStatus::SourceStaged, Some(detail))
     } else {
         (
-            "state_advanced",
-            Some("state_advanced"),
-            "not_applicable",
+            Some(DeleteTerminalOutcome::StateAdvanced),
+            DeleteLocalEffectStatus::NotApplicable,
             None,
         )
     };
     let changed = transaction
         .execute(
-            "UPDATE sync_delete_mutations
-             SET phase = ?1, terminal_outcome = ?2, local_effect_status = ?3,
-                 detail = ?4, updated_at_unix = ?5
-             WHERE mutation_id = ?6
-               AND phase IN ('response_bound', 'reconciliation_required')",
+            &format!(
+                "UPDATE sync_delete_mutations
+                 SET phase = ?1, terminal_outcome = ?2, local_effect_status = ?3,
+                     detail = ?4, updated_at_unix = ?5
+                 WHERE mutation_id = ?6
+                   AND {}",
+                transition.guard().sql()
+            ),
             params![
-                next_phase,
+                transition.target(),
                 terminal_outcome,
                 local_effect_status,
                 detail,
@@ -1774,16 +1847,28 @@ pub(super) fn advance_verified_delete_mutation(
         let terminal_detail = preserved_source.then_some(
             "local delete cleanup completed; a concurrently present local source was preserved",
         );
+        let transition = PhaseTransition::FinishDeleteCleanup;
         let changed = transaction
             .execute(
-                "UPDATE sync_delete_mutations
-                 SET phase = 'state_advanced', terminal_outcome = 'state_advanced',
-                     local_effect_status = 'complete', detail = ?1,
-                     updated_at_unix = ?2
-                 WHERE mutation_id = ?3
-                   AND phase = 'reconciliation_required'
-                   AND local_effect_status = 'source_staged'",
-                params![terminal_detail, now, intent.mutation_id],
+                &format!(
+                    "UPDATE sync_delete_mutations
+                     SET phase = ?4, terminal_outcome = ?5,
+                         local_effect_status = ?6, detail = ?1,
+                         updated_at_unix = ?2
+                     WHERE mutation_id = ?3
+                       AND {}
+                       AND local_effect_status = ?7",
+                    transition.guard().sql()
+                ),
+                params![
+                    terminal_detail,
+                    now,
+                    intent.mutation_id,
+                    transition.target(),
+                    DeleteTerminalOutcome::StateAdvanced,
+                    DeleteLocalEffectStatus::Complete,
+                    DeleteLocalEffectStatus::SourceStaged,
+                ],
             )
             .context("failed to mark local delete cleanup complete")?;
         if changed != 1 {
@@ -1834,13 +1919,22 @@ pub(super) fn advance_verified_edit_mutation(
         &page.content,
     )?;
     let now = i64::try_from(unix_timestamp()?).context("timestamp does not fit into i64")?;
+    let transition = PhaseTransition::AdvanceEdit;
     let changed = transaction
         .execute(
-            "UPDATE sync_edit_mutations
-             SET phase = 'state_advanced', terminal_outcome = 'state_advanced',
-                 detail = NULL, updated_at_unix = ?1
-             WHERE mutation_id = ?2 AND phase = 'response_bound'",
-            params![now, intent.mutation_id],
+            &format!(
+                "UPDATE sync_edit_mutations
+                 SET phase = ?3, terminal_outcome = ?4,
+                     detail = NULL, updated_at_unix = ?1
+                 WHERE mutation_id = ?2 AND {}",
+                transition.guard().sql()
+            ),
+            params![
+                now,
+                intent.mutation_id,
+                transition.target(),
+                EditTerminalOutcome::StateAdvanced
+            ],
         )
         .with_context(|| {
             format!(

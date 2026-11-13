@@ -18,9 +18,13 @@ Every paragraph should have a defensible job. Prefer concrete actors, actions, d
 - abstract nouns that replace an actual event or mechanism;
 - transitions that repeat the preceding sentence;
 - “context” that never returns to the subject;
-- ornamental quotations;
+- ornamental quotations, or quotations that run past the part that carries meaning;
 - conclusions that merely restate the lead;
-- paragraph templates that could accept another subject name unchanged.
+- paragraph templates that could accept another subject name unchanged;
+- defensive hedging and attribution stacking that make settled or first-party facts sound doubtful;
+- self-conscious framing ("it is worth noting", "notably", "in his own words" around a paraphrase) and paired qualifiers that soften every claim.
+
+Register matters. An encyclopedia states what happened in plain declarative sentences, keeps attribution for views and disputed accounts, and earns gravitas through concrete facts rather than adjectives or caution.
 
 The problem is not that a phrase is associated with machine writing. The problem is that the sentence spends reader attention without delivering a sourced distinction.
 
