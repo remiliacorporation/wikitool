@@ -2412,6 +2412,7 @@ Options:
       --prose-origin <ORIGIN>    Prose origin: human-draft|human-revision|agent-draft|collaborative-draft|mechanical-conversion-of-human-prose|human-reviewed-legacy [possible values: human-draft, human-revision, agent-draft, collaborative-draft, mechanical-conversion-of-human-prose, human-reviewed-legacy]
       --allow-warnings           Record explicit caller acceptance of remaining lint warnings
       --diagnostics              Print resolved runtime diagnostics
+      --content-sha256 <SHA256>  Refuse, recording nothing, unless the file still has this SHA-256 of the exact bytes the human read: the raw file bytes without line-ending or encoding normalization, as `sha256sum PATH` prints and `article lint PATH --format json` reports in content_sha256
       --format <FORMAT>          Output format: text|json [default: text] [possible values: text, json]
   -h, --help                     Print help
 ```

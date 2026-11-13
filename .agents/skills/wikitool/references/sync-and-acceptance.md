@@ -49,7 +49,11 @@ does not establish that absence or clear the invalidation.
 
 Follow the project's human publication policy. Never invent a human decision
 or self-attest to satisfy it. `article accept` binds the exact bytes, target, and
-adapter policy to a named decision. A coherent multi-article decision can use
+adapter policy to a named decision. Pass `--content-sha256` with the hash of the
+bytes the human read, or that the review recorded; accept then refuses, writing
+nothing, if the file no longer has that hash. The hash covers the raw file
+bytes; `article lint PATH --format json` reports it as `content_sha256` without
+recording anything. A coherent multi-article decision can use
 `article changeset prepare` then `article changeset accept`; later byte changes
 invalidate individual members. `prepare` freezes each member's hash and lint
 result with one truthful `--prose-origin` in the manifest named by `--output`.

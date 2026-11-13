@@ -66,10 +66,11 @@ A small sourced revision need not manufacture a separate research dossier.
 Lint the exact candidate and inspect any mechanical repairs. For a finished new
 or substantially revised article, obtain an independent `prose-review` invocation
 from the exact candidate and sources, without supplying an intended verdict.
-Resolve material findings and re-review substantive changes. Before handing off
-for acceptance, compare the hash each review recorded with the final bytes; a
-page edited after its review, including a change of voice or attribution, goes
-back for re-review or is reported as unreviewed. If independent review is
+Resolve material findings and re-review substantive changes. A page edited
+after its review, including a change of voice or attribution, goes back for
+re-review or is reported as unreviewed. Hand off for acceptance with the hash
+the final review recorded, and pass it as `article accept --content-sha256`
+so Wikitool refuses any bytes other than those reviewed. If independent review is
 unavailable, deliver the completed draft with that limit; self-review cannot
 satisfy it.
 

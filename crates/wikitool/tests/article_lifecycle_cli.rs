@@ -211,3 +211,135 @@ fn lint_fix_accept_promote_and_refuse_stale_acceptance() {
     );
     wt.assert_file_lacks(PROMOTED, "deliberately changed");
 }
+
+const ACCEPTANCE_STORE: &str = ".wikitool/acceptance/acceptance.sqlite3";
+
+fn accept_args<'a>(extra: &[&'a str]) -> Vec<&'a str> {
+    let mut args = vec![
+        "article",
+        "accept",
+        DRAFT,
+        "--title",
+        "Example Draft",
+        "--human-editor",
+        "Wikitest fixture identity",
+        "--prose-origin",
+        "agent-draft",
+        "--allow-warnings",
+        "--format",
+        "json",
+    ];
+    args.extend_from_slice(extra);
+    args
+}
+
+fn lint_hash(wt: &Project<'_>) -> String {
+    wt.run(&[
+        "article",
+        "lint",
+        DRAFT,
+        "--title",
+        "Example Draft",
+        "--format",
+        "json",
+    ])
+    .assert_code(0)
+    .assert_json("/errors", 0)
+    .json_str("/content_sha256")
+}
+
+/// A caller binds acceptance to the bytes the human read by passing their hash; bytes that
+/// changed before accept ran are refused without writing, and omitting the hash keeps the
+/// record-what-is-there behavior.
+#[test]
+fn accept_refuses_bytes_other_than_the_reviewed_hash() {
+    let wt = Project::new(env!("CARGO_BIN_EXE_wikitool"));
+    wt.install(
+        fixture("site-adapter.toml"),
+        "site-adapter/site-adapter.toml",
+    );
+    wt.run(&[
+        "init",
+        "--templates",
+        "--no-network",
+        "--api-url",
+        "https://wikitest.invalid/api.php",
+        "--adapter-path",
+        "site-adapter/site-adapter.toml",
+    ])
+    .assert_code(0);
+    wt.install(
+        fixture("Template_Article_quality.wiki"),
+        "templates/misc/Template_Article_quality.wiki",
+    );
+    wt.install(
+        fixture("Template_Reflist.wiki"),
+        "templates/misc/Template_Reflist.wiki",
+    );
+    wt.install(
+        fixture("Template_Cite_web.wiki"),
+        "templates/cite/Template_Cite_web.wiki",
+    );
+    wt.install(fixture("mutated-draft.wiki"), DRAFT);
+
+    // The human reads these bytes; lint reports their hash without recording anything.
+    let reviewed = lint_hash(&wt);
+    let draft_path = wt.path().join(DRAFT);
+    let reviewed_bytes = std::fs::read(&draft_path).expect("read reviewed draft");
+    assert_eq!(reviewed.len(), 64);
+    wt.assert_missing(ACCEPTANCE_STORE);
+
+    // The file changes between reading and accepting.
+    let mut changed_bytes = reviewed_bytes.clone();
+    changed_bytes.extend_from_slice(b"\nAn unreviewed sentence.\n");
+    std::fs::write(&draft_path, &changed_bytes).expect("change draft");
+    let changed = lint_hash(&wt);
+    assert_ne!(changed, reviewed);
+
+    let refused = wt.run(&accept_args(&["--content-sha256", &reviewed]));
+    refused
+        .assert_code(1)
+        .assert_json("/success", false)
+        .assert_json("/status", "content_mismatch")
+        .assert_json("/expected_content_sha256", reviewed.as_str())
+        .assert_json("/current_content_sha256", changed.as_str())
+        .assert_stderr_contains(&reviewed)
+        .assert_stderr_contains(&changed);
+    wt.assert_missing(ACCEPTANCE_STORE);
+
+    // Restored to the reviewed bytes, the same hash accepts; the hash is case-insensitive.
+    std::fs::write(&draft_path, &reviewed_bytes).expect("restore draft");
+    wt.run(&accept_args(&[
+        "--content-sha256",
+        &reviewed.to_ascii_uppercase(),
+    ]))
+    .assert_code(0)
+    .assert_json("/content_sha256", reviewed.as_str());
+
+    // A later mismatch leaves the earlier decision in place: promotion still names it.
+    std::fs::write(&draft_path, &changed_bytes).expect("change draft again");
+    wt.run(&accept_args(&["--content-sha256", &reviewed]))
+        .assert_code(1)
+        .assert_json("/status", "content_mismatch");
+    wt.run(&[
+        "article",
+        "promote",
+        DRAFT,
+        "--title",
+        "Example Draft",
+        "--format",
+        "json",
+    ])
+    .assert_code(1)
+    .assert_stderr_contains(&format!("accepted {reviewed}, current {changed}"));
+    wt.assert_missing(PROMOTED);
+
+    // A malformed hash is a usage error, not a refusal of the content.
+    wt.run(&accept_args(&["--content-sha256", "not-a-digest"]))
+        .assert_code(2);
+
+    // Without the option, accept records whatever bytes the file holds, as before.
+    wt.run(&accept_args(&[]))
+        .assert_code(0)
+        .assert_json("/content_sha256", changed.as_str());
+}
