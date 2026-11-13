@@ -235,6 +235,114 @@ fn the_site_adapter_supplies_the_export_settings() {
     assert_eq!(export["source"]["ontology"], "https://ontology.example/");
 }
 
+/// `[ontology] module_sections` narrows the generated module to the sections a wiki's modules
+/// read, plus `source`; the vendored copy stays complete and omitting the key restores the
+/// whole module byte for byte.
+#[test]
+fn module_sections_narrow_only_the_generated_module() {
+    let ontology = Ontology::new();
+    let wt = Project::new(env!("CARGO_BIN_EXE_wikitool"));
+    let generic = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../site_adapters/generic/site-adapter.toml"),
+    )
+    .expect("generic adapter");
+    let write_adapter = |extra: &str| {
+        let adapter = format!(
+            "{generic}\n[ontology]\n\
+             product = \"test-wiki\"\n\
+             source = \"https://ontology.example/\"\n\
+             local_prefix = \"wiki\"\n\
+             local_namespace = \"https://wiki.example/ns/\"\n\
+             imports = \"v1/imports\"\n\
+             {extra}"
+        );
+        fs::create_dir_all(wt.path().join("site-adapter")).expect("adapter dir");
+        fs::write(wt.path().join("site-adapter/site-adapter.toml"), adapter).expect("adapter");
+    };
+    write_adapter("");
+    wt.run(&[
+        "init",
+        "--no-network",
+        "--api-url",
+        "https://wikitest.invalid/api.php",
+        "--adapter-path",
+        "site-adapter/site-adapter.toml",
+    ])
+    .assert_code(0);
+    wt.run(&["ontology", "export", "--from", ontology.path()])
+        .assert_code(0);
+    let full_module = wt.read(MODULE);
+    let all_sections = json!([
+        "classes",
+        "external",
+        "families",
+        "mappings",
+        "properties",
+        "relations",
+        "renames",
+        "schemes",
+        "source"
+    ]);
+    wt.run(&["ontology", "generate", "--check", "--format", "json"])
+        .assert_code(0)
+        .assert_json("/sections", all_sections.clone());
+    assert!(full_module.contains("[\"mappings\"] = {"));
+
+    // Narrowed: the current module no longer matches, and generate drops exactly the others.
+    write_adapter("module_sections = [\"classes\", \"schemes\"]\n");
+    wt.run(&["ontology", "generate", "--check"]).assert_code(1);
+    assert_eq!(wt.read(MODULE), full_module, "--check must not write");
+    wt.run(&["ontology", "generate", "--format", "json"])
+        .assert_code(0)
+        .assert_json("/written", true)
+        .assert_json("/sections", json!(["classes", "schemes", "source"]));
+    let narrowed = wt.read(MODULE);
+    for kept in ["[\"classes\"] = {", "[\"schemes\"] = {", "[\"source\"] = {"] {
+        assert!(narrowed.contains(kept), "{kept} missing");
+    }
+    for dropped in [
+        "[\"families\"]",
+        "[\"properties\"]",
+        "[\"relations\"]",
+        "[\"mappings\"]",
+        "[\"renames\"]",
+        "[\"external\"]",
+    ] {
+        assert!(!narrowed.contains(dropped), "{dropped} kept");
+    }
+    wt.run(&["ontology", "generate", "--check"]).assert_code(0);
+    // The vendored copy is complete, and export writes the narrowed module too.
+    wt.run(&["ontology", "export", "--from", ontology.path()])
+        .assert_code(0);
+    assert_eq!(
+        read_json(&wt, EXPORT)["mappings"]["remilia:Agent"][0]["object"],
+        "prov:Agent"
+    );
+    assert_eq!(wt.read(MODULE), narrowed);
+
+    // A changed list makes the narrowed module out of date.
+    write_adapter("module_sections = [\"classes\"]\n");
+    wt.run(&["ontology", "generate", "--check", "--format", "json"])
+        .assert_code(1)
+        .assert_json("/up_to_date", false)
+        .assert_json("/sections", json!(["classes", "source"]));
+
+    // Without the key the module is the whole export again, byte for byte.
+    write_adapter("");
+    wt.run(&["ontology", "generate"]).assert_code(0);
+    assert_eq!(wt.read(MODULE), full_module);
+
+    // An unknown section is an adapter error that names the valid ones.
+    write_adapter("module_sections = [\"classes\", \"mapping\"]\n");
+    wt.run(&["ontology", "generate"])
+        .assert_code(1)
+        .assert_stderr_contains("unknown section \"mapping\"")
+        .assert_stderr_contains(
+            "valid sections: classes, families, properties, relations, schemes, mappings, renames, external, source",
+        );
+    assert_eq!(wt.read(MODULE), full_module);
+}
+
 #[test]
 fn generate_without_a_vendored_copy_explains_what_is_missing() {
     let wt = Project::new(env!("CARGO_BIN_EXE_wikitool"));

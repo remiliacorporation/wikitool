@@ -172,6 +172,12 @@ pub struct OntologyRules {
     /// exactly against the part before the colon.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exclude_rename_prefixes: Vec<String>,
+    /// The top-level export sections that `generate` writes into
+    /// `Module:Ontology/data`, such as `["classes", "schemes"]`. Omitted
+    /// means every section. `source` is always written. The vendored export
+    /// stays complete either way.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub module_sections: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

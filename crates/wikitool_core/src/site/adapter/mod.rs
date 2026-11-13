@@ -209,6 +209,24 @@ fn validate_site_adapter(policy: &SiteAdapterDocument) -> Result<()> {
             );
         }
     }
+    if let Some(sections) = policy
+        .ontology
+        .as_ref()
+        .and_then(|ontology| ontology.module_sections.as_ref())
+    {
+        let mut seen = BTreeSet::new();
+        for section in sections {
+            if !crate::ontology::MODULE_SECTIONS.contains(&section.as_str()) {
+                bail!(
+                    "site-adapter [ontology] module_sections names unknown section {section:?}; valid sections: {}",
+                    crate::ontology::MODULE_SECTIONS.join(", ")
+                );
+            }
+            if !seen.insert(section.as_str()) {
+                bail!("site-adapter [ontology] module_sections lists {section:?} more than once");
+            }
+        }
+    }
     Ok(())
 }
 

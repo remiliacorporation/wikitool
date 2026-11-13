@@ -115,6 +115,23 @@ matches the CURIE prefix before the colon exactly, so `legacy` does not exclude 
 `--product` overrides `product`. `source` is only recorded in the export's metadata; Wikitool
 never fetches it, so it need not resolve.
 
+`module_sections` narrows `Module:Ontology/data` to the top-level sections the wiki's modules
+read:
+
+```toml
+module_sections = ["classes", "families", "properties", "relations", "schemes"]
+```
+
+Every page that loads the module with `mw.loadData` parses all of it, so sections nothing reads
+at runtime still cost parse time and Lua memory on each such page. Mappings and renames are
+the large ones. The valid names are `classes`, `families`, `properties`, `relations`,
+`schemes`, `mappings`, `renames`, `external` and `source`; an unknown or repeated name is an
+adapter error. `source`, which holds the commit and product, is always written whether listed
+or not. Omitting the key writes every section, exactly as before. Both `export` and `generate`
+write the narrowed module and `generate --check` compares against it, while the vendored copy
+always stays complete. Before narrowing, make sure no module, including a function that is
+rarely called, indexes a section left out: it would read `nil`.
+
 ## Supplemental guidance
 
 Keep target names, relationships, local source rules, category governance,

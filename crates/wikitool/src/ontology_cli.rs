@@ -94,6 +94,10 @@ struct GenerateReport {
     product: Option<String>,
     export_path: String,
     module_path: String,
+    /// The vendored copy's top-level sections the module holds: all of them,
+    /// or those the site adapter's `[ontology] module_sections` selects plus
+    /// `source`. Null without a vendored copy.
+    sections: Option<Vec<String>>,
     check: bool,
     /// Whether the module on disk already matched the vendored copy.
     up_to_date: bool,
@@ -138,11 +142,17 @@ pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Resu
                     .map(|rules| (rules.local_prefix.as_str(), rules.local_namespace.as_str())),
             };
             let export = ontology::export(&args.from, &options)?;
-            // Render both outputs before writing either.
+            // Render both outputs before writing either. The vendored copy is
+            // always complete; only the module follows `module_sections`.
             let export_text = serde_json::to_string_pretty(&export)? + "\n";
-            let module = ontology::generate_module(&export)?;
+            let module = ontology::generate_module(
+                &export,
+                rules
+                    .as_ref()
+                    .and_then(|rules| rules.module_sections.as_deref()),
+            )?;
             write(&export_path, &export_text)?;
-            write(&module_path, &module)?;
+            write(&module_path, &module.text)?;
             let report = ExportReport {
                 schema_version: "ontology_export_v1",
                 ontology_dir: normalize_path(&args.from),
@@ -161,6 +171,9 @@ pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Resu
             }
         }
         OntologySubcommand::Generate(args) => {
+            let module_sections = load_site_adapter(&paths)?
+                .ontology
+                .and_then(|rules| rules.module_sections);
             let text = match fs::read_to_string(&export_path) {
                 Ok(text) => text,
                 Err(error) if error.kind() == ErrorKind::NotFound => {
@@ -173,6 +186,7 @@ pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Resu
                             product: None,
                             export_path: ontology::EXPORT_PATH.to_string(),
                             module_path: module_relative,
+                            sections: None,
                             check: args.check,
                             up_to_date: false,
                             written: false,
@@ -191,7 +205,10 @@ pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Resu
             };
             let export: Value = serde_json::from_str(&text)
                 .with_context(|| format!("failed to parse {}", normalize_path(&export_path)))?;
-            let module = ontology::generate_module(&export)?;
+            let ontology::GeneratedModule {
+                text: module,
+                sections,
+            } = ontology::generate_module(&export, module_sections.as_deref())?;
             let current = match fs::read_to_string(&module_path) {
                 Ok(current) => Some(current),
                 Err(error) if error.kind() == ErrorKind::NotFound => None,
@@ -224,6 +241,7 @@ pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Resu
                     .map(str::to_string),
                 export_path: ontology::EXPORT_PATH.to_string(),
                 module_path: module_relative,
+                sections: Some(sections),
                 check: args.check,
                 up_to_date,
                 written,
