@@ -863,9 +863,9 @@ fn handle_edit(
     if !state.csrf_token_issued {
         bail!("edit request did not obtain a CSRF token for the authenticated session");
     }
-    if !params
+    if params
         .get("token")
-        .is_some_and(|value| value == &csrf_token(state))
+        .is_none_or(|value| value != &csrf_token(state))
     {
         bail!("edit request used an invalid CSRF token");
     }
@@ -944,9 +944,9 @@ fn handle_delete(
     if !state.csrf_token_issued {
         bail!("delete request did not obtain a CSRF token for the authenticated session");
     }
-    if !params
+    if params
         .get("token")
-        .is_some_and(|value| value == &csrf_token(state))
+        .is_none_or(|value| value != &csrf_token(state))
     {
         bail!("delete request used an invalid CSRF token");
     }

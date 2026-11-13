@@ -1206,7 +1206,7 @@ fn validate_open_items_sidecar(
     brief_path: &Path,
     metadata: &BriefFrontmatter,
     errors: &mut Vec<String>,
-    warnings: &mut Vec<String>,
+    warnings: &mut [String],
 ) -> Result<OpenItemsValidationResult> {
     let path = match open_items_sidecar_path(brief_path, metadata) {
         Ok(path) => path,
@@ -1272,7 +1272,7 @@ fn reject_symlink_sidecar(path: &Path) -> Result<()> {
 fn collect_open_items(
     path: &Path,
     errors: &mut Vec<String>,
-    warnings: &mut Vec<String>,
+    warnings: &mut [String],
 ) -> Result<OpenItemsValidationResult> {
     if !path.is_file() {
         errors.push(format!("open items sidecar missing: {}", path.display()));
@@ -1338,7 +1338,7 @@ fn validate_open_item_record(
     counts: &mut InterviewOpenItemCounts,
     item_ids: &mut BTreeSet<String>,
     errors: &mut Vec<String>,
-    _warnings: &mut Vec<String>,
+    _warnings: &mut [String],
 ) {
     if item.schema_version.as_deref() != Some(OPEN_ITEM_SCHEMA_VERSION) {
         errors.push(format!(
