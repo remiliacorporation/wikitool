@@ -239,3 +239,20 @@ local_namespace = "https://wiki.remilia.org/ns/"
 imports = "v0.1.0/imports"
 exclude_rename_prefixes = ["rn", "rns"]
 module_sections = ["classes", "properties", "relations"]
+# Lint and scout read an article's classes from {{Instance of}} and its
+# infobox's kind of page from Module:Ontology/display.
+class_template = "Template:Instance of"
+typed_infobox_template = "Template:Infobox"
+# Dates follow the style guide (May 12, 2019) or ISO 8601.
+date_formats = ["%B %-d, %Y", "%B %Y"]
+
+[ontology.infobox_types]
+"Template:Infobox person" = "person"
+"Template:Infobox organization" = "organization"
+"Template:Infobox NFT collection" = "nft collection"
+"Template:Infobox concept" = "concept"
+"Template:Infobox event" = "event"
+"Template:Infobox exhibition" = "exhibition"
+"Template:Infobox artwork" = "artwork"
+"Template:Infobox website" = "website"
+"Template:Infobox trait" = "trait"

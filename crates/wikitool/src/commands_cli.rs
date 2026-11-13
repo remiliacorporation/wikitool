@@ -86,6 +86,16 @@ const COMMAND_PURPOSES: &[(&str, Audience, &str)] = &[
     ),
     ("ontology export", Agent, "vendor ontology classes"),
     ("ontology generate", Agent, "ontology data module"),
+    (
+        "ontology check",
+        Agent,
+        "ontology modules local display mappings ci",
+    ),
+    (
+        "ontology report",
+        Agent,
+        "ontology intake evidence term usage failing values",
+    ),
     ("delete", Agent, "remove page live"),
     ("upload", Agent, "media image file"),
     ("mutation list", Agent, "receipts writes ambiguous outcome"),

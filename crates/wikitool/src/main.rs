@@ -113,7 +113,9 @@ enum Commands {
     Module(module_cli::ModuleArgs),
     #[command(about = "Export a remote wiki page tree to local files")]
     Export(export_cli::ExportArgs),
-    #[command(about = "Vendor the pinned ontology and generate Module:Ontology/data")]
+    #[command(
+        about = "Vendor the pinned ontology, generate Module:Ontology/data, and check the wiki's use of it"
+    )]
     Ontology(ontology_cli::OntologyArgs),
     #[command(about = "Delete a page from the live wiki")]
     Delete(sync_cli::DeleteArgs),

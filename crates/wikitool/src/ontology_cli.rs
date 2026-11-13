@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 use clap::{Args, Subcommand};
 use serde::Serialize;
 use serde_json::Value;
-use wikitool_core::ontology::{self, ExportOptions};
+use wikitool_core::ontology::{self, ExportOptions, typing};
 use wikitool_core::site::adapter::load_site_adapter;
 
 use crate::RuntimeOptions;
@@ -26,6 +26,12 @@ enum OntologySubcommand {
     Export(ExportArgs),
     #[command(about = "Generate Module:Ontology/data from the vendored copy")]
     Generate(GenerateArgs),
+    #[command(
+        about = "Check Module:Ontology/local and Module:Ontology/display against the vendored copy"
+    )]
+    Check(CheckArgs),
+    #[command(about = "Report how the wiki's articles use the ontology, as evidence for an intake")]
+    Report(CheckArgs),
 }
 
 #[derive(Debug, Args)]
@@ -70,6 +76,35 @@ struct GenerateArgs {
         help = "Output format: text|json"
     )]
     format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct CheckArgs {
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = OutputFormat::Text,
+        value_name = "FORMAT",
+        help = "Output format: text|json"
+    )]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Serialize)]
+struct CheckReport {
+    schema_version: &'static str,
+    /// `not_ready` without `[ontology]` or a vendored copy, `incomplete` when
+    /// a module is missing or unreadable, otherwise `clean` or `findings`.
+    status: &'static str,
+    export_ready: bool,
+    commit: Option<String>,
+    export_path: String,
+    modules: Vec<typing::ModuleStatus>,
+    checks_run: Vec<&'static str>,
+    skipped: Vec<typing::SkippedCheck>,
+    finding_count: usize,
+    findings: Vec<typing::TypingFinding>,
+    message: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -261,8 +296,90 @@ pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Resu
                 );
             }
         }
+        OntologySubcommand::Check(args) => run_check(&paths, &args)?,
+        OntologySubcommand::Report(args) => run_report(&paths, &args)?,
     }
     Ok(())
+}
+
+/// Check the wiki's ontology modules alone, for CI: every local term is
+/// mapped and shadows no shared term, and every display field and type
+/// resolves. Fails on any finding or skipped check.
+fn run_check(paths: &wikitool_core::runtime::ResolvedPaths, args: &CheckArgs) -> Result<()> {
+    let adapter = load_site_adapter(paths)?;
+    let mut report = CheckReport {
+        schema_version: "ontology_check_v1",
+        status: "not_ready",
+        export_ready: false,
+        commit: None,
+        export_path: ontology::EXPORT_PATH.to_string(),
+        modules: Vec::new(),
+        checks_run: Vec::new(),
+        skipped: Vec::new(),
+        finding_count: 0,
+        findings: Vec::new(),
+        message: None,
+    };
+    let project = match typing::load_project_ontology(paths, &adapter)? {
+        typing::OntologyAvailability::NotConfigured => {
+            report.message = Some(
+                "the site adapter has no [ontology] section; a wiki that does not use an \
+                 ontology needs no ontology check"
+                    .to_string(),
+            );
+            None
+        }
+        typing::OntologyAvailability::Unavailable { reason } => {
+            report.message = Some(reason);
+            None
+        }
+        typing::OntologyAvailability::Ready(project) => Some(project),
+    };
+    if let Some(project) = &project {
+        let check = project.check_modules();
+        report.export_ready = true;
+        report.commit = project.commit().map(str::to_string);
+        report.modules = vec![project.local_module.clone(), project.display_module.clone()];
+        report.finding_count = check.findings.len();
+        report.status = if !check.skipped.is_empty() {
+            "incomplete"
+        } else if check.findings.is_empty() {
+            "clean"
+        } else {
+            "findings"
+        };
+        report.checks_run = check.checks_run;
+        report.skipped = check.skipped;
+        report.findings = check.findings;
+    }
+    if args.format.is_json() {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        if let Some(message) = &report.message {
+            println!("{message}");
+        }
+        for module in &report.modules {
+            println!(
+                "{}: {} ({})",
+                module.title, module.status, module.relative_path
+            );
+        }
+        for skipped in &report.skipped {
+            println!("skipped {}: {}", skipped.check, skipped.reason);
+        }
+        for finding in &report.findings {
+            println!("{}: {}", finding.code, finding.message);
+        }
+        if report.status == "clean" {
+            println!("ontology modules are consistent with the vendored copy");
+        }
+    }
+    match report.status {
+        "clean" => Ok(()),
+        "not_ready" => bail!("ontology check requires [ontology] and a vendored ontology"),
+        "incomplete" => bail!("ontology check could not read every ontology module"),
+        _ => bail!("ontology check found {} finding(s)", report.finding_count),
+    }
 }
 
 fn commit_of(export: &Value) -> String {
@@ -279,4 +396,62 @@ fn write(path: &Path, text: &str) -> Result<()> {
             .with_context(|| format!("failed to create {}", normalize_path(parent)))?;
     }
     fs::write(path, text).with_context(|| format!("failed to write {}", normalize_path(path)))
+}
+
+/// Walk the content mirror and report, for the intake that moves the wiki's
+/// terms into the shared ontology: the pages that use each local term, the
+/// display fields with no property, the values that fail their value type,
+/// and the class ids no module defines.
+fn run_report(paths: &wikitool_core::runtime::ResolvedPaths, args: &CheckArgs) -> Result<()> {
+    let adapter = load_site_adapter(paths)?;
+    let project = match typing::load_project_ontology(paths, &adapter)? {
+        typing::OntologyAvailability::NotConfigured => bail!(
+            "the site adapter has no [ontology] section; a wiki that does not use an ontology \
+             has nothing to report"
+        ),
+        typing::OntologyAvailability::Unavailable { reason } => bail!("{reason}"),
+        typing::OntologyAvailability::Ready(project) => project,
+    };
+    let pages = wikitool_core::ontology::report::read_content_pages(paths)?;
+    let report = project.report(&pages);
+    if args.format.is_json() {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
+    println!(
+        "{} articles read, {} typed",
+        report.page_count, report.typed_page_count
+    );
+    for skipped in &report.skipped {
+        println!("skipped {}: {}", skipped.check, skipped.reason);
+    }
+    println!("local terms:");
+    for term in &report.local_terms {
+        println!(
+            "  {} ({}): {} page(s){}",
+            term.id,
+            term.section,
+            term.page_count,
+            if term.mapped { "" } else { ", unmapped" }
+        );
+    }
+    println!("fields without a property:");
+    for field in &report.fields_without_property {
+        println!("  {}: {} page(s)", field.field, field.page_count);
+    }
+    println!("values that fail their value type:");
+    for failure in &report.value_failures {
+        println!(
+            "  {} ({}): {} value(s) on {} page(s)",
+            failure.property,
+            failure.value_type.as_deref().unwrap_or("unknown"),
+            failure.failure_count,
+            failure.page_count
+        );
+    }
+    println!("unknown classes:");
+    for class in &report.unknown_classes {
+        println!("  {}: {} page(s)", class.id, class.page_count);
+    }
+    Ok(())
 }

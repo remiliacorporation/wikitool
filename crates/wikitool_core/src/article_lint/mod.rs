@@ -18,8 +18,9 @@ pub use file::{
     lint_article_file_with_resources,
 };
 pub use model::{
-    AppliedFixRecord, ArticleFixApplyMode, ArticleFixResult, ArticleLintIssue, ArticleLintReport,
-    ArticleLintResourcesStatus, ArticleLintSeverity, SuggestedFix, SuggestedFixKind, TextSpan,
+    AppliedFixRecord, ArticleFixApplyMode, ArticleFixResult, ArticleLintIssue,
+    ArticleLintOntologyStatus, ArticleLintReport, ArticleLintResourcesStatus, ArticleLintSeverity,
+    ArticleLintSkippedCheck, SuggestedFix, SuggestedFixKind, TextSpan,
 };
 
 use document::{ParsedArticleDocument, load_article_document_with_title};
@@ -172,6 +173,7 @@ fn build_report(
             graph_ready: resources.index_connection.is_some(),
         },
         issues,
+        ontology: rules::ontology_status(document, resources),
     }
 }
 

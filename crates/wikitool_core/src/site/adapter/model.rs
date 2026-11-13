@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -148,6 +148,13 @@ pub struct LintRules {
     pub lead_paragraph_limit: LintRuleLevel,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_lead_paragraphs: Option<usize>,
+    /// `ontology.*`: a class, field or value an article states does not
+    /// match the vendored ontology and the wiki's own ontology modules.
+    /// Omitted, it is `warning` when the adapter has `[ontology]`; `ignore`
+    /// turns the checks off. They run only when the adapter has `[ontology]`
+    /// and the project has the vendored export.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ontology_typing: Option<LintRuleLevel>,
 }
 
 /// The ontology a wiki types its pages and infobox fields with. The adapter
@@ -178,6 +185,25 @@ pub struct OntologyRules {
     /// stays complete either way.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub module_sections: Option<Vec<String>>,
+    /// The template whose positional arguments name the classes an article's
+    /// subject is an instance of, such as `Template:Instance of`. Without it,
+    /// lint does not check class statements and scout reads only infoboxes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub class_template: Option<String>,
+    /// The infobox template whose `type=` argument names a kind of page in
+    /// `Module:Ontology/display`, such as `Template:Infobox`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub typed_infobox_template: Option<String>,
+    /// Infobox templates that always render one kind of page, mapped to that
+    /// kind's key in `Module:Ontology/display`'s `types`, such as
+    /// `"Template:Infobox person" = "person"`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub infobox_types: BTreeMap<String, String>,
+    /// Date formats, in strftime notation such as `%B %-d, %Y`, that a date
+    /// value may use besides ISO 8601 (`2024`, `2024-05`, `2024-05-12`).
+    /// Without any, lint reports every other date.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub date_formats: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -252,4 +278,16 @@ pub struct TemplateCatalogSummary {
     pub usage_index_ready: bool,
     pub adapter_template_titles: Vec<String>,
     pub refreshed_at: String,
+}
+
+impl SiteAdapter {
+    /// The level of the `ontology.*` lint findings: the configured
+    /// `ontology_typing`, else `warning` for an adapter with `[ontology]`.
+    pub fn ontology_typing_level(&self) -> LintRuleLevel {
+        match (self.lint.ontology_typing, &self.ontology) {
+            (Some(level), _) => level,
+            (None, Some(_)) => LintRuleLevel::Warning,
+            (None, None) => LintRuleLevel::Ignore,
+        }
+    }
 }

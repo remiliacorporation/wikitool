@@ -22,6 +22,9 @@ use wikitool_core::wiki_interview::{
 };
 
 use super::live_existence::{LiveExistence, check_live_existence};
+use super::scout_ontology::{
+    WithOntology, build_scout_ontology, scout_ontology_card, scout_ontology_line,
+};
 use crate::briefs::{
     BriefCommand, BriefView, brief_command, brief_command_owned, capped_strings, text_preview,
 };
@@ -290,6 +293,7 @@ pub(crate) fn run_article_scout(runtime: &RuntimeOptions, args: ArticleScoutArgs
         },
     )?;
     let status = catalog_status(&paths, &docs_profile)?;
+    let mut scout_ontology = None;
     let mut output = match pack {
         AuthoringContextOutcome::IndexMissing => ArticleScoutOutput {
             docs_profile_requested: status.docs_profile_requested.clone(),
@@ -318,6 +322,8 @@ pub(crate) fn run_article_scout(runtime: &RuntimeOptions, args: ArticleScoutArgs
                 template_catalog.as_ref(),
                 args.intent.into(),
             );
+            scout_ontology =
+                build_scout_ontology(&paths, &adapter, &article_scout, stub_content.as_deref())?;
             ArticleScoutOutput {
                 docs_profile_requested: status.docs_profile_requested.clone(),
                 live_existence: live_existence.clone(),
@@ -335,12 +341,18 @@ pub(crate) fn run_article_scout(runtime: &RuntimeOptions, args: ArticleScoutArgs
 
     if args.format.is_json() {
         if args.view.is_full() {
-            println!("{}", serde_json::to_string_pretty(&output)?);
+            let view = WithOntology {
+                view: &output,
+                ontology: scout_ontology.as_ref(),
+            };
+            println!("{}", serde_json::to_string_pretty(&view)?);
         } else {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&build_article_scout_brief(&output))?
-            );
+            let brief = build_article_scout_brief(&output);
+            let view = WithOntology {
+                view: &brief,
+                ontology: scout_ontology.as_ref().map(scout_ontology_card),
+            };
+            println!("{}", serde_json::to_string_pretty(&view)?);
         }
         return Ok(());
     }
@@ -373,6 +385,9 @@ pub(crate) fn run_article_scout(runtime: &RuntimeOptions, args: ArticleScoutArgs
                 serde_json::to_string(&article_scout.intent)?
             );
             println!("article_scout.topic: {}", article_scout.topic);
+            if let Some(ontology) = &scout_ontology {
+                println!("{}", scout_ontology_line(ontology));
+            }
             println!(
                 "article_scout.local_state: {}",
                 serde_json::to_string(&article_scout.local_state)?
