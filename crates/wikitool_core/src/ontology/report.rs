@@ -17,7 +17,9 @@ use crate::filesystem::{ScanOptions, scan_files};
 use crate::runtime::ResolvedPaths;
 use crate::support::normalize_path;
 
-use super::typing::{ProjectOntology, SkippedCheck, UNKNOWN_CLASS, VALUE_TYPE_MISMATCH};
+use super::typing::{
+    PageStatements, ProjectOntology, SkippedCheck, UNKNOWN_CLASS, VALUE_TYPE_MISMATCH,
+};
 use super::vocabulary::TERM_SECTIONS;
 
 pub const ONTOLOGY_REPORT_SCHEMA_VERSION: &str = "ontology_report_v1";
@@ -157,7 +159,7 @@ impl ProjectOntology {
         let mut unknown: BTreeMap<String, Tally> = BTreeMap::new();
         let mut typed_page_count = 0;
         // Which checks cannot run does not depend on the page.
-        let skipped: Vec<SkippedCheck> = self.check_article("").skipped;
+        let skipped: Vec<SkippedCheck> = self.check_statements(&PageStatements::default()).skipped;
 
         for page in pages {
             let title = page.title.as_str();
@@ -182,30 +184,22 @@ impl ProjectOntology {
                 if let Some(class) = kind.get("class").and_then(Value::as_str) {
                     used.insert(self.vocabulary.current(class));
                 }
-                for (field_name, _) in self.filled_fields(call, kind) {
-                    let field = self.vocabulary.display_field(field_name);
-                    match field
-                        .and_then(|field| field.get("property"))
-                        .and_then(Value::as_str)
-                    {
+                for (field, _) in self.filled_fields(call, kind) {
+                    match field.property {
                         Some(property) => {
                             used.insert(self.vocabulary.current(property));
                         }
-                        None => {
-                            if field.is_some() {
-                                fields
-                                    .entry(field_name.to_string())
-                                    .or_default()
-                                    .add(title, None);
-                            }
-                        }
+                        None => fields
+                            .entry(field.name.to_string())
+                            .or_default()
+                            .add(title, None),
                     }
                 }
             }
             for id in used {
                 terms.entry(id).or_default().add(title, None);
             }
-            let typing = self.check_article(&page.wikitext);
+            let typing = self.check_statements(&statements);
             for finding in typing.findings {
                 if finding.code == VALUE_TYPE_MISMATCH {
                     failures

@@ -349,7 +349,7 @@ fn check_quantity(value: &str, allowed_units: Option<Vec<&str>>) -> Verdict {
         .into_iter()
         .filter(|unit| *unit != "1")
         .collect();
-    if units.contains(&unit) {
+    if units.iter().any(|code| unit_matches(code, unit)) {
         return Verdict::Valid;
     }
     if units.is_empty() {
@@ -409,6 +409,42 @@ fn strip_number(value: &str) -> Option<&str> {
     Some(&value[index..])
 }
 
+/// Whether a written unit is the UCUM code an ontology lists, or a common
+/// way of writing it (`MB` for `MBy`, `in` for `[in_i]`, `px` for `{px}`).
+fn unit_matches(code: &str, written: &str) -> bool {
+    if code == written {
+        return true;
+    }
+    let aliases: &[&str] = match code {
+        "By" => &["B", "byte", "bytes"],
+        "kBy" => &["kB", "KB"],
+        "MBy" => &["MB"],
+        "GBy" => &["GB"],
+        "TBy" => &["TB"],
+        "bit" => &["bits"],
+        "Cel" => &["°C", "\u{2103}"],
+        "[in_i]" => &["in", "inch", "inches", "\u{2033}"],
+        "[ft_i]" => &["ft", "foot", "feet"],
+        "[mi_i]" => &["mi", "mile", "miles"],
+        "[lb_av]" => &["lb", "lbs", "pound", "pounds"],
+        "[lb_av].[ft_i]" => &["lb\u{b7}ft", "lb-ft", "lb ft", "ft\u{b7}lb", "ft-lb"],
+        "N.m" => &["N\u{b7}m", "N m", "Nm"],
+        "a" => &["yr", "year", "years"],
+        "h" => &["hr", "hour", "hours"],
+        "min" => &["mins", "minute", "minutes"],
+        "s" => &["sec", "second", "seconds"],
+        "ms" => &["msec"],
+        "L" => &["l", "liter", "liters", "litre", "litres"],
+        "mL" => &["ml"],
+        "cm3" => &["cm\u{b3}", "cc"],
+        "g/cm3" => &["g/cm\u{b3}"],
+        "g/m2" => &["g/m\u{b2}", "gsm"],
+        "g/m3" => &["g/m\u{b3}"],
+        "{px}" => &["px", "pixels"],
+        _ => &[],
+    };
+    aliases.contains(&written)
+}
 #[cfg(test)]
 mod tests {
     use super::{display_parts, is_iso_date, matches_date, strip_number};
@@ -460,6 +496,27 @@ mod tests {
         assert!(matches_date("May 2019", "%B %Y"));
         assert!(!matches_date("May 32, 2019", "%B %-d, %Y"));
         assert!(!matches_date("12 May 2019", "%B %-d, %Y"));
+    }
+
+    #[test]
+    fn quantities_accept_ucum_codes_and_their_common_spellings() {
+        use super::{Verdict, check_quantity};
+        assert_eq!(check_quantity("5 MB", Some(vec!["MBy"])), Verdict::Valid);
+        assert_eq!(check_quantity("5 MBy", Some(vec!["MBy"])), Verdict::Valid);
+        assert_eq!(
+            check_quantity("12 in", Some(vec!["[in_i]"])),
+            Verdict::Valid
+        );
+        assert_eq!(
+            check_quantity("3.2 GHz", Some(vec!["Hz", "GHz"])),
+            Verdict::Valid
+        );
+        assert_eq!(check_quantity("10,000", Some(vec!["1"])), Verdict::Valid);
+        assert!(matches!(
+            check_quantity("5 MB", Some(vec!["GBy"])),
+            Verdict::Invalid(_)
+        ));
+        assert!(matches!(check_quantity("5000+", None), Verdict::Invalid(_)));
     }
 
     #[test]

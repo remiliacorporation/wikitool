@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Result;
@@ -5,7 +6,7 @@ use rusqlite::Connection;
 
 use crate::content_store::parsing::open_indexed_connection;
 use crate::filesystem::{ScanOptions, scan_files};
-use crate::ontology::typing::{OntologyAvailability, load_project_ontology};
+use crate::ontology::typing::{ArticleTyping, OntologyAvailability, load_project_ontology};
 use crate::runtime::ResolvedPaths;
 use crate::site::{
     SiteAdapter, TemplateCatalog, WikiCapabilityManifest, load_latest_wiki_capabilities,
@@ -29,6 +30,8 @@ pub(super) struct LoadedResources {
     /// The vendored ontology and the wiki's ontology modules, loaded only when
     /// the adapter's `ontology_typing` level is not `ignore`.
     pub(super) ontology: Option<OntologyAvailability>,
+    /// The last article's typing, so lint computes it once per article.
+    pub(super) ontology_typing: RefCell<Option<(String, ArticleTyping)>>,
 }
 
 pub(super) fn load_resources(paths: &ResolvedPaths) -> Result<LoadedResources> {
@@ -61,6 +64,7 @@ pub(super) fn load_resources(paths: &ResolvedPaths) -> Result<LoadedResources> {
         proper_noun_words,
         index_connection,
         ontology,
+        ontology_typing: RefCell::new(None),
     })
 }
 

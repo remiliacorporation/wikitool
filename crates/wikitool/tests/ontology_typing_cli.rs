@@ -35,6 +35,10 @@ fn export() -> Value {
                 "label": "Base clock", "valueType": "quantity", "cardinality": "one",
                 "allowedUnits": ["Hz", "GHz"], "appliesTo": ["remilia:Artwork"]
             },
+            "wdt:P276": {
+                "label": "location", "valueType": "canonical-object", "cardinality": "one",
+                "appliesTo": ["schema:Event"]
+            },
             "wdt:P212": {
                 "label": "ISBN-13", "valueType": "external-id", "cardinality": "one",
                 "appliesTo": ["remilia:Artwork"]
@@ -80,10 +84,17 @@ return {
 			cardinality = 'one',
 			appliesTo = { 'wd:Q5' },
 		},
+		['wiki:location'] = {
+			label = 'Location',
+			valueType = 'text',
+			cardinality = 'one',
+			appliesTo = { 'remilia:Artwork' },
+		},
 	},
 	mappings = {
 		['wd:Q5'] = { { predicate = 'skos:exactMatch', object = 'wd:Q5' } },
 		['wdt:P569'] = { { predicate = 'skos:exactMatch', object = 'wdt:P569' } },
+		['wiki:location'] = { { predicate = 'skos:closeMatch', object = 'sssom:NoTermFound' } },
 	},
 }
 "#;
@@ -97,17 +108,24 @@ const DISPLAY_MODULE: &str = r#"return {
 		clock = { property = 'remilia:baseClock', label = 'Clock' },
 		isbn = { property = 'wdt:P212', label = 'ISBN' },
 		plain = { label = 'Plain' },
+		-- Its own property applies only to events; the artwork kind
+		-- overrides it with one that applies.
+		location = { property = 'wdt:P276', label = 'Location' },
 		movement = { property = 'wdt:P135', label = 'Movement', category = '%s' },
 		member_of = { property = 'remilia:memberOf', label = 'Member of', category = '%s' },
 	},
 	types = {
 		person = {
 			class = 'wd:Q5',
-			sections = { { fields = { 'birth_date', 'affiliation', 'released' } } },
+			sections = {
+				{ fields = { 'birth_date', 'affiliation', 'released', { field = 'plain', property = 'wiki:missing' } } },
+			},
 		},
 		artwork = {
 			class = 'remilia:Artwork',
-			sections = { { fields = { 'medium', 'released', 'clock', 'isbn', 'plain' } } },
+			sections = {
+				{ fields = { 'medium', 'released', 'clock', 'isbn', 'plain', { field = 'location', property = 'wiki:location' } } },
+			},
 		},
 	},
 }
@@ -117,7 +135,7 @@ const TYPED_ARTICLE: &str = "\
 {{SHORTDESC:A typed example}}
 {{Instance of|wd:Q5|remilia:OldArtwork|wd:Q999|movement=New Net Art|colour=red|wikidata=42}}
 {{Infobox person|birth_date=May 12, 2019|released=2020|affiliation=[[Remilia]]}}
-{{Infobox|type=artwork|medium=[[Painting|painting]]|released=sometime<ref>{{Cite web|title=x}}</ref>|clock=3.2 GHz|isbn=978 0|plain=x}}
+{{Infobox|type=artwork|medium=[[Painting|painting]]|released=sometime<ref>{{Cite web|title=x}}</ref>|clock=3.2 GHz|isbn=978 0|plain=x|location=Paris}}
 {{Infobox|type=spaceship}}
 '''Typed''' is an example.
 
@@ -129,6 +147,18 @@ const LOCAL_TERMS_ARTICLE: &str = "\
 {{SHORTDESC:A thesis}}
 {{Instance of|wiki:Thesis|remilia:Idea}}
 '''Thesis''' is an example.
+
+== References ==
+{{Reflist}}
+";
+
+/// Ids are compared as the module sees them: comments gone, and a later argument for a
+/// position wins, so `1=wd:Q5` replaces the unknown id before it.
+const COMMENTED_ARTICLE: &str = "\
+{{SHORTDESC:Commented}}
+{{Instance of|wd:Q5 <!-- human -->|wikidata=Q42<!-- the item -->}}
+{{Instance of|wd:Q999|1=wd:Q5}}
+'''Commented''' is an example.
 
 == References ==
 {{Reflist}}
@@ -170,6 +200,7 @@ fn project(lint: &str, with_export: bool, with_modules: bool) -> Project<'static
     }
     write(&wt, "wiki_content/Main/Typed.wiki", TYPED_ARTICLE);
     write(&wt, "wiki_content/Main/Thesis.wiki", LOCAL_TERMS_ARTICLE);
+    write(&wt, "wiki_content/Main/Commented.wiki", COMMENTED_ARTICLE);
     wt
 }
 
@@ -231,10 +262,16 @@ fn lint_checks_classes_fields_and_values_as_warnings_by_default() {
     let wt = project("", true, true);
     let report = lint(&wt, "wiki_content/Main/Typed.wiki");
     let issues = ontology_issues(&report);
-    assert!(
-        issues.iter().all(|(_, severity, _)| severity == "warning"),
-        "{issues:#?}"
-    );
+    // A property that does not apply is the display module's defect, which `ontology check`
+    // reports; on an article it is only a suggestion. Everything else is a warning.
+    for (rule, severity, message) in &issues {
+        let expected = if rule == "ontology.property_not_applicable" {
+            "suggestion"
+        } else {
+            "warning"
+        };
+        assert_eq!(severity, expected, "{rule}: {message}");
+    }
     assert_issue(
         &issues,
         "ontology.renamed_term",
@@ -279,6 +316,17 @@ fn lint_checks_classes_fields_and_values_as_warnings_by_default() {
     );
     assert_eq!(report["ontology"]["skipped"], json!([]));
 
+    // A field the kind gives its own property (location: wiki:location for artworks) is
+    // checked against that property, not the field's (wdt:P276, events only).
+    assert!(
+        issues
+            .iter()
+            .all(|(_, _, message)| !message.contains("location")),
+        "{issues:#?}"
+    );
+
+    let commented = lint(&wt, "wiki_content/Main/Commented.wiki");
+    assert_eq!(ontology_issues(&commented), Vec::new());
     let thesis = lint(&wt, "wiki_content/Main/Thesis.wiki");
     let issues = ontology_issues(&thesis);
     assert_issue(
@@ -299,7 +347,12 @@ fn the_adapter_sets_the_level_and_can_turn_the_checks_off() {
     let wt = project("ontology_typing = \"error\"\n", true, true);
     let issues = ontology_issues(&lint(&wt, "wiki_content/Main/Typed.wiki"));
     assert!(!issues.is_empty());
-    assert!(issues.iter().all(|(_, severity, _)| severity == "error"));
+    assert!(
+        issues
+            .iter()
+            .filter(|(rule, _, _)| rule != "ontology.property_not_applicable")
+            .all(|(_, severity, _)| severity == "error")
+    );
 
     let off = project("ontology_typing = \"ignore\"\n", true, true);
     let report = lint(&off, "wiki_content/Main/Typed.wiki");
@@ -318,6 +371,20 @@ fn missing_export_or_modules_skip_the_checks_with_the_reason() {
             .as_str()
             .expect("reason")
             .contains("no vendored ontology at vendor/ontology/ontology.json")
+    );
+
+    // Scout names the reason too, rather than leaving the object out.
+    no_export
+        .run(&["catalog", "build", "--format", "json"])
+        .assert_code(0);
+    let scout = no_export.run(&["article", "scout", "Typed", "--format", "json"]);
+    scout
+        .assert_code(0)
+        .assert_json("/ontology/probable_class_count", 0);
+    assert!(
+        scout
+            .json_str("/ontology/skipped/0/reason")
+            .contains("no vendored ontology")
     );
 
     let no_modules = project("", true, false);
@@ -375,8 +442,8 @@ fn check_reports_module_findings_and_fails() {
         .assert_json("/schema_version", "ontology_check_v1")
         .assert_json("/status", "findings")
         .assert_json("/commit", "fixture-commit")
-        .assert_json("/finding_count", 3)
-        .assert_stderr_contains("ontology check found 3 finding(s)");
+        .assert_json("/finding_count", 5)
+        .assert_stderr_contains("ontology check found 5 finding(s)");
     let findings: Vec<(String, String)> = output
         .json_array("/findings")
         .iter()
@@ -391,6 +458,8 @@ fn check_reports_module_findings_and_fails() {
         ("ontology.unmapped_local_term", "wiki:Thesis"),
         ("ontology.local_shadows_shared", "remilia:Idea"),
         ("ontology.unresolved_field_property", "wdt:P135"),
+        ("ontology.property_not_applicable", "remilia:releaseDate"),
+        ("ontology.unresolved_field_property", "wiki:missing"),
     ] {
         assert!(
             findings.contains(&(expected.0.to_string(), expected.1.to_string())),
@@ -416,8 +485,8 @@ fn report_counts_term_usage_unmapped_fields_failed_values_and_unknown_classes() 
     output
         .assert_code(0)
         .assert_json("/schema_version", "ontology_report_v1")
-        .assert_json("/page_count", 2)
-        .assert_json("/typed_page_count", 2);
+        .assert_json("/page_count", 3)
+        .assert_json("/typed_page_count", 3);
     let report = output.json();
     let term = |id: &str| {
         report["local_terms"]
@@ -428,8 +497,12 @@ fn report_counts_term_usage_unmapped_fields_failed_values_and_unknown_classes() 
             .cloned()
             .unwrap_or_else(|| panic!("{id} missing"))
     };
-    assert_eq!(term("wd:Q5")["page_count"], 1);
-    assert_eq!(term("wd:Q5")["example_titles"], json!(["Typed"]));
+    assert_eq!(term("wd:Q5")["page_count"], 2);
+    assert_eq!(
+        term("wd:Q5")["example_titles"],
+        json!(["Commented", "Typed"])
+    );
+    assert_eq!(term("wiki:location")["page_count"], 1);
     assert_eq!(term("wdt:P569")["page_count"], 1);
     assert_eq!(term("wiki:Thesis")["page_count"], 1);
     assert_eq!(term("wiki:Thesis")["mapped"], false);
@@ -493,6 +566,13 @@ fn scout_lists_probable_classes_and_what_applies_to_them() {
     assert_eq!(medium["field"], "medium");
     assert_eq!(medium["value_type"], "controlled-term");
     assert_eq!(medium["value_scheme"], "remilia:art-medium/");
+    // The artwork kind carries wiki:location in its location field, overriding the field's own.
+    let location = properties
+        .iter()
+        .find(|property| property["id"] == "wiki:location")
+        .expect("wiki:location applies");
+    assert_eq!(location["field"], "location");
+    assert_eq!(location["local"], true);
     // A qualifier with no appliesTo applies to no class.
     assert!(
         properties
@@ -518,7 +598,7 @@ fn scout_lists_probable_classes_and_what_applies_to_them() {
         .assert_code(0)
         .assert_json("/ontology/probable_class_count", 1)
         .assert_json("/ontology/top_classes/0/id", "remilia:Artwork")
-        .assert_json("/ontology/top_classes/0/property_count", 4)
+        .assert_json("/ontology/top_classes/0/property_count", 5)
         .assert_json("/ontology/top_classes/0/relation_count", 0);
 
     // Without a stub, an existing page's statements are the evidence: Typed is a human.
@@ -533,6 +613,6 @@ fn scout_lists_probable_classes_and_what_applies_to_them() {
     let relations = existing.json_array("/ontology/probable_classes/0/relations");
     assert_eq!(relations[0]["id"], "remilia:memberOf");
     assert_eq!(relations[0]["applies_through"], "prov:Agent");
-    let field = relations[0]["field"].as_str().expect("field");
-    assert!(field == "affiliation" || field == "member_of", "{field}");
+    // The person kind lists affiliation for remilia:memberOf, so it wins over member_of.
+    assert_eq!(relations[0]["field"], "affiliation");
 }

@@ -21,7 +21,7 @@ use crate::support::normalize_path;
 
 use super::lua_data::parse_lua_data;
 use super::values::{Verdict, check_value, display_parts, is_valid_date_format, wikitext_profile};
-use super::vocabulary::{Term, Vocabulary};
+use super::vocabulary::{Term, TypeField, Vocabulary};
 
 /// The wiki's own terms.
 pub const LOCAL_MODULE_TITLE: &str = "Module:Ontology/local";
@@ -363,6 +363,9 @@ impl ProjectOntology {
                 positional: Vec::new(),
                 named: BTreeMap::new(),
             };
+            // MediaWiki numbers unnamed arguments 1, 2, ... in order; `n=`
+            // sets position n; a later argument for a position wins.
+            let mut numbered: BTreeMap<usize, Argument> = BTreeMap::new();
             let mut next_position = 1usize;
             for argument in &template.arguments {
                 let value = Argument {
@@ -372,23 +375,44 @@ impl ProjectOntology {
                 };
                 match argument.name {
                     None => {
-                        call.positional.push(value);
+                        numbered.insert(next_position, value);
                         next_position += 1;
                     }
                     Some(name) => {
                         let name = document.text(name).trim().to_string();
-                        // `1=` names the first positional argument.
                         if let Ok(index) = name.parse::<usize>()
                             && index >= 1
+                            && name == index.to_string()
                         {
-                            if index == next_position {
-                                call.positional.push(value);
-                                next_position += 1;
-                            }
+                            numbered.insert(index, value);
                             continue;
                         }
                         call.named.insert(name, value);
                     }
+                }
+            }
+            // The positions a module reads as args[1], args[2], ... until the
+            // first one that is missing.
+            let mut position = 1;
+            while let Some(value) = numbered.remove(&position) {
+                call.positional.push(value);
+                position += 1;
+            }
+            if is_class {
+                // Ids are compared as the module sees them: comments and
+                // markup gone, and the list ends at the first blank id.
+                for argument in &mut call.positional {
+                    argument.value = plain_text(&argument.value);
+                }
+                if let Some(blank) = call
+                    .positional
+                    .iter()
+                    .position(|argument| argument.value.is_empty())
+                {
+                    call.positional.truncate(blank);
+                }
+                if let Some(wikidata) = call.named.get_mut("wikidata") {
+                    wikidata.value = plain_text(&wikidata.value);
                 }
             }
             if is_class {
@@ -411,36 +435,22 @@ impl ProjectOntology {
 
     /// Check one article.
     pub fn check_article(&self, wikitext: &str) -> ArticleTyping {
+        match self.page_statements(wikitext) {
+            Ok(statements) => self.check_statements(&statements),
+            Err(error) => ArticleTyping {
+                skipped: skip_all(&format!("the article's wikitext does not parse: {error}")),
+                ..ArticleTyping::default()
+            },
+        }
+    }
+
+    /// Check the statements already read from one article.
+    pub(crate) fn check_statements(&self, statements: &PageStatements) -> ArticleTyping {
         let mut out = ArticleTyping::default();
-        let all = [
-            CHECK_CLASS_STATEMENTS,
-            CHECK_INFOBOX_FIELDS,
-            CHECK_FIELD_VALUES,
-            CHECK_TERM_DEFINITIONS,
-        ];
         if let Some(reason) = self.modules_unavailable() {
-            out.skipped = all
-                .iter()
-                .map(|check| SkippedCheck {
-                    check,
-                    reason: reason.clone(),
-                })
-                .collect();
+            out.skipped = skip_all(&reason);
             return out;
         }
-        let statements = match self.page_statements(wikitext) {
-            Ok(statements) => statements,
-            Err(error) => {
-                out.skipped = all
-                    .iter()
-                    .map(|check| SkippedCheck {
-                        check,
-                        reason: format!("the article's wikitext does not parse: {error}"),
-                    })
-                    .collect();
-                return out;
-            }
-        };
         // Terms the article states, for the term-definition checks.
         let mut referenced: BTreeMap<String, (usize, usize, String)> = BTreeMap::new();
 
@@ -632,13 +642,9 @@ impl ProjectOntology {
             .or_insert((call.start, call.end, call_evidence));
         let lineage = self.vocabulary.lineage(&class);
         let class_label = self.vocabulary.label(&class).unwrap_or(&class).to_string();
-        for (field_name, argument) in self.filled_fields(call, kind) {
-            let Some(property_id) = self
-                .vocabulary
-                .display_field(field_name)
-                .and_then(|field| field.get("property"))
-                .and_then(Value::as_str)
-            else {
+        for (field, argument) in self.filled_fields(call, kind) {
+            let field_name = field.name;
+            let Some(property_id) = field.property else {
                 continue;
             };
             let evidence = format!("{field_name}={}", argument.value);
@@ -665,29 +671,21 @@ impl ProjectOntology {
                 argument.end,
                 evidence.clone(),
             ));
-            let scope_key = if term.section == "relations" {
-                "domainClasses"
-            } else {
-                "appliesTo"
-            };
-            if let Some(scope) = term.ids(scope_key) {
-                let scope: BTreeSet<String> = scope
-                    .into_iter()
-                    .map(|id| self.vocabulary.current(id))
-                    .collect();
-                if !lineage.iter().any(|class| scope.contains(class)) {
-                    findings.push(finding(
-                        PROPERTY_NOT_APPLICABLE,
-                        format!(
-                            "The field {field_name} states {current}, which does not apply to {class} ({class_label}) or its ancestors; it applies to {}.",
-                            scope.iter().cloned().collect::<Vec<_>>().join(", ")
-                        ),
-                        &current,
-                        argument,
-                        &evidence,
-                        "Move the value to a field whose property applies to this kind of page, or drop it.".to_string(),
-                    ));
-                }
+            // The display module lists the field for this kind, so a property
+            // that does not apply is a module defect; `ontology check` reports
+            // it once, and lint only notes it here as a suggestion.
+            if let Some(scope) = self.inapplicable_scope(&term, &lineage) {
+                findings.push(finding(
+                    PROPERTY_NOT_APPLICABLE,
+                    format!(
+                        "The field {field_name} states {current}, which does not apply to {class} ({class_label}) or its ancestors; it applies to {}. {DISPLAY_MODULE_TITLE} lists the field for {kind_key:?}; `wikitool ontology check` reports it.",
+                        scope.join(", ")
+                    ),
+                    &current,
+                    argument,
+                    &evidence,
+                    format!("Fix the property of {field_name} for {kind_key:?} in {DISPLAY_MODULE_TITLE}, or the term's appliesTo."),
+                ));
             }
             if term.section == "properties" {
                 self.check_field_value(field_name, &current, &term, argument, &evidence, findings);
@@ -864,7 +862,10 @@ impl ProjectOntology {
                     DISPLAY_MODULE_TITLE,
                     format!("Add {current} to {LOCAL_MODULE_TITLE}, or point the type at an existing class."),
                 ));
+                continue;
             }
+            out.findings
+                .extend(self.check_kind_fields(key, kind, &current));
         }
         out
     }
@@ -935,17 +936,135 @@ impl ProjectOntology {
     /// The fields of a kind of page that an infobox call fills: the names its
     /// sections list that the call gives a non-empty value.
     pub(crate) fn filled_fields<'c, 'k>(
-        &self,
+        &'k self,
         call: &'c TemplateCall,
         kind: &'k Map<String, Value>,
-    ) -> Vec<(&'k str, &'c Argument)> {
+    ) -> Vec<(TypeField<'k>, &'c Argument)> {
         self.vocabulary
-            .type_field_names(kind)
+            .type_fields(kind)
             .into_iter()
-            .filter_map(|name| {
-                let argument = call.named.get(name)?;
-                (!argument.value.is_empty()).then_some((name, argument))
+            .filter_map(|field| {
+                // Module:Infobox skips a listed name with no field definition.
+                if !field.known {
+                    return None;
+                }
+                let argument = call.named.get(field.name)?;
+                (!argument.value.is_empty()).then_some((field, argument))
             })
             .collect()
     }
+
+    /// The classes a property or relation applies to, when none of a
+    /// lineage's classes is among them; `None` when it applies or declares
+    /// no scope (a qualifier, or a term without `appliesTo`).
+    pub(crate) fn inapplicable_scope(
+        &self,
+        term: &Term<'_>,
+        lineage: &[String],
+    ) -> Option<Vec<String>> {
+        let scope_key = if term.section == "relations" {
+            "domainClasses"
+        } else {
+            "appliesTo"
+        };
+        let scope: BTreeSet<String> = term
+            .ids(scope_key)?
+            .into_iter()
+            .map(|id| self.vocabulary.current(id))
+            .collect();
+        (!lineage.iter().any(|class| scope.contains(class))).then(|| scope.into_iter().collect())
+    }
+
+    /// The per-kind checks: each field a kind lists states a property that
+    /// resolves and applies to the kind's class.
+    fn check_kind_fields(
+        &self,
+        key: &str,
+        kind: &Map<String, Value>,
+        class: &str,
+    ) -> Vec<TypingFinding> {
+        let mut out = Vec::new();
+        let lineage = self.vocabulary.lineage(class);
+        for field in self.vocabulary.type_fields(kind) {
+            let name = field.name;
+            if !field.known {
+                out.push(module_finding(
+                    UNKNOWN_FIELD,
+                    format!("The type {key:?} lists the field {name}, which {DISPLAY_MODULE_TITLE} does not define in its fields."),
+                    name,
+                    DISPLAY_MODULE_TITLE,
+                    format!("Define {name} in the fields of {DISPLAY_MODULE_TITLE}, or remove it from {key:?}."),
+                ));
+            }
+            let Some(property) = field.property else {
+                continue;
+            };
+            let current = self.vocabulary.current(property);
+            // A field's own property is checked with the fields; check an
+            // override here.
+            if field.overridden && current != property {
+                out.push(module_finding(
+                    RENAMED_TERM,
+                    format!("The type {key:?} gives the field {name} the property {property}, which the ontology renamed to {current}."),
+                    property,
+                    DISPLAY_MODULE_TITLE,
+                    format!("Replace {property} with {current} in {DISPLAY_MODULE_TITLE}."),
+                ));
+            }
+            let term = self
+                .vocabulary
+                .term("properties", &current)
+                .or_else(|| self.vocabulary.term("relations", &current));
+            let Some(term) = term else {
+                if field.overridden {
+                    out.push(module_finding(
+                        UNRESOLVED_FIELD_PROPERTY,
+                        format!(
+                            "The type {key:?} gives the field {name} the property {current}, which is neither in Module:Ontology/data nor {LOCAL_MODULE_TITLE}."
+                        ),
+                        &current,
+                        DISPLAY_MODULE_TITLE,
+                        format!("Add {current} to {LOCAL_MODULE_TITLE}, or give the field an existing property."),
+                    ));
+                }
+                continue;
+            };
+            if let Some(scope) = self.inapplicable_scope(&term, &lineage) {
+                out.push(module_finding(
+                    PROPERTY_NOT_APPLICABLE,
+                    format!(
+                        "The type {key:?} lists the field {name}, whose property {current} does not apply to {class} or its ancestors; it applies to {}.",
+                        scope.join(", ")
+                    ),
+                    &current,
+                    DISPLAY_MODULE_TITLE,
+                    format!("Give {name} a property that applies to {class} for {key:?}, or extend the term's appliesTo."),
+                ));
+            }
+        }
+        out
+    }
+}
+
+fn skip_all(reason: &str) -> Vec<SkippedCheck> {
+    [
+        CHECK_CLASS_STATEMENTS,
+        CHECK_INFOBOX_FIELDS,
+        CHECK_FIELD_VALUES,
+        CHECK_TERM_DEFINITIONS,
+    ]
+    .into_iter()
+    .map(|check| SkippedCheck {
+        check,
+        reason: reason.to_string(),
+    })
+    .collect()
+}
+
+/// What a reader (and a module, after the preprocessor) sees of an argument:
+/// comments and markup gone, whitespace collapsed.
+fn plain_text(raw: &str) -> String {
+    display_parts(raw)
+        .map(|parts| parts.join(" "))
+        .unwrap_or_else(|| raw.trim().to_string())
 }

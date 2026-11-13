@@ -9,7 +9,7 @@ use serde::Serialize;
 use wikitool_core::authoring::model::{ArticleScoutResult, LocalExistenceState};
 use wikitool_core::filesystem::title_to_relative_path;
 use wikitool_core::ontology::scout::{EvidenceSource, OntologyScout, ScoutPage};
-use wikitool_core::ontology::typing::{OntologyAvailability, load_project_ontology};
+use wikitool_core::ontology::typing::{OntologyAvailability, SkippedCheck, load_project_ontology};
 use wikitool_core::runtime::ResolvedPaths;
 use wikitool_core::site::SiteAdapter;
 
@@ -22,8 +22,12 @@ pub(super) fn build_scout_ontology(
     scout: &ArticleScoutResult,
     stub: Option<&str>,
 ) -> Result<Option<OntologyScout>> {
-    let OntologyAvailability::Ready(project) = load_project_ontology(paths, adapter)? else {
-        return Ok(None);
+    let project = match load_project_ontology(paths, adapter)? {
+        OntologyAvailability::NotConfigured => return Ok(None),
+        OntologyAvailability::Unavailable { reason } => {
+            return Ok(Some(OntologyScout::unavailable(reason)));
+        }
+        OntologyAvailability::Ready(project) => project,
     };
     let read = |title: &str| -> Option<String> {
         let relative = title_to_relative_path(paths, title, false).ok()?;
@@ -58,6 +62,8 @@ pub(super) struct ScoutOntologyCard<'a> {
     ontology_commit: Option<&'a str>,
     evidence_source: EvidenceSource,
     probable_class_count: usize,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    skipped: &'a [SkippedCheck],
     top_classes: Vec<ScoutClassCard<'a>>,
 }
 
@@ -77,6 +83,7 @@ pub(super) fn scout_ontology_card(scout: &OntologyScout) -> ScoutOntologyCard<'_
         ontology_commit: scout.ontology_commit.as_deref(),
         evidence_source: scout.evidence_source,
         probable_class_count: scout.probable_classes.len(),
+        skipped: &scout.skipped,
         top_classes: scout
             .probable_classes
             .iter()

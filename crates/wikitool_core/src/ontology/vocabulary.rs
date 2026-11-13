@@ -126,13 +126,14 @@ impl Vocabulary {
     pub(crate) fn renamed_to(&self, id: &str) -> Option<String> {
         let renames = self.shared.get("renames")?;
         let mut current = id;
-        let mut hops = 0;
+        let mut visited = BTreeSet::from([id]);
         while let Some(next) = renames.get(current).and_then(Value::as_str) {
-            if next == current || hops >= MAX_HOPS {
-                break;
+            // A chain that returns to an id it passed has no current id;
+            // treat the id as not renamed rather than pick one arbitrarily.
+            if !visited.insert(next) || visited.len() > MAX_HOPS {
+                return None;
             }
             current = next;
-            hops += 1;
         }
         (current != id).then(|| current.to_string())
     }
@@ -149,7 +150,9 @@ impl Vocabulary {
         let mut out = Vec::new();
         let mut seen = BTreeSet::from([class.to_string()]);
         let mut frontier = vec![class.to_string()];
-        while !frontier.is_empty() && out.len() < MAX_HOPS {
+        let mut depth = 0;
+        while !frontier.is_empty() && depth < MAX_HOPS {
+            depth += 1;
             let mut next = Vec::new();
             for id in frontier {
                 let Some(term) = self.term("classes", &id) else {
@@ -282,10 +285,12 @@ impl Vocabulary {
             .unwrap_or_default()
     }
 
-    /// The field names a kind of page lists in its sections, in order. An
-    /// entry is a field name or a table with a `field` key.
-    pub(crate) fn type_field_names<'a>(&self, kind: &'a Map<String, Value>) -> Vec<&'a str> {
-        let mut out = Vec::new();
+    /// The fields a kind of page lists in its sections, in order, each with
+    /// the property it states on that kind of page. An entry is a field name,
+    /// or a table with a `field` key whose `property` overrides the field's
+    /// own, as `Module:Infobox` reads it (`entry.property or field.property`).
+    pub(crate) fn type_fields<'a>(&'a self, kind: &'a Map<String, Value>) -> Vec<TypeField<'a>> {
+        let mut out: Vec<TypeField<'a>> = Vec::new();
         for section in kind
             .get("sections")
             .and_then(Value::as_array)
@@ -298,20 +303,44 @@ impl Vocabulary {
                 .into_iter()
                 .flatten()
             {
-                let name = match entry {
-                    Value::String(name) => Some(name.as_str()),
-                    Value::Object(entry) => entry.get("field").and_then(Value::as_str),
-                    _ => None,
+                let (name, override_property) = match entry {
+                    Value::String(name) => (name.as_str(), None),
+                    Value::Object(entry) => match entry.get("field").and_then(Value::as_str) {
+                        Some(name) => (name, entry.get("property").and_then(Value::as_str)),
+                        None => continue,
+                    },
+                    _ => continue,
                 };
-                if let Some(name) = name
-                    && !out.contains(&name)
-                {
-                    out.push(name);
+                if out.iter().any(|field| field.name == name) {
+                    continue;
                 }
+                let property = override_property.or_else(|| {
+                    self.display_field(name)?
+                        .get("property")
+                        .and_then(Value::as_str)
+                });
+                out.push(TypeField {
+                    name,
+                    property,
+                    overridden: override_property.is_some(),
+                    known: self.display_field(name).is_some(),
+                });
             }
         }
         out
     }
+}
+
+/// A field as one kind of page lists it.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TypeField<'a> {
+    pub(crate) name: &'a str,
+    /// The property it states on this kind of page, if any.
+    pub(crate) property: Option<&'a str>,
+    /// Whether the kind's entry sets the property rather than the field.
+    pub(crate) overridden: bool,
+    /// Whether the display module's `fields` defines the field.
+    pub(crate) known: bool,
 }
 
 /// One id or a list of ids.

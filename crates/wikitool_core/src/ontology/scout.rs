@@ -319,19 +319,33 @@ impl ProjectOntology {
     /// class's own kinds of page list, then the first field by name.
     fn fields_by_property(&self, class: &str) -> BTreeMap<String, String> {
         let lineage = self.vocabulary.lineage(class);
-        let mut preferred: BTreeSet<&str> = BTreeSet::new();
-        for (_, kind) in self.vocabulary.display_types() {
-            let kind_class = kind
-                .get("class")
-                .and_then(Value::as_str)
-                .map(|id| self.vocabulary.current(id));
-            if kind_class.is_some_and(|id| lineage.contains(&id)) {
-                preferred.extend(self.vocabulary.type_field_names(kind));
+        let mut out: BTreeMap<String, String> = BTreeMap::new();
+        // The kinds of page for the class or an ancestor, nearest first, with
+        // each field's property as that kind states it (overrides included).
+        let mut kinds: Vec<(usize, &str, &serde_json::Map<String, Value>)> = self
+            .vocabulary
+            .display_types()
+            .into_iter()
+            .filter_map(|(key, kind)| {
+                let kind_class = self
+                    .vocabulary
+                    .current(kind.get("class").and_then(Value::as_str)?);
+                let depth = lineage.iter().position(|id| *id == kind_class)?;
+                Some((depth, key, kind))
+            })
+            .collect();
+        kinds.sort_by_key(|(depth, key, _)| (*depth, *key));
+        for (_, _, kind) in kinds {
+            for field in self.vocabulary.type_fields(kind) {
+                if let (true, Some(property)) = (field.known, field.property) {
+                    out.entry(self.vocabulary.current(property))
+                        .or_insert_with(|| field.name.to_string());
+                }
             }
         }
-        let mut out: BTreeMap<String, String> = BTreeMap::new();
+        // Then any field that states the property, by name.
         let mut fields = self.vocabulary.display_fields();
-        fields.sort_by_key(|(name, _)| (!preferred.contains(name), *name));
+        fields.sort_by_key(|(name, _)| *name);
         for (name, field) in fields {
             if let Some(property) = field.get("property").and_then(Value::as_str) {
                 out.entry(self.vocabulary.current(property))
@@ -350,3 +364,20 @@ fn page_count(evidence: &BTreeSet<ClassEvidence>) -> usize {
 /// Pages offered as one kind of evidence: each page's title (none for the
 /// stub) and its wikitext.
 type EvidencePages<'a> = Vec<(Option<&'a str>, &'a str)>;
+
+impl OntologyScout {
+    /// The scout's ontology object when the adapter has `[ontology]` but the
+    /// vendored copy cannot be read: no classes, and the reason.
+    pub fn unavailable(reason: String) -> Self {
+        Self {
+            schema_version: ONTOLOGY_SCOUT_SCHEMA_VERSION,
+            ontology_commit: None,
+            evidence_source: EvidenceSource::None,
+            probable_classes: Vec::new(),
+            skipped: vec![SkippedCheck {
+                check: "all",
+                reason,
+            }],
+        }
+    }
+}

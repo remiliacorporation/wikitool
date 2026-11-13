@@ -1,7 +1,9 @@
 use crate::article_lint::model::{
     ArticleLintIssue, ArticleLintOntologyStatus, ArticleLintSeverity, ArticleLintSkippedCheck,
 };
-use crate::ontology::typing::OntologyAvailability;
+use crate::ontology::typing::{
+    ArticleTyping, OntologyAvailability, PROPERTY_NOT_APPLICABLE, ProjectOntology,
+};
 use crate::site::LintRuleLevel;
 
 use super::super::document::ParsedArticleDocument;
@@ -28,7 +30,14 @@ pub(super) fn lint_ontology_typing(
     if document.is_redirect {
         return;
     }
-    for finding in project.check_article(&document.content).findings {
+    for finding in article_typing(document, resources, project).findings {
+        // A property that does not apply comes from the display module, which
+        // `ontology check` reports once; on an article it is only a note.
+        let severity = if finding.code == PROPERTY_NOT_APPLICABLE {
+            ArticleLintSeverity::Suggestion
+        } else {
+            severity
+        };
         matches.push(IssueMatch {
             issue: ArticleLintIssue {
                 rule_id: finding.code.to_string(),
@@ -68,7 +77,7 @@ pub(in crate::article_lint) fn ontology_status(
             let typing = if document.is_redirect {
                 Default::default()
             } else {
-                project.check_article(&document.content)
+                article_typing(document, resources, project)
             };
             Some(ArticleLintOntologyStatus {
                 ontology_commit: project.commit().map(str::to_string),
@@ -85,4 +94,22 @@ pub(in crate::article_lint) fn ontology_status(
             })
         }
     }
+}
+
+/// The article's typing, computed once per lint run for both the findings
+/// and the report's status.
+fn article_typing(
+    document: &ParsedArticleDocument,
+    resources: &LoadedResources,
+    project: &ProjectOntology,
+) -> ArticleTyping {
+    let mut cache = resources.ontology_typing.borrow_mut();
+    if let Some((content, typing)) = cache.as_ref()
+        && *content == document.content
+    {
+        return typing.clone();
+    }
+    let typing = project.check_article(&document.content);
+    *cache = Some((document.content.clone(), typing.clone()));
+    typing
 }
