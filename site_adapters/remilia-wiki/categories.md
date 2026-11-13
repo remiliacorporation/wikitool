@@ -9,15 +9,17 @@ to a separate, explicitly scoped taxonomy effort.
 ## Articles
 
 Verify the exact live title, definition and representative members, then check
-the subject's defining membership against sources. Existing use is not approval:
-a populated red-linked category may be a defect. Do not create its description
-page merely to make the link blue.
+the subject's defining membership against sources or the contributor's material.
+Existing use is not approval: a populated red-linked category may be a defect.
+Do not create its description page merely to make the link blue.
 
 Use the smallest set that provides distinct useful browsing paths. There is no
-minimum, target count or default `Category:Remilia`. Do not repeat ancestors,
-copy a neighbor's categories or translate category names without checking the
-established taxonomy. If none fits, finish the article without categories and
-record the gap separately. Diagnostic counts are not editorial obligations.
+minimum, target count or default `Category:Remilia`; it marks Remilia's own work
+([Article object and framing](editorial.md#article-object-and-framing)). Do not
+repeat ancestors, copy a neighbor's categories or translate category names
+without checking the established taxonomy. If none fits, finish the article
+without categories and record the gap separately. Diagnostic counts are not
+editorial obligations.
 
 An NFT collection may fit `Category:NFT Collections` after checking its current
 scope. It does not therefore need `NFT projects`, `Blockchain projects`, `Crypto`
@@ -26,8 +28,8 @@ and trait types in structured metadata and existing gallery navigation. Research
 any additional browsing index separately.
 
 Membership implying affiliation, ideology, controversy or identity is a factual
-claim with source and due-weight requirements. Presence on this wiki proves none
-of those relationships.
+claim: it needs the support any statement needs and must be defining. Presence
+on this wiki proves none of those relationships.
 
 ## Templates and tracking
 

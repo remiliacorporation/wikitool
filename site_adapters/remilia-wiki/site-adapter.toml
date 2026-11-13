@@ -43,27 +43,27 @@ template_title = "Template:Cite video"
 [[citations.source_review_rules]]
 label = "Wikipedia"
 host = "wikipedia.org"
-reason = "Tertiary source: inspect and cite the underlying source for article claims; direct use needs an explicit article-specific reason."
+reason = "Reference site: use it for dates and leads, then read and cite the work it summarizes. Cite it directly only when the article is the artifact under discussion or the only place the fact is written."
 
 [[citations.source_review_rules]]
 label = "IQ.wiki"
 host = "iq.wiki"
-reason = "Community-edited tertiary wiki: cite the underlying source it summarizes where it has one."
+reason = "Community-edited reference wiki: read and cite the work it summarizes. Cite it directly only when the page is the artifact under discussion or the only place the fact is written."
 
 [[citations.source_review_rules]]
 label = "Know Your Meme"
 host = "knowyourmeme.com"
-reason = "Meme database that summarizes originals: cite the original post or artifact where it gives one."
+reason = "Reference site that summarizes originals: use it for dates and leads, then cite the original post or artifact. Cite the entry directly only when it is the artifact under discussion or the only place the fact is written."
 
 [[citations.source_review_rules]]
 label = "NFT Price Floor"
 host = "nftpricefloor.com"
-reason = "Aggregator data may be volatile or methodology-dependent; verify the exact metric, timestamp, and primary record."
+reason = "Aggregator data may be volatile or methodology-dependent: verify the exact metric and timestamp, and cite the primary record, such as the contract or marketplace data, where one exists."
 
 [[citations.source_review_rules]]
 label = "Urban Dictionary"
 host = "urbandictionary.com"
-reason = "User-submitted definitions: citable for how a term is used; cite the original usage where one is known."
+reason = "Reference site of user-submitted definitions: cite the original usage where one is known. Cite the entry directly only when it is the artifact under discussion, such as evidence of how a term was used, or the only place the fact is written."
 
 [[citations.source_review_rules]]
 label = "Remilia Wiki"
@@ -222,7 +222,7 @@ provider = "local"
 syntax = "module_invoke"
 body_required = false
 
-# The Remilia ontology types the wiki's pages and infobox fields (RSV-D867).
+# The Remilia ontology types the wiki's pages and infobox fields.
 # The wiki's own terms use the wiki: namespace until an intake moves them.
 [ontology]
 product = "remilia-wiki"

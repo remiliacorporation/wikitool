@@ -9,7 +9,7 @@ This document supplements [editorial policy](editorial.md). It sets the voice an
 - Prefer one fact per sentence. Split a sentence when its clauses need different sources.
 - State a disputed point once, with who disputes it. Do not repeat the dispute in every paragraph.
 - Write lore as plain declarative sentences. See [Lore](editorial.md#lore).
-- Use at most one block quote per section. Quote only wording that is distinctive, and say who wrote it.
+- Quote exactly, and only as much as carries the meaning ([Voice and register](editorial.md#voice-and-register)). Use a block quotation for a text the reader needs whole, such as a definition, a license or an essay passage. Quote a passing remark inline. Name the speaker once.
 - Say what happened, who did it, and when. Leave the judgment of importance to the reader and the sources.
 
 ## Words to watch
@@ -18,8 +18,8 @@ These words are signals to re-read a sentence, not bans. Keep one only when the 
 
 | Word | Why it is a problem |
 |---|---|
-| adjacent | Names a relation without saying what it is. Say what links the two subjects, or drop the link. |
-| lineage | Implies a traced descent that is usually not sourced. Name the actual predecessor. |
+| adjacent | Names no relation. Say what the relation is: who did, said or made what, and when. The relationship stays; the word goes. |
+| lineage | Names a descent without its steps. Name the predecessor and what passed from it, as a concrete "X did Y". A real lineage stays ([Article object and framing](editorial.md#article-object-and-framing)). |
 | ironic detachment | A label for a tone, not a fact. Show the behavior that you mean. |
 | broader | Points at a larger context without naming it. Name the context. |
 | notably | Asks the reader to find a fact important. Put the fact in the sentence. |
@@ -31,7 +31,7 @@ These words are signals to re-read a sentence, not bans. Keep one only when the 
 
 ## Headings
 
-Headings are specific to the subject and its type. Use sentence case. Avoid "Background", "Overview", "Legacy", and "Influence" unless a source supports the claim that the heading makes. "Background" appears on 187 pages, and on most of them it says nothing about the subject.
+Headings are specific to the subject and its type. Use sentence case. Do not use "Background", "Overview", "Legacy", or "Influence" as a default heading. Use one only when the section under it holds concrete facts about the subject; under "Influence", that means who took what from the subject, or what the subject took from whom. As of the 2026-11-12 review, "Background" appeared on 187 pages, and on most of them it said nothing about the subject.
 
 Start from the set for the subject's type, and drop any section the evidence cannot fill. A short article may have no sections at all.
 
@@ -52,12 +52,15 @@ Event keeps "Background" because there it names the lead-up to a dated event. Dr
 
 ## Mechanics
 
+Wikitool's `article lint` enforces three of these rules: curly quotes (`style.curly_quotes`), footnote placement (`citation.after_punctuation`), and heading capitalization (`style.sentence_case_heading`, which catches title case in headings of three or more words, not every miscapitalization). Writers and reviewers check the rest.
+
 These rules set spelling, punctuation, and form. They follow Wikipedia's Manual of Style, with the choices below made for this wiki. A rule that says "keep consistent" means the article may not mix the two forms.
 
 - Use US spelling: color, behavior, organize, center. Quotations and proper names keep their own spelling.
 - Write dates as month, day, year: May 12, 2019. Do not mix this with 12 May 2019 in one article.
 - Use the serial comma: "Reddit, Tumblr, and Twitter".
 - Use straight quotes and apostrophes. Do not use curly ones.
+- Put a footnote after the punctuation it follows: `text.<ref>`, not `text<ref>.`.
 - Use logical quotation. Put a comma or period inside the closing quote only when it belongs to the quoted words. Write `"Much hug", and "Wow".` for fragments.
 - Use `'s` for the possessive of a singular name that ends in s: "James's book", "Descartes's method". Plurals take a bare apostrophe: "the Beatles' album".
 - Use an en dash for a range: 2019–2021. Do not use a hyphen, and do not use `--` for a dash. Pick spaced or unspaced for the dash that sets off a phrase, and keep it the same through the article.
@@ -78,7 +81,7 @@ These rules set spelling, punctuation, and form. They follow Wikipedia's Manual 
 
 ## Worked examples
 
-Both examples come from existing pages. The "After" text shows the form only: each fact in it still needs a citation in the live article.
+Both examples come from existing pages. The "After" text shows the form only: each fact in it still needs a citation or a [provenance line](research.md#provenance-lines) in the live article.
 
 ### The lead of 4chan
 
@@ -93,7 +96,8 @@ After:
 What changed:
 
 - The first sentence says what the site is and how it works. "Influential" and "internet culture" are gone, because the history sections show the influence.
-- The Remilia sentence left the lead. It had no source outside Remilia's channels. "Adjacent" and "ironic detachment" went with it.
+- The Remilia sentence left the lead. Remilia is not part of what 4chan is, so it does not belong there (placement rule 1 in [Article object and framing](editorial.md#article-object-and-framing)).
+- "Adjacent" and "ironic detachment" name no relationship, so they went with it. If a source or a contributor supplies a concrete relationship, it goes in the body where its topic is discussed, stated as who did what.
 - The dates, names, and boards that the old lead left for later are now in the lead.
 
 ### The closing paragraph of Pepe the Frog
@@ -102,12 +106,22 @@ Before (the last paragraph of "Interpretation and influence", with the page's `C
 
 > Pepe is also a reference point for [[Remilia Corporation]] and the [[New Net Art]] movement. The Rare Pepe cards described above prefigured the profile-picture NFT projects that [[Milady Maker]] later developed, and [[Charlotte Fang]] has described New Net Art as art unafraid to engage the internet, in contrast with "artists [who] cowered in irrelevance scared to engage the internet because they got cancelled for knowing what pepe is." The Miya corpus, which preceded Remilia, uses egregore language for Pepe [...]
 
-After: delete the paragraph and remove `Category:Remilia`. End the section on the sourced history instead:
+After, in the part of the body that discusses the Rare Pepe cards:
+
+> The Rare Pepe cards prefigured later profile-picture NFT projects, including [[Milady Maker]].
+
+"Interpretation and influence" now ends on the paragraph before the old one:
 
 > Furie started a "Save Pepe" campaign, killed the character off in 2017, and took legal action over several uses. The image stayed in circulation.
 
+`Category:Remilia` is removed.
+
 What changed:
 
-- The deleted paragraph cited only a Remilia Wiki page for a Remilia founder's view. Remilia's channels are primary sources for Remilia's own acts, and this is not one.
-- No source outside Remilia connects Pepe to Remilia, and Remilia did not make Pepe. Under the [due weight rule](editorial.md#article-object-and-framing), the mention goes.
-- The article now ends on its subject. The Rare Pepe section already covers the link to NFTs, with a citation.
+- The concrete relationship stays. That the Rare Pepe cards prefigured profile-picture NFT projects, Milady Maker among them, is now one plain sentence where the cards are discussed (placement rule 2).
+- "A reference point for Remilia Corporation and the New Net Art movement" names no relationship, so the sentence does not stay as written. Ask the contributor what Remilia or New Net Art did with Pepe; the answer goes where its topic is discussed (placement rule 3).
+- Charlotte Fang's quotation goes. It is about New Net Art rather than Pepe, and here it served as a prestige anchor (placement rule 5).
+- The Miya corpus sentence, cut short in this example, follows the same rule: it stays as a plain sentence where the section discusses interpretations of Pepe, not as the closing paragraph.
+- The old paragraph cited only a Remilia Wiki page. The live article cites what that page cites, or records provenance ([What to cite](editorial.md#what-to-cite)).
+- `Category:Remilia` marks Remilia's own work, and Remilia did not make Pepe (placement rule 4).
+- The section ends on its subject.
