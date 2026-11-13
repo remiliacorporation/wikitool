@@ -2,6 +2,7 @@
 //! `live_existence` as exists, redirect, missing, or unchecked with the reason, so a
 //! fresh project's local index is never mistaken for the live wiki.
 
+use std::fs;
 use std::path::PathBuf;
 
 use wikitest::harness::{FakeWiki, Project};
@@ -39,20 +40,32 @@ fn scout_reports_live_existence_from_the_configured_wiki() {
         wiki.api_url(),
     ])
     .assert_code(0);
+    // A local catalog without the topic, so scout takes its normal path.
+    fs::create_dir_all(wt.path().join("wiki_content/Main")).expect("mirror dir");
+    fs::write(
+        wt.path().join("wiki_content/Main/Other.wiki"),
+        "Other links to [[Radbro]].\n",
+    )
+    .expect("local page");
+    wt.run(&["catalog", "build"]).assert_code(0);
 
-    // A fresh project has no local copy, yet scout knows the page exists live.
+    // The local index has no Radbro page, yet scout knows the page exists live.
     wt.run(&[
         "article", "scout", "Radbro", "--format", "json", "--view", "full",
     ])
+    .assert_code(0)
     .assert_json("/live_existence/status", "exists")
     .assert_json("/live_existence/title", "Radbro")
     .assert_json("/live_existence/revision_id", 5990);
     wt.run(&["article", "scout", "Radbro alias", "--format", "json"])
+        .assert_code(0)
         .assert_json("/live_existence/status", "redirect")
         .assert_json("/live_existence/target", "Radbro");
     wt.run(&["article", "scout", "Radbro Webring", "--format", "json"])
+        .assert_code(0)
         .assert_json("/live_existence/status", "missing");
     wt.run(&["article", "scout", "Radbro", "--format", "text"])
+        .assert_code(0)
         .assert_stdout_contains("live_existence: exists (Radbro)");
     wt.run(&[
         "article",
@@ -62,6 +75,7 @@ fn scout_reports_live_existence_from_the_configured_wiki() {
         "--format",
         "json",
     ])
+    .assert_code(0)
     .assert_json("/live_existence/status", "unchecked")
     .assert_stdout_contains("--no-live-check");
 }
@@ -72,6 +86,7 @@ fn scout_says_unchecked_when_the_wiki_is_unconfigured_or_unreachable() {
     unconfigured.run(&["init", "--no-network"]).assert_code(0);
     unconfigured
         .run(&["article", "scout", "Radbro", "--format", "json"])
+        .assert_code(0)
         .assert_json("/live_existence/status", "unchecked")
         .assert_stdout_contains("not configured");
 
@@ -88,6 +103,7 @@ fn scout_says_unchecked_when_the_wiki_is_unconfigured_or_unreachable() {
         .assert_code(0);
     unreachable
         .run(&["article", "scout", "Radbro", "--format", "json"])
+        .assert_code(0)
         .assert_json("/live_existence/status", "unchecked")
         .assert_stdout_contains("failed");
 }
