@@ -29,3 +29,16 @@ bytes before choosing `--overwrite`. Source-wiki HTML and templates are design
 evidence, not authority to clone. Migration plans inventory current bytes and
 expose ambiguous invocations; no report authorizes bulk transclusion rewrites.
 Local zero-use does not establish live retirement readiness.
+
+When the site adapter has `[ontology]` and the project vendors the ontology,
+`article lint` reports `ontology.*` findings (warnings by default) for class
+ids, infobox fields whose property does not apply to the page's class, and
+values that do not parse as their property's value type, and `article scout`
+returns an `ontology` object: the subject's probable classes with the
+properties and relation types that apply, their value types, and the infobox
+field that carries each. Treat it as the checklist of facts a page of that
+kind states. Changes to `Module:Ontology/local` or `Module:Ontology/display`
+need `ontology check`; `ontology report` counts how the wiki's pages use local
+terms, unmapped fields and failing values. Findings are mechanical: a value
+that parses can still be wrong, and a new term needs a mappings entry and the
+operator's agreement before it is added.

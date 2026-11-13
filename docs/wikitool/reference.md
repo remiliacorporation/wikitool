@@ -30,7 +30,7 @@ Commands:
   review      Run the structured pre-push review gate
   module      Run Lua module linting and related checks
   export      Export a remote wiki page tree to local files
-  ontology    Vendor the pinned ontology and generate Module:Ontology/data
+  ontology    Vendor the pinned ontology, generate Module:Ontology/data, and check the wiki's use of it
   delete      Delete a page from the live wiki
   upload      Upload a media file to the live wiki
   mutation    Inspect and reconcile durable remote mutation receipts
@@ -370,13 +370,15 @@ Options:
 ## ontology
 
 ```text
-Vendor the pinned ontology and generate Module:Ontology/data
+Vendor the pinned ontology, generate Module:Ontology/data, and check the wiki's use of it
 
 Usage: wikitool ontology [OPTIONS] <COMMAND>
 
 Commands:
   export    Export an ontology checkout into the vendored copy and regenerate the module
   generate  Generate Module:Ontology/data from the vendored copy
+  check     Check Module:Ontology/local and Module:Ontology/display against the vendored copy
+  report    Report how the wiki's articles use the ontology, as evidence for an intake
   help      Print this message or the help of the given subcommand(s)
 
 Options:
@@ -418,6 +420,38 @@ Options:
       --project-root <PATH>
       --data-dir <PATH>
       --format <FORMAT>      Output format: text|json [default: text] [possible values: text, json]
+      --config <PATH>
+      --diagnostics          Print resolved runtime diagnostics
+  -h, --help                 Print help
+```
+
+## ontology check
+
+```text
+Check Module:Ontology/local and Module:Ontology/display against the vendored copy
+
+Usage: wikitool ontology check [OPTIONS]
+
+Options:
+      --format <FORMAT>      Output format: text|json [default: text] [possible values: text, json]
+      --project-root <PATH>
+      --data-dir <PATH>
+      --config <PATH>
+      --diagnostics          Print resolved runtime diagnostics
+  -h, --help                 Print help
+```
+
+## ontology report
+
+```text
+Report how the wiki's articles use the ontology, as evidence for an intake
+
+Usage: wikitool ontology report [OPTIONS]
+
+Options:
+      --format <FORMAT>      Output format: text|json [default: text] [possible values: text, json]
+      --project-root <PATH>
+      --data-dir <PATH>
       --config <PATH>
       --diagnostics          Print resolved runtime diagnostics
   -h, --help                 Print help
