@@ -3,8 +3,7 @@ use std::path::Path;
 use anyhow::{Result, bail};
 use serde::Serialize;
 use wikitool_core::article_lint::{
-    ArticleLintReport, lint_article, lint_article_with_resources, lint_article_with_title,
-    load_article_lint_resources,
+    ArticleLintReport, lint_article_file, lint_article_with_resources, load_article_lint_resources,
 };
 
 use crate::cli_support::{normalize_path, resolve_runtime_paths};
@@ -13,7 +12,7 @@ use crate::{LOCAL_DB_POLICY_MESSAGE, RuntimeOptions};
 use super::output::{flag, print_article_target_selection, print_report};
 use super::selection::{
     ArticleTargetSelection, article_selection_from_args, resolve_article_targets,
-    single_state_path_title_override, uses_single_path_mode,
+    single_file_lint_title,
 };
 use super::*;
 #[derive(Debug, Serialize)]
@@ -30,58 +29,39 @@ struct ArticleLintBatchReport {
 
 pub(super) fn run_article_lint(runtime: &RuntimeOptions, args: ArticleLintArgs) -> Result<()> {
     let paths = resolve_runtime_paths(runtime)?;
-    if let Some(title_override) = single_state_path_title_override(
+    if let Some(title_override) = single_file_lint_title(
         &paths,
         args.path.as_deref(),
         &args.titles,
         &args.paths,
         args.titles_file.as_ref(),
         args.changed,
-    )? {
-        let report = lint_article_with_title(
+    ) {
+        let file_report = lint_article_file(
             &paths,
             args.path.as_deref().expect("single path"),
-            Some(title_override),
+            title_override,
         )?;
+        let report = &file_report.report;
 
         if args.format.is_json() {
-            println!("{}", serde_json::to_string_pretty(&report)?);
+            println!("{}", serde_json::to_string_pretty(&file_report)?);
         } else {
             println!("article lint");
             println!("project_root: {}", normalize_path(&paths.project_root));
-            print_report(&report);
-            println!("policy: {LOCAL_DB_POLICY_MESSAGE}");
-            if runtime.diagnostics {
-                println!("\n[diagnostics]\n{}", paths.diagnostics());
+            if let Some(header) = &file_report.export_header {
+                println!("export_header.title: {}", header.title);
+                println!(
+                    "export_header.source_url: {}",
+                    header.source_url.as_deref().unwrap_or("<none>")
+                );
+                println!(
+                    "export_header.revision_id: {}",
+                    header.revision_id.as_deref().unwrap_or("<none>")
+                );
+                println!("export_header.line_count: {}", header.line_count);
             }
-        }
-
-        if report.errors > 0 || (args.strict && report.warnings > 0) {
-            bail!(
-                "article lint found {} error(s), {} warning(s), and {} suggestion(s)",
-                report.errors,
-                report.warnings,
-                report.suggestions
-            );
-        }
-        return Ok(());
-    }
-
-    if uses_single_path_mode(
-        args.path.as_deref(),
-        &args.titles,
-        &args.paths,
-        args.titles_file.as_ref(),
-        args.changed,
-    ) {
-        let report = lint_article(&paths, args.path.as_deref().expect("single path"))?;
-
-        if args.format.is_json() {
-            println!("{}", serde_json::to_string_pretty(&report)?);
-        } else {
-            println!("article lint");
-            println!("project_root: {}", normalize_path(&paths.project_root));
-            print_report(&report);
+            print_report(report);
             println!("policy: {LOCAL_DB_POLICY_MESSAGE}");
             if runtime.diagnostics {
                 println!("\n[diagnostics]\n{}", paths.diagnostics());

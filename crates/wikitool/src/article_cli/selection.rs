@@ -193,3 +193,35 @@ fn resolve_article_selector_path(
     let _ = relative_path_to_title(paths, &relative_path)?;
     Ok(relative_path)
 }
+
+/// Whether `article lint` reads one file on its own, and with which title
+/// override. A lone PATH qualifies wherever it lives; so does a PATH with
+/// exactly one `--title`, unless the path is a mirrored page under
+/// `wiki_content/`, where `--title` still selects a second article as the batch
+/// selectors do. Reading a file is not a project write, so no scope applies.
+pub(super) fn single_file_lint_title<'a>(
+    runtime_paths: &wikitool_core::runtime::ResolvedPaths,
+    path: Option<&Path>,
+    titles: &'a [String],
+    paths: &[PathBuf],
+    titles_file: Option<&PathBuf>,
+    changed: bool,
+) -> Option<Option<&'a str>> {
+    let path = path?;
+    if !paths.is_empty() || titles_file.is_some() || changed {
+        return None;
+    }
+    match titles {
+        [] => Some(None),
+        [title] => {
+            let absolute = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                runtime_paths.project_root.join(path)
+            };
+            (!path_is_under_directory(&absolute, &runtime_paths.wiki_content_dir))
+                .then_some(Some(title.as_str()))
+        }
+        _ => None,
+    }
+}

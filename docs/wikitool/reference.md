@@ -2533,7 +2533,7 @@ Lint article wikitext against MediaWiki and site-adapter rules
 Usage: wikitool article lint [OPTIONS] [PATH]
 
 Arguments:
-  [PATH]  Article path; state-draft paths under .wikitool/drafts/ may use --title override
+  [PATH]  File to lint, anywhere; an export's metadata header supplies the title
 
 Options:
       --format <FORMAT>      Output format: text|json [default: text] [possible values: text, json]
@@ -2541,7 +2541,7 @@ Options:
       --data-dir <PATH>
       --strict               Treat warnings as errors
       --config <PATH>
-      --title <TITLE>        Select a canonical article title; with one .wikitool/drafts/ PATH, override the draft title
+      --title <TITLE>        Select a canonical article title; with one PATH outside wiki_content/, the page title for that file
       --diagnostics          Print resolved runtime diagnostics
       --path <PATH>
       --titles-file <PATH>   Read one canonical page title per line

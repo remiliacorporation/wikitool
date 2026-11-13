@@ -22,11 +22,11 @@ To read one live page, use `export PAGE_URL --format wikitext` or
 `source fetch PAGE_URL --format wikitext`. `pull --title TITLE` brings one page
 into the mirror and records its revision baseline. To check whether a page exists, use
 `source wiki-search TERM --what nearmatch`; some wikis reject `--what title`.
-Exported files carry a metadata header; `article lint` reads only paths under
-`wiki_content/`, `templates/` or `.wikitool/`, so copy a candidate to
-`.wikitool/drafts/TITLE.wiki` and pass `--title`. Batch selectors (`--path`,
-`--titles-file`, `--changed`) cover `wiki_content/` only; lint an off-mirror
-draft one path at a time. `export --urls-file` writes Markdown only; export
+`article lint PATH` reads any file. An export's metadata header supplies the
+title and is not linted; a file without one outside `wiki_content/` or
+`templates/` needs `--title`. Batch selectors (`--path`, `--titles-file`,
+`--changed`) cover `wiki_content/` only; lint an off-mirror draft one path at a
+time. `export --urls-file` writes Markdown only; export
 several pages as wikitext with one `export PAGE_URL` call each.
 
 For template parameters, start with `templates show NAME --format json --view brief` and follow
