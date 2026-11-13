@@ -7,8 +7,11 @@ store and establish a fresh baseline; do not reuse production identity locally.
 so site policy becomes generic, and it keeps the default `article_path`; check
 `config show` and correct the path when the wiki serves pages under `/wiki/$1`.
 Global planning requires a successful explicit `pull --full --all`; scoped or
-legacy-migrated rows do not establish coverage, and `status`, `diff`, `review`
-and push preview refuse until that baseline exists.
+legacy-migrated rows do not establish coverage, and `review` and push preview
+refuse until that baseline exists. Read-only `status` and `diff` also run on
+the titles that `pull --title TITLE` or a scoped pull recorded; their output
+says `scope: pulled_titles` and lists local files without a recorded baseline
+as unbaselined, not new.
 
 Before a push, inspect scoped status, diff, and review. Preview the exact titles
 and summary, inspect the returned plan, then apply that plan ID with identical

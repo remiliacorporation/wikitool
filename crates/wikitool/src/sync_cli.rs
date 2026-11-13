@@ -49,6 +49,13 @@ pub(crate) struct InitArgs {
 
 #[derive(Debug, Args)]
 pub(crate) struct PullArgs {
+    #[arg(
+        long = "title",
+        value_name = "TITLE",
+        conflicts_with_all = ["category", "templates", "categories", "all"],
+        help = "Pull exactly this page and record its revision baseline; repeatable. Read-only status and diff honor it; push still needs `pull --full --all`"
+    )]
+    pub(crate) titles: Vec<String>,
     #[arg(long, help = "Full refresh (ignore last pull timestamp)")]
     pub(crate) full: bool,
     #[arg(long, help = "Overwrite locally modified files during pull")]

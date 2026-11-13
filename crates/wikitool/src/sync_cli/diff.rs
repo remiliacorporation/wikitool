@@ -6,7 +6,9 @@ use crate::cli_support::{normalize_path, resolve_runtime_paths};
 use crate::{LOCAL_DB_POLICY_MESSAGE, RuntimeOptions};
 
 use super::DiffArgs;
-use super::shared::{format_baseline_status, format_diff_change_type, load_sync_selection};
+use super::shared::{
+    format_baseline_status, format_diff_change_type, load_sync_selection, print_baseline_scope,
+};
 
 pub(crate) fn run_diff(runtime: &RuntimeOptions, args: DiffArgs) -> Result<()> {
     let paths = resolve_runtime_paths(runtime)?;
@@ -74,6 +76,7 @@ pub(crate) fn run_diff(runtime: &RuntimeOptions, args: DiffArgs) -> Result<()> {
         println!("selection.paths: {}", selection.paths.join(" | "));
     }
 
+    print_baseline_scope("diff", &report.scope);
     println!("diff.new_local: {}", report.new_local);
     println!("diff.modified_local: {}", report.modified_local);
     println!("diff.deleted_local: {}", report.deleted_local);

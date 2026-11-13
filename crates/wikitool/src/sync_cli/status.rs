@@ -3,7 +3,7 @@ use serde::Serialize;
 use wikitool_core::filesystem::{ScanOptions, ScanStats, scan_stats};
 use wikitool_core::runtime::inspect_runtime;
 use wikitool_core::sync::{
-    SyncPlanOptions, SyncPlanReport, SyncSelection, plan_sync_changes_with_config,
+    SyncPlanOptions, SyncPlanReport, SyncSelection, inspect_sync_changes_with_config,
 };
 
 use crate::cli_support::{
@@ -13,8 +13,8 @@ use crate::{LOCAL_DB_POLICY_MESSAGE, RuntimeOptions};
 
 use super::StatusArgs;
 use super::shared::{
-    RuntimeStatusJson, format_diff_change_type, load_sync_selection, runtime_status_json,
-    status_display_changes,
+    RuntimeStatusJson, format_diff_change_type, load_sync_selection, print_baseline_scope,
+    runtime_status_json, status_display_changes,
 };
 
 #[derive(Debug, Serialize)]
@@ -54,7 +54,7 @@ pub(crate) fn run_status(runtime: &RuntimeOptions, args: StatusArgs) -> Result<(
             custom_content_folders: custom_folders,
         },
     )?;
-    let plan = plan_sync_changes_with_config(
+    let plan = inspect_sync_changes_with_config(
         &paths,
         &SyncPlanOptions {
             include_templates: args.templates,
@@ -101,6 +101,7 @@ pub(crate) fn run_status(runtime: &RuntimeOptions, args: StatusArgs) -> Result<(
     }
 
     if let Some(plan) = &plan {
+        print_baseline_scope("status", &plan.scope);
         println!("status.new_local: {}", plan.new_local);
         println!("status.modified_local: {}", plan.modified_local);
         println!("status.deleted_local: {}", plan.deleted_local);

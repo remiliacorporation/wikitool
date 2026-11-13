@@ -19,8 +19,8 @@ the project directory or pass `--project-root`. Check `config show` when target 
 or before a write. Keep credentials out of reports.
 
 To read one live page, use `export PAGE_URL --format wikitext` or
-`source fetch PAGE_URL --format wikitext`; `pull` selects categories, templates
-or everything, never a single title. To check whether a page exists, use
+`source fetch PAGE_URL --format wikitext`. `pull --title TITLE` brings one page
+into the mirror and records its revision baseline. To check whether a page exists, use
 `source wiki-search TERM --what nearmatch`; some wikis reject `--what title`.
 Exported files carry a metadata header; `article lint` reads only paths under
 `wiki_content/`, `templates/` or `.wikitool/`, so copy a candidate to
@@ -36,10 +36,11 @@ fresh project. For current remote contracts without a mirror, use
 `source mediawiki-templates PAGE_URL --template NAME` with the freshness options
 from help. Inspect coverage limits.
 
-`status`, `diff`, `review` and `push` preview all require the global baseline
-from one successful `pull --full --all`; a scoped pull reports
-`global_baseline_established: false` and does not unlock them. Read-only
-retrieval never needs the baseline. Whole-mirror `validate` reports the live
+`review` and `push` preview require the global baseline from one successful
+`pull --full --all`. Without it, `status` and `diff` compare only titles that
+`pull --title` or a scoped pull recorded and say `scope: pulled_titles`; a
+local file without a recorded baseline is listed as unbaselined, not new.
+Read-only retrieval never needs a baseline. Whole-mirror `validate` reports the live
 wiki's existing red links and orphans; scope it with `--title` for a change.
 
 Before editing, inspect relevant local changes; include template-scoped status

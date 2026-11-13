@@ -106,6 +106,7 @@ pub fn push_to_remote_with_progress<A: WikiWriteApi>(
             selection: options.selection.clone(),
         },
         target,
+        BaselineRequirement::Global,
     )?
     else {
         let plan_id = canonical_push_plan_id(target, options, &[], &BTreeMap::new())?;

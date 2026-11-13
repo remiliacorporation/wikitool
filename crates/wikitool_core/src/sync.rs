@@ -23,9 +23,9 @@ pub use wikitool_sync::{
     RemoteMutationInspection, RemoteMutationListReport, RemoteMutationOperation,
     RemoteMutationReconciliationReport, RemoteMutationReconciliationStatus, RemoteUploadAction,
     RemoteUploadError, RemoteUploadInput, RemoteUploadPlan, RemoteUploadReport, RemoteUploadStatus,
-    SyncPathEffect, SyncPathEffectKind, SyncPlanChange, SyncPlanOptions, SyncPlanReport,
-    SyncSelection, SyncStateError, SyncStoreMigrationReport, SyncStoreMigrationStatus,
-    SyncTargetIdentity,
+    SyncBaselineScope, SyncBaselineScopeKind, SyncPathEffect, SyncPathEffectKind, SyncPlanChange,
+    SyncPlanOptions, SyncPlanReport, SyncSelection, SyncStateError, SyncStoreMigrationReport,
+    SyncStoreMigrationStatus, SyncTargetIdentity, SyncUnbaselinedFile,
 };
 
 fn target_from_config(config: &WikiConfig) -> Result<SyncTargetIdentity> {
@@ -58,6 +58,30 @@ pub fn pull_from_remote_with_config(
     let mut client = client_from_wikitool_config(config)?;
     let report =
         wikitool_sync::pull_from_remote_with_api(&sync_paths, options, &target, &mut client)?;
+    if !report.changed_paths.is_empty() {
+        rebuild_index(paths, &ScanOptions::default())?;
+    }
+    Ok(report)
+}
+
+/// Pull exactly `titles`, recording a per-title baseline that read-only `status`
+/// and `diff` honor. Never establishes the global baseline.
+pub fn pull_titles_from_remote_with_config(
+    paths: &ResolvedPaths,
+    titles: &[String],
+    overwrite_local: bool,
+    config: &WikiConfig,
+) -> Result<PullReport> {
+    let sync_paths = sync_project_paths(paths)?;
+    let target = target_from_config(config)?;
+    let mut client = client_from_wikitool_config(config)?;
+    let report = wikitool_sync::pull_titles_from_remote_with_api(
+        &sync_paths,
+        titles,
+        overwrite_local,
+        &target,
+        &mut client,
+    )?;
     if !report.changed_paths.is_empty() {
         rebuild_index(paths, &ScanOptions::default())?;
     }
@@ -104,6 +128,23 @@ pub fn plan_sync_changes_with_config(
         wikitool_sync::plan_sync_changes_with_api(&sync_paths, options, &target, &mut client)
     } else {
         wikitool_sync::plan_sync_changes(&sync_paths, options, &target)
+    }
+}
+
+/// Read-only planning for `status`: without the global baseline it covers the
+/// titles a scoped or single-title pull recorded and labels its `scope`.
+pub fn inspect_sync_changes_with_config(
+    paths: &ResolvedPaths,
+    options: &SyncPlanOptions,
+    config: &WikiConfig,
+) -> Result<Option<SyncPlanReport>> {
+    let sync_paths = sync_project_paths(paths)?;
+    let target = target_from_config(config)?;
+    if options.include_remote_conflicts {
+        let mut client = client_from_wikitool_config(config)?;
+        wikitool_sync::inspect_sync_changes_with_api(&sync_paths, options, &target, &mut client)
+    } else {
+        wikitool_sync::inspect_sync_changes(&sync_paths, options, &target)
     }
 }
 

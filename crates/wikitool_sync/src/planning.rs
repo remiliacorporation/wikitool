@@ -5,13 +5,7 @@ pub fn plan_sync_changes(
     options: &SyncPlanOptions,
     target: &SyncTargetIdentity,
 ) -> Result<Option<SyncPlanReport>> {
-    if options.include_remote_conflicts {
-        bail!("remote conflict hydration requires plan_sync_changes_with_api");
-    }
-    let Some(context) = collect_sync_planning_context(paths, options, target)? else {
-        return Ok(None);
-    };
-    Ok(Some(build_sync_plan_report(&context)))
+    plan_without_api(paths, options, target, BaselineRequirement::Global)
 }
 
 pub fn plan_sync_changes_with_api<A: WikiWriteApi>(
@@ -20,7 +14,64 @@ pub fn plan_sync_changes_with_api<A: WikiWriteApi>(
     target: &SyncTargetIdentity,
     api: &mut A,
 ) -> Result<Option<SyncPlanReport>> {
-    let mut context = match collect_sync_planning_context(paths, options, target)? {
+    plan_with_api(paths, options, target, api, BaselineRequirement::Global)
+}
+
+/// Read-only planning for `status`. Without the global baseline it compares
+/// only the titles a scoped or single-title pull recorded, and its report's
+/// `scope` says so. Writes never use this entry point.
+pub fn inspect_sync_changes(
+    paths: &SyncProjectPaths,
+    options: &SyncPlanOptions,
+    target: &SyncTargetIdentity,
+) -> Result<Option<SyncPlanReport>> {
+    plan_without_api(
+        paths,
+        options,
+        target,
+        BaselineRequirement::PulledTitlesForInspection,
+    )
+}
+
+/// [`inspect_sync_changes`] with remote conflict hydration.
+pub fn inspect_sync_changes_with_api<A: WikiWriteApi>(
+    paths: &SyncProjectPaths,
+    options: &SyncPlanOptions,
+    target: &SyncTargetIdentity,
+    api: &mut A,
+) -> Result<Option<SyncPlanReport>> {
+    plan_with_api(
+        paths,
+        options,
+        target,
+        api,
+        BaselineRequirement::PulledTitlesForInspection,
+    )
+}
+
+fn plan_without_api(
+    paths: &SyncProjectPaths,
+    options: &SyncPlanOptions,
+    target: &SyncTargetIdentity,
+    requirement: BaselineRequirement,
+) -> Result<Option<SyncPlanReport>> {
+    if options.include_remote_conflicts {
+        bail!("remote conflict hydration requires plan_sync_changes_with_api");
+    }
+    let Some(context) = collect_sync_planning_context(paths, options, target, requirement)? else {
+        return Ok(None);
+    };
+    Ok(Some(build_sync_plan_report(&context)))
+}
+
+fn plan_with_api<A: WikiWriteApi>(
+    paths: &SyncProjectPaths,
+    options: &SyncPlanOptions,
+    target: &SyncTargetIdentity,
+    api: &mut A,
+    requirement: BaselineRequirement,
+) -> Result<Option<SyncPlanReport>> {
+    let mut context = match collect_sync_planning_context(paths, options, target, requirement)? {
         Some(context) => context,
         None => return Ok(None),
     };
@@ -46,6 +97,7 @@ pub fn collect_changed_article_paths(
             selection: selection.clone(),
         },
         target,
+        BaselineRequirement::Global,
     )?
     else {
         return Ok(None);
@@ -75,8 +127,14 @@ pub(super) fn collect_sync_planning_context(
     paths: &SyncProjectPaths,
     options: &SyncPlanOptions,
     target: &SyncTargetIdentity,
+    requirement: BaselineRequirement,
 ) -> Result<Option<SyncPlanningContext>> {
-    let connection = open_existing_sync_connection(paths, target)?;
+    let (connection, global) = match requirement {
+        BaselineRequirement::Global => (open_existing_sync_connection(paths, target)?, true),
+        BaselineRequirement::PulledTitlesForInspection => {
+            open_sync_connection_for_inspection(paths, target)?
+        }
+    };
 
     let selection = resolve_sync_selection(paths, &options.selection)?;
     let local_files = scan_files(
@@ -110,9 +168,16 @@ pub(super) fn collect_sync_planning_context(
     backfill_sync_snapshots_from_local(&connection, paths, &local_map, &ledger)?;
 
     let mut changes = Vec::new();
+    let mut unbaselined_local = Vec::new();
     for file in local_map.values() {
         let key = normalized_title_key(&file.title);
         match ledger.get(&key) {
+            // Without the global baseline a missing row proves nothing about the
+            // remote page, so the file is not called new.
+            None if !global => unbaselined_local.push(SyncUnbaselinedFile {
+                title: file.title.clone(),
+                relative_path: file.relative_path.clone(),
+            }),
             None => changes.push(PlannedSyncChangeInternal {
                 title: file.title.clone(),
                 change_type: DiffChangeType::NewLocal,
@@ -170,11 +235,22 @@ pub(super) fn collect_sync_planning_context(
             .then(left.title.cmp(&right.title))
     });
 
+    let scope = SyncBaselineScope {
+        kind: if global {
+            SyncBaselineScopeKind::Global
+        } else {
+            SyncBaselineScopeKind::PulledTitles
+        },
+        baselined_titles: ledger.len(),
+        unbaselined_local,
+    };
+
     Ok(Some(SyncPlanningContext {
         connection,
         local_map,
         ledger,
         changes,
+        scope,
         request_count: 0,
     }))
 }
@@ -206,6 +282,7 @@ fn build_sync_plan_report(context: &SyncPlanningContext) -> SyncPlanReport {
             })
             .collect(),
         request_count: context.request_count,
+        scope: context.scope.clone(),
     }
 }
 

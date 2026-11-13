@@ -425,12 +425,12 @@ impl fmt::Display for SyncStateError {
         match self {
             Self::Missing { path } => write!(
                 formatter,
-                "sync state is missing at {}; run a successful `wikitool pull --full --all` to establish a global revision baseline before diff, status, review, or push",
+                "sync state is missing at {}; run `wikitool pull --title TITLE` to record a baseline for one page that read-only status and diff can use, or a successful `wikitool pull --full --all` to establish the global revision baseline that review and push require",
                 path.display()
             ),
             Self::Unestablished { path } => write!(
                 formatter,
-                "sync state at {} has no authoritative global baseline; run a successful `wikitool pull --full --all` before diff, status, review, or push",
+                "sync state at {} has no authoritative global baseline; read-only status and diff cover titles recorded by `wikitool pull --title TITLE` or a scoped pull, while review and push require a successful `wikitool pull --full --all`",
                 path.display()
             ),
             Self::TargetUnbound {
@@ -578,6 +578,34 @@ pub(super) fn require_sync_store(
     }
     verify_sync_target(paths, &connection, target)?;
     Ok(connection)
+}
+
+/// Open durable sync state for a read-only inspection (status, diff). Unlike
+/// [`require_sync_store`] it accepts a store without the global baseline, as
+/// long as it is bound to exactly `target`: a scoped or single-title pull binds
+/// the target when it records its first row. Returns whether the global
+/// baseline is established so the caller can label its scope.
+pub(super) fn open_sync_store_for_inspection(
+    paths: &SyncProjectPaths,
+    target: &SyncTargetIdentity,
+) -> Result<(Connection, bool)> {
+    let report = preserve_legacy_sync_state(paths, None)?;
+    if report.status == SyncStoreMigrationStatus::NoLegacyState {
+        return Err(SyncStateError::Missing {
+            path: report.sync_store_path,
+        }
+        .into());
+    }
+    let connection = open_existing_store(&report.sync_store_path)?;
+    let established = global_baseline_is_established(paths, &connection)?;
+    if !established && stored_sync_target(&connection)?.is_none() {
+        return Err(SyncStateError::Unestablished {
+            path: report.sync_store_path,
+        }
+        .into());
+    }
+    verify_sync_target(paths, &connection, target)?;
+    Ok((connection, established))
 }
 
 /// Prove that the durable sync authority is established for exactly `target`

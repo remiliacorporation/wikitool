@@ -2027,6 +2027,13 @@ pub(super) fn open_sync_connection(paths: &SyncProjectPaths) -> Result<Connectio
     store::open_or_create_sync_store(paths)
 }
 
+pub(super) fn open_sync_connection_for_inspection(
+    paths: &SyncProjectPaths,
+    target: &store::SyncTargetIdentity,
+) -> Result<(Connection, bool)> {
+    store::open_sync_store_for_inspection(paths, target)
+}
+
 pub(super) fn open_existing_sync_connection(
     paths: &SyncProjectPaths,
     target: &store::SyncTargetIdentity,

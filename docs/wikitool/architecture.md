@@ -241,7 +241,10 @@ store; catalog reset and pull/catalog refresh operations preserve both durable s
 planning fails closed when sync identity is absent. Only an explicitly global, successful
 `pull --full --all` writes global baseline
 authority; scoped or category pulls and legacy migrations may preserve rows but cannot prove
-coverage and therefore cannot unlock global diff/status/review/push. Establishment atomically binds
+coverage and therefore cannot unlock review or push. Read-only status and diff accept those
+per-title rows when the global baseline is absent: they compare only titles with a recorded
+baseline, report `scope: pulled_titles`, and list other local files as unbaselined rather than
+new. `pull --title` records such a row for exactly the named pages. Establishment atomically binds
 the store to a normalized MediaWiki API endpoint. Every planning and publication read verifies that
 identity, and target mismatch fails before network conflict hydration or mutation; `--force` cannot
 waive it.

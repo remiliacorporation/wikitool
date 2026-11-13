@@ -163,12 +163,13 @@ Pull wiki content and templates to local files
 Usage: wikitool pull [OPTIONS]
 
 Options:
-      --full                 Full refresh (ignore last pull timestamp)
       --project-root <PATH>
+      --title <TITLE>        Pull exactly this page and record its revision baseline; repeatable. Read-only status and diff honor it; push still needs `pull --full --all`
       --data-dir <PATH>
+      --full                 Full refresh (ignore last pull timestamp)
+      --config <PATH>
       --overwrite-local      Overwrite locally modified files during pull
   -c, --category <NAME>      Filter by category
-      --config <PATH>
       --diagnostics          Print resolved runtime diagnostics
       --templates            Pull templates instead of articles
       --categories           Pull Category: namespace pages

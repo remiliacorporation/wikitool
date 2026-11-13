@@ -6,6 +6,47 @@ pub fn pull_from_remote_with_api<A: WikiReadApi>(
     target: &SyncTargetIdentity,
     api: &mut A,
 ) -> Result<PullReport> {
+    pull_selected_pages(paths, options, None, target, api)
+}
+
+/// Pull exactly `titles` and record a revision baseline for each page that
+/// exists remotely. This is a scoped pull: it never establishes the global
+/// baseline and writes no incremental checkpoint. A title that does not exist
+/// on the wiki is reported with action `missing_remote` and is not an error.
+pub fn pull_titles_from_remote_with_api<A: WikiReadApi>(
+    paths: &SyncProjectPaths,
+    titles: &[String],
+    overwrite_local: bool,
+    target: &SyncTargetIdentity,
+    api: &mut A,
+) -> Result<PullReport> {
+    let titles = titles
+        .iter()
+        .map(|title| normalize_title_for_storage(title))
+        .filter(|title| !title.is_empty())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    if titles.is_empty() {
+        bail!("pull --title requires at least one non-empty title");
+    }
+    let options = PullOptions {
+        namespaces: Vec::new(),
+        category: None,
+        full: true,
+        coverage: PullCoverage::Scoped,
+        overwrite_local,
+    };
+    pull_selected_pages(paths, &options, Some(&titles), target, api)
+}
+
+fn pull_selected_pages<A: WikiReadApi>(
+    paths: &SyncProjectPaths,
+    options: &PullOptions,
+    explicit_titles: Option<&[String]>,
+    target: &SyncTargetIdentity,
+    api: &mut A,
+) -> Result<PullReport> {
     target.ensure_matches_api(api.target_api_url())?;
     let authoritative_global_pull = is_authoritative_global_pull(options)?;
     let mut connection = open_sync_connection(paths)?;
@@ -28,7 +69,10 @@ pub fn pull_from_remote_with_api<A: WikiReadApi>(
         changed_paths: Vec::new(),
     };
 
-    let pages_to_pull = resolve_pages_to_pull(&connection, options, api)?;
+    let pages_to_pull = match explicit_titles {
+        Some(titles) => titles.to_vec(),
+        None => resolve_pages_to_pull(&connection, options, api)?,
+    };
     report.requested_pages = pages_to_pull.len();
     if pages_to_pull.is_empty() {
         if authoritative_global_pull {
@@ -75,6 +119,16 @@ pub fn pull_from_remote_with_api<A: WikiReadApi>(
         let key = normalized_title_key(title);
         let page = match content_by_title.get(&key) {
             Some(page) => page,
+            None if explicit_titles.is_some() => {
+                report.pages.push(PullPageResult {
+                    title: title.clone(),
+                    action: "missing_remote".to_string(),
+                    detail: Some(
+                        "page does not exist on the wiki; no baseline recorded".to_string(),
+                    ),
+                });
+                continue;
+            }
             None => {
                 let message = format!("{title}: page content missing in API response");
                 report.errors.push(message);
@@ -251,7 +305,8 @@ pub fn pull_from_remote_with_api<A: WikiReadApi>(
         }
     }
 
-    if let Some(config_key) = pull_config_key(options)
+    if explicit_titles.is_none()
+        && let Some(config_key) = pull_config_key(options)
         && let Some(timestamp) = max_timestamp
     {
         set_sync_config(&connection, &config_key, &timestamp)?;

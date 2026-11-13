@@ -140,10 +140,11 @@ fn orientation(
 }
 
 const SYNC_BASELINE_RULE: &str = "\
-Sync baseline: `status`, `diff`, `review` and `push` need the global revision
-  baseline from one successful `pull --full --all`; a scoped pull does not
-  establish it. Read-only retrieval (`export`, `source`, `templates show`)
-  never needs it.
+Sync baseline: `review` and `push` need the global revision baseline from one
+  successful `pull --full --all`. `pull --title TITLE` records a baseline for
+  one page; without the global baseline, `status` and `diff` compare only such
+  titles and say `scope: pulled_titles`. Read-only retrieval (`export`,
+  `source`, `templates show`) never needs a baseline.
 ";
 
 const ACCEPTANCE_RULE: &str = "\
