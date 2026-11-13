@@ -30,3 +30,4 @@ jobs:
             target/debug/wikitool
             target/debug/wikitest
           if-no-files-found: error
+          retention-days: 7
