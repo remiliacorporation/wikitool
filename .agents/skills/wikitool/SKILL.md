@@ -11,6 +11,9 @@ On macOS, apply the [release trust](references/macos-release-trust.md) check
 before the first tool command of a session.
 Use `config show` to inspect the shipped default or existing project target.
 
+`wikitool guide` prints these procedures from the binary, and `wikitool commands
+WORDS` finds a command by purpose.
+
 Use the smallest operation that answers the task. CLI help owns flags. Run from
 the project directory or pass `--project-root`. Check `config show` when target identity is unknown
 or before a write. Keep credentials out of reports.

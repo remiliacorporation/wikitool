@@ -66,6 +66,7 @@ MediaWiki's bot flag, independently of authoring or human review.
 | Wiki reads, templates, mechanical edits and sync | `wikitool` skill and CLI help |
 | New or substantially revised encyclopedic prose | `wiki-writing` skill |
 | Independent editorial assessment | `prose-review` skill |
+| Procedures without skill discovery, or finding a command by purpose | `wikitool guide [TOPIC]`, `wikitool commands WORDS` |
 | Missing human knowledge, source leads or exclusions | `wiki-writing` skill, human notes |
 
 These are conditional lanes, not a mandatory sequence. A parameter lookup does

@@ -70,3 +70,8 @@ and authority boundaries; Claude Code reads it directly. Both harness discovery 
 contain complete skill packages because Claude Code discovers skills only under
 `.claude/skills/`. Start work directly;
 skill installation is not a prerequisite.
+
+The binary also compiles in the three public skills from `.agents/skills/`.
+`wikitool guide` prints them, and the selected adapter's guidance documents,
+byte for byte, for a harness that cannot discover skills; a test keeps the
+compiled copy equal to the sources.

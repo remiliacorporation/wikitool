@@ -18,6 +18,8 @@ Wiki management CLI
 Usage: wikitool [OPTIONS] [COMMAND]
 
 Commands:
+  guide       Print the shipped procedures, rules and site-adapter guidance
+  commands    Find commands by purpose, tagged agent or operator
   init        Initialize a new wikitool project
   config      Show resolved configuration and target-wiki sources
   pull        Pull wiki content and templates to local files
@@ -55,6 +57,44 @@ Options:
       --license              Print license information and exit
   -h, --help                 Print help
   -V, --version              Print version
+```
+
+## guide
+
+```text
+Print the shipped procedures, rules and site-adapter guidance
+
+Usage: wikitool guide [OPTIONS] [TOPIC]
+
+Arguments:
+  [TOPIC]  A skill (wikitool), one of its references (wikitool/sync-and-acceptance) or a site-adapter guidance document (adapter:NAME); bare `guide` prints the orientation and every topic
+
+Options:
+      --project-root <PATH>
+      --data-dir <PATH>
+      --config <PATH>
+      --diagnostics          Print resolved runtime diagnostics
+  -h, --help                 Print help
+```
+
+## commands
+
+```text
+Find commands by purpose, tagged agent or operator
+
+Usage: wikitool commands [OPTIONS] [WORDS]...
+
+Arguments:
+  [WORDS]...  Every word must match the command path, its description or its purpose; omit to list every command
+
+Options:
+      --limit <N>            Maximum commands to print; the report still counts every match
+      --project-root <PATH>
+      --data-dir <PATH>
+      --format <FORMAT>      Output format: text|json [default: text] [possible values: text, json]
+      --config <PATH>
+      --diagnostics          Print resolved runtime diagnostics
+  -h, --help                 Print help
 ```
 
 ## init
