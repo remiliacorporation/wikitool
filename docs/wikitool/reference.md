@@ -2416,6 +2416,7 @@ Options:
       --brief-stale-days <DAYS>     Age in days after which an interview ledger is considered stale [default: 45]
       --config <PATH>
       --diagnostics                 Print resolved runtime diagnostics
+      --no-live-check               Skip the live existence check against the configured wiki API; scout then reports live_existence unchecked
       --related-limit <N>           Maximum related pages [default: 18]
       --chunk-limit <N>             Maximum retrieved context chunks [default: 10]
       --token-budget <TOKENS>       Token budget across retrieved chunks [default: 1200]

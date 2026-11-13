@@ -22,6 +22,8 @@ To read one live page, use `export PAGE_URL --format wikitext` or
 `source fetch PAGE_URL --format wikitext`. `pull --title TITLE` brings one page
 into the mirror and records its revision baseline. To check whether a page exists, use
 `source wiki-search TERM --what nearmatch`; some wikis reject `--what title`.
+`article scout TOPIC` also reports the exact title's `live_existence` on the
+configured wiki, or `unchecked` with the reason.
 `article lint PATH` reads any file. An export's metadata header supplies the
 title and is not linted; a file without one outside `wiki_content/` or
 `templates/` needs `--title`. Batch selectors (`--path`, `--titles-file`,

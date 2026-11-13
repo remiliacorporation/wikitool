@@ -13,6 +13,7 @@ mod accept;
 mod changeset;
 mod fix;
 mod lint;
+mod live_existence;
 mod output;
 mod promote;
 mod scout;

@@ -21,6 +21,7 @@ use wikitool_core::wiki_interview::{
     validate_interview_brief,
 };
 
+use super::live_existence::{LiveExistence, check_live_existence};
 use crate::briefs::{
     BriefCommand, BriefView, brief_command, brief_command_owned, capped_strings, text_preview,
 };
@@ -58,6 +59,11 @@ pub(crate) struct ArticleScoutArgs {
         help = "Age in days after which an interview ledger is considered stale"
     )]
     brief_stale_days: u64,
+    #[arg(
+        long,
+        help = "Skip the live existence check against the configured wiki API; scout then reports live_existence unchecked"
+    )]
+    no_live_check: bool,
     #[arg(
         long,
         default_value_t = 18,
@@ -199,6 +205,7 @@ impl From<ArticleScoutContractProfileArg> for AuthoringContractProfile {
 #[derive(Debug, Serialize)]
 struct ArticleScoutOutput {
     docs_profile_requested: String,
+    live_existence: LiveExistence,
     readiness: CatalogReadiness,
     degradations: Vec<String>,
     catalog_generation: String,
@@ -244,7 +251,7 @@ pub(crate) fn run_article_scout(runtime: &RuntimeOptions, args: ArticleScoutArgs
     }
 
     let use_diversify = !args.no_diversify;
-    let (paths, _config, docs_profile) =
+    let (paths, config, docs_profile) =
         resolve_runtime_with_docs_profile(runtime, args.docs_profile.as_deref())?;
     let interview_brief = match args.brief_path.as_deref() {
         Some(path) => {
@@ -262,6 +269,7 @@ pub(crate) fn run_article_scout(runtime: &RuntimeOptions, args: ArticleScoutArgs
     let topic = normalize_option(args.topic.as_deref())
         .or_else(|| derive_topic_from_stub_path(args.stub_path.as_deref()));
     let stub_content = load_stub_content(&paths, args.stub_path.as_deref())?;
+    let live_existence = check_live_existence(&config, topic.as_deref(), args.no_live_check);
     let pack = build_authoring_context(
         &paths,
         topic.as_deref(),
@@ -285,6 +293,7 @@ pub(crate) fn run_article_scout(runtime: &RuntimeOptions, args: ArticleScoutArgs
     let mut output = match pack {
         AuthoringContextOutcome::IndexMissing => ArticleScoutOutput {
             docs_profile_requested: status.docs_profile_requested.clone(),
+            live_existence: live_existence.clone(),
             readiness: status.readiness.clone(),
             degradations: status.degradations.clone(),
             catalog_generation: status.catalog_generation.clone(),
@@ -293,6 +302,7 @@ pub(crate) fn run_article_scout(runtime: &RuntimeOptions, args: ArticleScoutArgs
         },
         AuthoringContextOutcome::QueryMissing => ArticleScoutOutput {
             docs_profile_requested: status.docs_profile_requested.clone(),
+            live_existence: live_existence.clone(),
             readiness: status.readiness.clone(),
             degradations: status.degradations.clone(),
             catalog_generation: status.catalog_generation.clone(),
@@ -310,6 +320,7 @@ pub(crate) fn run_article_scout(runtime: &RuntimeOptions, args: ArticleScoutArgs
             );
             ArticleScoutOutput {
                 docs_profile_requested: status.docs_profile_requested.clone(),
+                live_existence: live_existence.clone(),
                 readiness: status.readiness.clone(),
                 degradations: status.degradations.clone(),
                 catalog_generation: status.catalog_generation.clone(),
@@ -340,6 +351,7 @@ pub(crate) fn run_article_scout(runtime: &RuntimeOptions, args: ArticleScoutArgs
         "topic: {}",
         topic.as_deref().unwrap_or("<derived-from-stub>")
     );
+    println!("live_existence: {}", output.live_existence.label());
     println!("docs_profile_requested: {}", output.docs_profile_requested);
     println!("catalog_generation: {}", output.catalog_generation);
     println!("readiness: {}", format_readiness(&output.readiness));
@@ -519,6 +531,7 @@ struct ArticleScoutBrief<'a> {
     topic: Option<&'a str>,
     intent: Option<&'a ArticleScoutIntent>,
     local_state: Option<&'a LocalExistenceState>,
+    live_existence: &'a LiveExistence,
     interview_brief: Option<InterviewBriefCard<'a>>,
     context: Option<ArticleScoutContextCard<'a>>,
     local_integration: Option<ArticleScoutIntegrationCard<'a>>,
@@ -635,6 +648,7 @@ fn build_article_scout_brief<'a>(output: &'a ArticleScoutOutput) -> ArticleScout
             topic: None,
             intent: None,
             local_state: None,
+            live_existence: &output.live_existence,
             interview_brief: output.interview_brief.as_ref().map(interview_brief_card),
             context: None,
             local_integration: None,
@@ -657,6 +671,7 @@ fn build_article_scout_brief<'a>(output: &'a ArticleScoutOutput) -> ArticleScout
             topic: None,
             intent: None,
             local_state: None,
+            live_existence: &output.live_existence,
             interview_brief: output.interview_brief.as_ref().map(interview_brief_card),
             context: None,
             local_integration: None,
@@ -815,6 +830,7 @@ fn build_article_scout_brief<'a>(output: &'a ArticleScoutOutput) -> ArticleScout
                 topic: Some(&article_scout.topic),
                 intent: Some(&article_scout.intent),
                 local_state: Some(&article_scout.local_state),
+                live_existence: &output.live_existence,
                 interview_brief: output.interview_brief.as_ref().map(interview_brief_card),
                 context: Some(ArticleScoutContextCard {
                     query: &article_scout.context_profile.query,

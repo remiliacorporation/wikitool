@@ -140,7 +140,8 @@ Requested publication: exact human decision -> promotion -> revision-bound push
 Optional inputs: local scout context, human intake, template/capability inspection
 ```
 
-`article scout --format json --view brief` returns local state, context coverage,
+`article scout --format json --view brief` returns local state, the topic's `live_existence` on the
+configured wiki (`exists`, `redirect`, `missing`, or `unchecked` with the reason), context coverage,
 stable context identities, comparable-page observations, observed categories, available
 templates, and blocking ledger gaps. It does not contain prompt prose, a recommended editorial
 action, a canned question agenda, or a quality claim. `retrieval_ready` means the configured local
