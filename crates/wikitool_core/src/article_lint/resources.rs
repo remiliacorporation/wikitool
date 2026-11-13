@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Result;
@@ -5,6 +6,7 @@ use rusqlite::Connection;
 
 use crate::content_store::parsing::open_indexed_connection;
 use crate::filesystem::{ScanOptions, scan_files};
+use crate::ontology::typing::{ArticleTyping, OntologyAvailability, load_project_ontology};
 use crate::runtime::ResolvedPaths;
 use crate::site::{
     SiteAdapter, TemplateCatalog, WikiCapabilityManifest, load_latest_wiki_capabilities,
@@ -25,6 +27,11 @@ pub(super) struct LoadedResources {
     /// nouns that may stay capitalized mid-heading.
     pub(super) proper_noun_words: BTreeSet<String>,
     pub(super) index_connection: Option<Connection>,
+    /// The vendored ontology and the wiki's ontology modules, loaded only when
+    /// the adapter's `ontology_typing` level is not `ignore`.
+    pub(super) ontology: Option<OntologyAvailability>,
+    /// The last article's typing, so lint computes it once per article.
+    pub(super) ontology_typing: RefCell<Option<(String, ArticleTyping)>>,
 }
 
 pub(super) fn load_resources(paths: &ResolvedPaths) -> Result<LoadedResources> {
@@ -41,6 +48,11 @@ pub(super) fn load_resources(paths: &ResolvedPaths) -> Result<LoadedResources> {
     let local_asset_titles = scan_local_asset_titles(paths)?;
     let proper_noun_words = build_proper_noun_words(paths, &adapter)?;
     let index_connection = open_indexed_connection(paths)?;
+    let ontology = if adapter.ontology_typing_level().is_ignore() {
+        None
+    } else {
+        Some(load_project_ontology(paths, &adapter)?)
+    };
 
     Ok(LoadedResources {
         adapter,
@@ -51,6 +63,8 @@ pub(super) fn load_resources(paths: &ResolvedPaths) -> Result<LoadedResources> {
         local_asset_titles,
         proper_noun_words,
         index_connection,
+        ontology,
+        ontology_typing: RefCell::new(None),
     })
 }
 

@@ -227,6 +227,9 @@ fn validate_site_adapter(policy: &SiteAdapterDocument) -> Result<()> {
             }
         }
     }
+    if let Some(ontology) = &policy.ontology {
+        crate::ontology::validate_typing_rules(ontology)?;
+    }
     Ok(())
 }
 

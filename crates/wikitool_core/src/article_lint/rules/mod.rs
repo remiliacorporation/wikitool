@@ -14,10 +14,13 @@ mod extension;
 mod integration;
 mod mechanics;
 mod module;
+mod ontology;
 mod structure;
 mod style;
 mod template;
 mod wikitext;
+
+pub(super) use ontology::ontology_status;
 
 #[derive(Debug, Clone)]
 pub(super) struct SafeFixEdit {
@@ -65,6 +68,7 @@ pub(super) fn collect_issue_matches(
     integration::lint_red_links_in_see_also(document, resources, &mut matches)?;
     integration::lint_capability_rules(document, resources, &mut matches);
     integration::lint_graph_rules(paths, document, resources, &mut matches)?;
+    ontology::lint_ontology_typing(document, resources, &mut matches);
 
     matches.sort_by(compare_issue_matches);
     Ok(matches)

@@ -17,6 +17,7 @@ mod live_existence;
 mod output;
 mod promote;
 mod scout;
+mod scout_ontology;
 mod selection;
 
 #[cfg(test)]

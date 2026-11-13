@@ -10,6 +10,7 @@ anyhow.workspace = true
 chrono.workspace = true
 full_moon.workspace = true
 mediawiki_protocol = { path = "../mediawiki_protocol" }
+mediawiki_wikitext = { path = "../mediawiki_wikitext" }
 reqwest.workspace = true
 rusqlite.workspace = true
 scraper.workspace = true

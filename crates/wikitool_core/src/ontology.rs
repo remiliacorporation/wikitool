@@ -19,7 +19,15 @@ use serde_json::{Map, Value, json};
 use crate::runtime::ResolvedPaths;
 use crate::support::normalize_path;
 
+mod lua_data;
 mod ntriples;
+pub mod report;
+pub mod scout;
+pub mod typing;
+mod values;
+mod vocabulary;
+
+pub use self::typing::validate_typing_rules;
 
 use self::ntriples::{LineParser, Literal, Term};
 
@@ -31,6 +39,8 @@ pub const MODULE_TITLE: &str = "Module:Ontology/data";
 /// Sync reads a template file's title from its path alone, so the folder is a
 /// layout choice; the title-to-path mapping takes it as a layout hint.
 const MODULE_FOLDER: &str = "ontology";
+/// The titles that live in [`MODULE_FOLDER`]: `Module:Ontology` and its subpages.
+const MODULE_TITLE_PREFIX: &str = "Module:Ontology";
 const NO_TERM: &str = "sssom:NoTermFound";
 const SECTIONS: [&str; 5] = ["classes", "families", "properties", "relations", "schemes"];
 /// The top-level sections of the export, any of which a site adapter's
@@ -71,15 +81,24 @@ pub struct ExportOptions<'a> {
 /// The project-relative path of `Module:Ontology/data`, derived from its
 /// title by the same mapping that sync uses.
 pub fn module_relative_path(paths: &ResolvedPaths) -> Result<String> {
+    module_title_relative_path(paths, MODULE_TITLE)
+}
+
+/// The project-relative path of one of the ontology modules
+/// (`Module:Ontology` and its subpages) in the templates mirror.
+pub fn module_title_relative_path(paths: &ResolvedPaths, title: &str) -> Result<String> {
     let sync_paths = wikitool_sync::SyncProjectPaths {
         project_root: paths.project_root.clone(),
         wiki_content_dir: paths.wiki_content_dir.clone(),
         templates_dir: paths.templates_dir.clone(),
         sync_store_path: paths.sync_store_path(),
         custom_namespaces: Vec::new(),
-        template_category_mappings: vec![(MODULE_TITLE.to_string(), MODULE_FOLDER.to_string())],
+        template_category_mappings: vec![(
+            MODULE_TITLE_PREFIX.to_string(),
+            MODULE_FOLDER.to_string(),
+        )],
     };
-    wikitool_sync::title_to_relative_path(&sync_paths, MODULE_TITLE, false)
+    wikitool_sync::title_to_relative_path(&sync_paths, title, false)
 }
 
 /// Build the vendored copy from an ontology directory inside a git checkout.

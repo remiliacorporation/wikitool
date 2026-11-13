@@ -83,6 +83,26 @@ pub struct ArticleLintReport {
     pub suggestions: usize,
     pub resources: ArticleLintResourcesStatus,
     pub issues: Vec<ArticleLintIssue>,
+    /// Which ontology typing checks ran, present only when the site adapter
+    /// enables `ontology_typing` and has `[ontology]`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ontology: Option<ArticleLintOntologyStatus>,
+}
+
+/// The ontology typing checks of one lint run.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ArticleLintOntologyStatus {
+    /// The vendored ontology commit the checks read, when there is one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ontology_commit: Option<String>,
+    pub checks_run: Vec<String>,
+    pub skipped: Vec<ArticleLintSkippedCheck>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ArticleLintSkippedCheck {
+    pub check: String,
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
