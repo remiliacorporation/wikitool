@@ -27,7 +27,8 @@ Read the site adapter's guidance, then follow [Human notes](references/human-not
 for how supplied knowledge reaches the page. On a wiki that is a first-party
 record of its own subject, what the contributor supplies as fact goes into the
 wiki's voice, whoever they are. Elsewhere, publish testimony with attribution
-or hold it as a lead.
+or hold it as a lead. Where the adapter sets its own source-support
+thresholds, they replace the defaults in the references.
 
 Doubt is a question, not a hedge. When a supplied statement is implausible on
 its face, contradicts an inspected source or another statement, or alleges

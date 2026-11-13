@@ -33,6 +33,12 @@ when to report it and treats needless hedging as a defect. Missing attribution
 on an allegation about a named person is the opposite defect and is reported
 under [Sensitive claims](references/blp-sensitive.md).
 
+The references set default source-support thresholds, including the higher one
+for sensitive claims. Where the site adapter sets its own, apply the adapter's:
+a missing citation is then a finding only if the adapter makes it one. Limits
+that are not about sourcing (attribution of allegations, privacy, exact bytes)
+stay unless the adapter removes them by name.
+
 Reconstruct material claims, including infoboxes, captions, headings and category
 placement. Check category scope and browsing value under the site's policy, not
 just whether the label could be technically true. Mechanical Wikitool checks

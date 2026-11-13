@@ -2,7 +2,7 @@
 
 This document specializes the public Wikitool authoring and review skills for Remilia Wiki. It is project policy, not generic MediaWiki behavior and not executable prose policy.
 
-Companion documents: [research](research.md) for where to look, [style](style.md) for voice, structure and mechanics, and [review](review.md) for the coverage step of prose review.
+Companion documents: [research](research.md) for where to look, [style](style.md) for voice, structure and mechanics, and [review](review.md) for review findings and the coverage step.
 
 ## Mission
 
@@ -42,7 +42,7 @@ Placement keeps the article about its subject:
 4. `Category:Remilia` and its subcategories mark Remilia's own work, not subjects that have a tie to it.
 5. Do not use Charlotte Fang as a prestige anchor. If the relationship merely explains why an editor encountered the subject, keep it out of article prose.
 
-Articles about Remilia's own work are exempt from the placement rules.
+Rules 1, 2 and 4 do not apply to articles about Remilia's own work. Rules 3 and 5 apply everywhere.
 
 Remilia Wiki preserves niche and early material that lacks broad secondary coverage. A short, honest article or redirect is better than an inflated standalone page.
 
@@ -64,7 +64,7 @@ This is the one rule that the low citation bar depends on. It is what separates 
 
 Lore is knowledge held by the community that no article records: how a meme began, what a phrase meant, who did what in a thread. Write lore as a plain declarative sentence, with a citation if one exists and without one if none does.
 
-Never use an attribution frame. Do not write "community accounts hold that", "is said to", "according to users", or "is often claimed". The frame hedges a statement the article is willing to make. If two accounts of the lore conflict, state the dispute once, with who disputes it.
+Never use an attribution frame. Do not write "community accounts hold that", "is said to", "according to users", or "is often claimed". The frame hedges a statement the article is willing to make. If two accounts of the lore conflict and one is the contributor's, ask the contributor first, as [Contributors](#contributors) describes. State what remains disputed once, with who disputes it.
 
 ### What to cite
 
@@ -76,7 +76,7 @@ When there is something to cite, cite the thing closest to the event:
 
 This order ranks what to cite. It does not rank what may be said, and no statement waits for a higher item.
 
-Cite the work rather than a summary of it. Never compress a Wikipedia article's many per-claim citations into a single Wikipedia citation or a generic publisher home page. Cite a summary directly only when it is the artifact under discussion or the only place the fact is written.
+Cite the work rather than a summary of it. Never compress a Wikipedia article's many per-claim citations into a single Wikipedia citation or a generic publisher home page. Cite a summary directly only when it is the artifact under discussion or the only place the fact is written. When the work it summarizes exists but cannot be opened, cite the summary and say less.
 
 Remilia Wiki pages are retrieval aids and claim trails. Inspect their underlying citations before reusing a claim. Do not cite the wiki as independent confirmation unless the wiki page itself is the primary artifact being discussed.
 
@@ -117,7 +117,7 @@ Avoid padding thin evidence with broad NFT, internet-culture, art-scene, or Remi
 
 ## Structure and mechanics
 
-Main-namespace articles use `SHORTDESC`, `Template:Article quality`, sentence-case headings, a References section with `Template:Reflist`, straight quotes, and wikitext rather than Markdown. These requirements are encoded in `site-adapter.toml` and enforced mechanically by Wikitool.
+Main-namespace articles use `SHORTDESC`, `Template:Article quality`, sentence-case headings, a References section with `Template:Reflist`, straight quotes, and wikitext rather than Markdown. These requirements are encoded in `site-adapter.toml`. Wikitool's lint enforces part of them; [style](style.md#mechanics) says which.
 
 Pages a Remilia admin has accepted carry `{{Article quality|verified}}`; do not add visible "unverified" banners to them. Quality decisions on other submissions belong to moderation.
 
