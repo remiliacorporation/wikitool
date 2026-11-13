@@ -18,6 +18,8 @@ Wiki management CLI
 Usage: wikitool [OPTIONS] [COMMAND]
 
 Commands:
+  guide       Print the shipped procedures, rules and site-adapter guidance
+  commands    Find commands by purpose, tagged agent or operator
   init        Initialize a new wikitool project
   config      Show resolved configuration and target-wiki sources
   pull        Pull wiki content and templates to local files
@@ -55,6 +57,44 @@ Options:
       --license              Print license information and exit
   -h, --help                 Print help
   -V, --version              Print version
+```
+
+## guide
+
+```text
+Print the shipped procedures, rules and site-adapter guidance
+
+Usage: wikitool guide [OPTIONS] [TOPIC]
+
+Arguments:
+  [TOPIC]  A skill (wikitool), one of its references (wikitool/sync-and-acceptance) or a site-adapter guidance document (adapter:NAME); bare `guide` prints the orientation and every topic
+
+Options:
+      --project-root <PATH>
+      --data-dir <PATH>
+      --config <PATH>
+      --diagnostics          Print resolved runtime diagnostics
+  -h, --help                 Print help
+```
+
+## commands
+
+```text
+Find commands by purpose, tagged agent or operator
+
+Usage: wikitool commands [OPTIONS] [WORDS]...
+
+Arguments:
+  [WORDS]...  Every word must match the command path, its description or its purpose; omit to list every command
+
+Options:
+      --limit <N>            Maximum commands to print; the report still counts every match
+      --project-root <PATH>
+      --data-dir <PATH>
+      --format <FORMAT>      Output format: text|json [default: text] [possible values: text, json]
+      --config <PATH>
+      --diagnostics          Print resolved runtime diagnostics
+  -h, --help                 Print help
 ```
 
 ## init
@@ -123,12 +163,13 @@ Pull wiki content and templates to local files
 Usage: wikitool pull [OPTIONS]
 
 Options:
-      --full                 Full refresh (ignore last pull timestamp)
       --project-root <PATH>
+      --title <TITLE>        Pull exactly this page and record its revision baseline; repeatable. Read-only status and diff honor it; push still needs `pull --full --all`
       --data-dir <PATH>
+      --full                 Full refresh (ignore last pull timestamp)
+      --config <PATH>
       --overwrite-local      Overwrite locally modified files during pull
   -c, --category <NAME>      Filter by category
-      --config <PATH>
       --diagnostics          Print resolved runtime diagnostics
       --templates            Pull templates instead of articles
       --categories           Pull Category: namespace pages
@@ -2375,6 +2416,7 @@ Options:
       --brief-stale-days <DAYS>     Age in days after which an interview ledger is considered stale [default: 45]
       --config <PATH>
       --diagnostics                 Print resolved runtime diagnostics
+      --no-live-check               Skip the live existence check against the configured wiki API; scout then reports live_existence unchecked
       --related-limit <N>           Maximum related pages [default: 18]
       --chunk-limit <N>             Maximum retrieved context chunks [default: 10]
       --token-budget <TOKENS>       Token budget across retrieved chunks [default: 1200]
@@ -2412,7 +2454,7 @@ Options:
       --prose-origin <ORIGIN>    Prose origin: human-draft|human-revision|agent-draft|collaborative-draft|mechanical-conversion-of-human-prose|human-reviewed-legacy [possible values: human-draft, human-revision, agent-draft, collaborative-draft, mechanical-conversion-of-human-prose, human-reviewed-legacy]
       --allow-warnings           Record explicit caller acceptance of remaining lint warnings
       --diagnostics              Print resolved runtime diagnostics
-      --content-sha256 <SHA256>  Refuse, recording nothing, unless the file still has this SHA-256 of the exact bytes the human read: the raw file bytes without line-ending or encoding normalization, as `sha256sum PATH` prints and `article lint PATH --format json` reports in content_sha256
+      --content-sha256 <SHA256>  Refuse, recording nothing, unless the file still has this SHA-256 of the exact bytes the human read: the raw file bytes without line-ending or encoding normalization, as `sha256sum PATH` prints and `article lint PATH --format json` reports in file_sha256
       --format <FORMAT>          Output format: text|json [default: text] [possible values: text, json]
   -h, --help                     Print help
 ```
@@ -2492,7 +2534,7 @@ Lint article wikitext against MediaWiki and site-adapter rules
 Usage: wikitool article lint [OPTIONS] [PATH]
 
 Arguments:
-  [PATH]  Article path; state-draft paths under .wikitool/drafts/ may use --title override
+  [PATH]  File to lint, anywhere; an export's metadata header supplies the title
 
 Options:
       --format <FORMAT>      Output format: text|json [default: text] [possible values: text, json]
@@ -2500,7 +2542,7 @@ Options:
       --data-dir <PATH>
       --strict               Treat warnings as errors
       --config <PATH>
-      --title <TITLE>        Select a canonical article title; with one .wikitool/drafts/ PATH, override the draft title
+      --title <TITLE>        Select a canonical article title; with one PATH outside wiki_content/, the page title for that file
       --diagnostics          Print resolved runtime diagnostics
       --path <PATH>
       --titles-file <PATH>   Read one canonical page title per line

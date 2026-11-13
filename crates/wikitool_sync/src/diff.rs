@@ -15,6 +15,7 @@ pub fn diff_local_against_sync(
             selection: options.selection.clone(),
         },
         target,
+        BaselineRequirement::PulledTitlesForInspection,
     )?
     else {
         return Ok(None);
@@ -54,6 +55,7 @@ pub fn diff_local_against_sync(
         deleted_local: count_changes(&context.changes, DiffChangeType::DeletedLocal),
         conflict_count: 0,
         changes,
+        scope: context.scope.clone(),
     }))
 }
 

@@ -5019,3 +5019,112 @@ fn sync_plan_selection_and_changed_article_paths_honor_scope() {
         vec!["wiki_content/Main/Beta.wiki".to_string()]
     );
 }
+
+fn edited_page_after_title_pull(
+    recorded_revision_is_available: bool,
+) -> (super::PullReport, MockApi) {
+    let temp = tempdir().expect("tempdir");
+    let project_root = temp.path().join("project");
+    let paths = paths(&project_root);
+    fs::create_dir_all(&paths.wiki_content_dir).expect("create wiki_content");
+    let mut api = MockApi::default();
+    api.page_contents
+        .insert("Alpha".to_string(), base_page("Alpha", "remote v1"));
+    let title_pull = super::pull_titles_from_remote_with_api(
+        &paths,
+        &["Alpha".to_string()],
+        false,
+        &target(api.target_api_url()),
+        &mut api,
+    )
+    .expect("title pull");
+    assert!(title_pull.success && !title_pull.global_baseline_established);
+
+    let local = paths.wiki_content_dir.join("Main").join("Alpha.wiki");
+    write_file(&local, "local edit");
+    if recorded_revision_is_available {
+        api.revisions_by_id
+            .insert(200, base_page("Alpha", "remote v1"));
+    }
+    let mut moved = base_page("Alpha", "remote v2");
+    moved.revision_id = 201;
+    moved.timestamp = "2026-02-20T00:00:00Z".to_string();
+    api.page_contents.insert("Alpha".to_string(), moved);
+    api.all_pages_by_namespace
+        .insert(NS_MAIN, vec!["Alpha".to_string()]);
+
+    let report = pull_from_remote_with_api(
+        &paths,
+        &PullOptions {
+            namespaces: authoritative_namespaces(),
+            category: None,
+            full: true,
+            coverage: PullCoverage::GlobalAllNamespaces,
+            overwrite_local: false,
+        },
+        &mut api,
+    )
+    .expect("global pull report");
+    assert_eq!(
+        fs::read_to_string(&local).expect("local file"),
+        "local edit",
+        "the global pull must keep the local edit"
+    );
+    (report, api)
+}
+
+#[test]
+fn global_pull_covers_an_edited_page_whose_recorded_revision_this_wiki_confirms() {
+    let (report, api) = edited_page_after_title_pull(true);
+    assert!(report.success, "{:?}", report.errors);
+    assert!(report.global_baseline_established);
+    assert_eq!(api.exact_revision_requests, vec![200]);
+}
+
+#[test]
+fn global_pull_names_an_edited_page_whose_recorded_revision_is_unconfirmed() {
+    let (report, _) = edited_page_after_title_pull(false);
+    assert!(!report.success);
+    assert!(!report.global_baseline_established);
+    assert!(
+        report.errors.iter().any(|error| error.contains("1 page(s)")
+            && error.contains("Alpha")
+            && error.contains("--overwrite-local")),
+        "{:?}",
+        report.errors
+    );
+}
+
+#[test]
+fn title_pull_of_a_page_the_wiki_no_longer_has_says_its_baseline_is_stale() {
+    let temp = tempdir().expect("tempdir");
+    let project_root = temp.path().join("project");
+    let paths = paths(&project_root);
+    fs::create_dir_all(&paths.wiki_content_dir).expect("create wiki_content");
+    let mut api = MockApi::default();
+    api.page_contents
+        .insert("Alpha".to_string(), base_page("Alpha", "remote v1"));
+    let titles = ["Alpha".to_string(), "Never existed".to_string()];
+    let target = target(api.target_api_url());
+    super::pull_titles_from_remote_with_api(&paths, &titles, false, &target, &mut api)
+        .expect("first title pull");
+
+    api.page_contents.remove("Alpha");
+    let report = super::pull_titles_from_remote_with_api(&paths, &titles, false, &target, &mut api)
+        .expect("second title pull");
+    assert!(report.success);
+    let detail = |title: &str| {
+        report
+            .pages
+            .iter()
+            .find(|page| page.title == title)
+            .and_then(|page| page.detail.clone())
+            .unwrap_or_default()
+    };
+    assert!(detail("Alpha").contains("now stale"), "{:?}", report.pages);
+    assert!(
+        detail("Never existed").contains("no baseline recorded"),
+        "{:?}",
+        report.pages
+    );
+}

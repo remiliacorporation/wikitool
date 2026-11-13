@@ -13,6 +13,7 @@ mod accept;
 mod changeset;
 mod fix;
 mod lint;
+mod live_existence;
 mod output;
 mod promote;
 mod scout;
@@ -162,7 +163,7 @@ pub(crate) struct ArticleAcceptArgs {
         long,
         value_name = "SHA256",
         value_parser = parse_content_sha256,
-        help = "Refuse, recording nothing, unless the file still has this SHA-256 of the exact bytes the human read: the raw file bytes without line-ending or encoding normalization, as `sha256sum PATH` prints and `article lint PATH --format json` reports in content_sha256"
+        help = "Refuse, recording nothing, unless the file still has this SHA-256 of the exact bytes the human read: the raw file bytes without line-ending or encoding normalization, as `sha256sum PATH` prints and `article lint PATH --format json` reports in file_sha256"
     )]
     content_sha256: Option<String>,
     #[arg(
@@ -186,9 +187,7 @@ fn parse_content_sha256(value: &str) -> std::result::Result<String, String> {
 
 #[derive(Debug, Args)]
 pub(crate) struct ArticleLintArgs {
-    #[arg(
-        help = "Article path; state-draft paths under .wikitool/drafts/ may use --title override"
-    )]
+    #[arg(help = "File to lint, anywhere; an export's metadata header supplies the title")]
     path: Option<PathBuf>,
     #[arg(
         long,
@@ -203,7 +202,7 @@ pub(crate) struct ArticleLintArgs {
     #[arg(
         long = "title",
         value_name = "TITLE",
-        help = "Select a canonical article title; with one .wikitool/drafts/ PATH, override the draft title"
+        help = "Select a canonical article title; with one PATH outside wiki_content/, the page title for that file"
     )]
     titles: Vec<String>,
     #[arg(long = "path", value_name = "PATH")]

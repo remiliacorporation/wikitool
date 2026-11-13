@@ -1,7 +1,10 @@
 use anyhow::{Result, bail};
 use serde::Serialize;
 use wikitool_core::runtime::{ensure_runtime_ready_for_sync, inspect_runtime};
-use wikitool_core::sync::{PullCoverage, PullOptions, PullReport, pull_from_remote_with_config};
+use wikitool_core::sync::{
+    PullCoverage, PullOptions, PullReport, pull_from_remote_with_config,
+    pull_titles_from_remote_with_config,
+};
 
 use crate::cli_support::{normalize_path, resolve_runtime_with_config};
 use crate::{LOCAL_DB_POLICY_MESSAGE, RuntimeOptions};
@@ -15,6 +18,8 @@ struct PullJsonReport<'a> {
     full: bool,
     overwrite_local: bool,
     category: Option<&'a str>,
+    #[serde(skip_serializing_if = "<[String]>::is_empty")]
+    titles: &'a [String],
     templates: bool,
     categories: bool,
     all: bool,
@@ -28,21 +33,25 @@ pub(crate) fn run_pull(runtime: &RuntimeOptions, args: PullArgs) -> Result<()> {
     ensure_runtime_ready_for_sync(&paths, &status)?;
 
     let namespaces = pull_namespaces_from_args(&args, &config);
-    let report = pull_from_remote_with_config(
-        &paths,
-        &PullOptions {
-            namespaces: namespaces.clone(),
-            category: args.category.clone(),
-            full: args.full,
-            coverage: if args.full && args.all {
-                PullCoverage::GlobalAllNamespaces
-            } else {
-                PullCoverage::Scoped
+    let report = if !args.titles.is_empty() {
+        pull_titles_from_remote_with_config(&paths, &args.titles, args.overwrite_local, &config)?
+    } else {
+        pull_from_remote_with_config(
+            &paths,
+            &PullOptions {
+                namespaces: namespaces.clone(),
+                category: args.category.clone(),
+                full: args.full,
+                coverage: if args.full && args.all {
+                    PullCoverage::GlobalAllNamespaces
+                } else {
+                    PullCoverage::Scoped
+                },
+                overwrite_local: args.overwrite_local,
             },
-            overwrite_local: args.overwrite_local,
-        },
-        &config,
-    )?;
+            &config,
+        )?
+    };
 
     if args.format.is_json() {
         println!(
@@ -52,6 +61,7 @@ pub(crate) fn run_pull(runtime: &RuntimeOptions, args: PullArgs) -> Result<()> {
                 full: args.full,
                 overwrite_local: args.overwrite_local,
                 category: args.category.as_deref(),
+                titles: &args.titles,
                 templates: args.templates,
                 categories: args.categories,
                 all: args.all,
@@ -70,6 +80,9 @@ pub(crate) fn run_pull(runtime: &RuntimeOptions, args: PullArgs) -> Result<()> {
     println!("full: {}", args.full);
     println!("overwrite_local: {}", args.overwrite_local);
     println!("category: {}", args.category.as_deref().unwrap_or("<none>"));
+    if !args.titles.is_empty() {
+        println!("titles: {}", args.titles.join(" | "));
+    }
     println!("templates: {}", args.templates);
     println!("categories: {}", args.categories);
     println!("all: {}", args.all);

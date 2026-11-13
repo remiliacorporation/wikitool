@@ -633,7 +633,7 @@ fn validate_sha256(value: &str, kind: &str) -> Result<()> {
     Ok(())
 }
 
-fn parse_skill_identity(source: &str, path: &Path) -> Result<(String, String)> {
+pub(crate) fn parse_skill_identity(source: &str, path: &Path) -> Result<(String, String)> {
     let mut lines = source.lines();
     if lines.next() != Some("---") {
         bail!(

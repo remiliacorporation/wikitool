@@ -11,20 +11,28 @@ On macOS, apply the [release trust](references/macos-release-trust.md) check
 before the first tool command of a session.
 Use `config show` to inspect the shipped default or existing project target.
 
+`wikitool guide` prints these procedures from the binary, and `wikitool commands
+WORDS` finds a command by purpose.
+
 Use the smallest operation that answers the task. CLI help owns flags. Run from
 the project directory or pass `--project-root`. Check `config show` when target identity is unknown
 or before a write. Keep credentials out of reports.
 
 To read one live page, use `export PAGE_URL --format wikitext` or
-`source fetch PAGE_URL --format wikitext`; `pull` selects categories, templates
-or everything, never a single title. To check whether a page exists, use
-`source wiki-search TERM --what nearmatch`; some wikis reject `--what title`.
-Exported files carry a metadata header; `article lint` reads only paths under
-`wiki_content/`, `templates/` or `.wikitool/`, so copy a candidate to
-`.wikitool/drafts/TITLE.wiki` and pass `--title`. Batch selectors (`--path`,
-`--titles-file`, `--changed`) cover `wiki_content/` only; lint an off-mirror
-draft one path at a time. `export --urls-file` writes Markdown only; export
-several pages as wikitext with one `export PAGE_URL` call each.
+`source fetch PAGE_URL --format wikitext`. `pull --title TITLE` brings one page
+into the mirror and records its revision baseline. To check whether a page
+exists, use `source wiki-search TERM --what nearmatch`; some wikis reject
+`--what title`. `article scout TOPIC` also reports the exact title's
+`live_existence` on the configured wiki, or `unchecked` with the reason.
+
+`article lint PATH` reads any file. Under `wiki_content/`, `templates/` or
+`.wikitool/` the file is linted whole, as accept and push read it, and an export
+header there is an error because it would be published. Elsewhere an export's
+header supplies the title and is set aside; a file outside the project without
+one needs `--title`. `file_sha256` is the hash `article accept --content-sha256`
+takes. Batch selectors (`--path`, `--titles-file`, `--changed`) cover
+`wiki_content/` only. `export --urls-file` writes Markdown only; export several
+pages as wikitext with one `export PAGE_URL` call each.
 
 For template parameters, start with `templates show NAME --format json --view brief` and follow
 its full-view command when all parameters are needed. This is local catalog
@@ -33,11 +41,13 @@ fresh project. For current remote contracts without a mirror, use
 `source mediawiki-templates PAGE_URL --template NAME` with the freshness options
 from help. Inspect coverage limits.
 
-`status`, `diff`, `review` and `push` preview all require the global baseline
-from one successful `pull --full --all`; a scoped pull reports
-`global_baseline_established: false` and does not unlock them. Read-only
-retrieval never needs the baseline. Whole-mirror `validate` reports the live
-wiki's existing red links and orphans; scope it with `--title` for a change.
+`review` and `push` preview require the global baseline from one successful
+`pull --full --all`. Without it, `status` and `diff` compare only titles that
+`pull --title` or a scoped pull recorded and say `scope: pulled_titles`; a
+local file without a recorded baseline is listed as unbaselined, not new.
+Read-only retrieval never needs a baseline. Whole-mirror `validate` reports the
+live wiki's existing red links and orphans; scope it with `--title` for a
+change.
 
 Before editing, inspect relevant local changes; include template-scoped status
 for template work. Refresh catalogs or capabilities only when missing or stale

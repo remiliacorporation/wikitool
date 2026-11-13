@@ -11,15 +11,18 @@ mod briefs;
 mod catalog_cli;
 mod catalog_inspect_cli;
 mod cli_support;
+mod commands_cli;
 mod companions_cli;
 mod config_cli;
 mod db_cli;
 #[cfg(feature = "maintainer")]
 mod dev_cli;
 mod docs_cli;
+mod embedded_skills;
 mod export_cli;
 #[cfg(test)]
 mod guidance_contracts;
+mod guide_cli;
 mod import_cli;
 mod interview_cli;
 mod lsp_cli;
@@ -83,6 +86,13 @@ impl RuntimeOptions {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
+    #[command(about = "Print the shipped procedures, rules and site-adapter guidance")]
+    Guide(guide_cli::GuideArgs),
+    #[command(
+        name = "commands",
+        about = "Find commands by purpose, tagged agent or operator"
+    )]
+    CommandSearch(commands_cli::CommandsArgs),
     #[command(about = "Initialize a new wikitool project")]
     Init(sync_cli::InitArgs),
     #[command(about = "Show resolved configuration and target-wiki sources")]
@@ -164,6 +174,8 @@ fn main() -> Result<()> {
     let runtime = RuntimeOptions::from_cli(&cli);
 
     match cli.command {
+        Some(Commands::Guide(args)) => guide_cli::run_guide(&runtime, args),
+        Some(Commands::CommandSearch(args)) => commands_cli::run_commands(args),
         Some(Commands::Init(args)) => sync_cli::run_init(&runtime, args),
         Some(Commands::Config(args)) => config_cli::run_config(&runtime, args),
         Some(Commands::Pull(args)) => sync_cli::run_pull(&runtime, args),

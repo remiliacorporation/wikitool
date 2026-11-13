@@ -45,8 +45,11 @@ pub use mutations::{
     close_remote_mutation, list_remote_mutations, reconcile_remote_mutation_with_api,
     show_remote_mutation,
 };
-pub use planning::{collect_changed_article_paths, plan_sync_changes, plan_sync_changes_with_api};
-pub use pull::pull_from_remote_with_api;
+pub use planning::{
+    collect_changed_article_paths, inspect_sync_changes, inspect_sync_changes_with_api,
+    plan_sync_changes, plan_sync_changes_with_api,
+};
+pub use pull::{pull_from_remote_with_api, pull_titles_from_remote_with_api};
 pub use push::{PushProgress, push_to_remote_with_api_and_preflight, push_to_remote_with_progress};
 pub use remote::{
     RemoteDeleteError, apply_remote_delete_with_api, plan_remote_delete_with_api,
@@ -105,8 +108,8 @@ pub trait PublicationPreflight {
 }
 
 use model::{
-    PlannedSyncChangeInternal, ResolvedSyncSelection, SyncLedgerEntry, SyncPlanningContext,
-    SyncSnapshotEntry,
+    BaselineRequirement, PlannedSyncChangeInternal, ResolvedSyncSelection, SyncLedgerEntry,
+    SyncPlanningContext, SyncSnapshotEntry,
 };
 use namespaces::{is_template_namespace_id, namespace_name_to_id};
 use planning::{collect_sync_planning_context, count_changes, hydrate_remote_conflicts};
@@ -116,8 +119,8 @@ use storage::{
     global_baseline_is_established, initialize_sync_schema, load_sync_ledger_map,
     load_sync_snapshot_map, mark_global_baseline_established, normalize_title_for_storage,
     normalized_title_key, open_existing_sync_connection, open_sync_connection,
-    remove_sync_page_state, set_sync_config, unresolved_remote_mutation, upsert_sync_page_state,
-    verify_sync_target_for_pull,
+    open_sync_connection_for_inspection, remove_sync_page_state, set_sync_config,
+    unresolved_remote_mutation, upsert_sync_page_state, verify_sync_target_for_pull,
 };
 use timestamps::timestamps_match_with_tolerance;
 

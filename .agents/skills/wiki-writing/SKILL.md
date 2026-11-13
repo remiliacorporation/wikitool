@@ -13,8 +13,9 @@ subject, exclusions and intended scope; do not replace an adequate brief with
 an interview or a useful draft with an unrelated workflow.
 
 Before drafting a new article, check the live wiki for the subject and its
-near-duplicates with `source wiki-search TERM --what nearmatch`; `article scout`
-reads only the local index and reports `likely_missing` for a page that exists.
+near-duplicates with `source wiki-search TERM --what nearmatch`. `article scout`
+reports the exact title's `live_existence` on the configured wiki, or
+`unchecked` and why; its `local_state` reflects only the local index.
 Write an off-wiki draft to `.wikitool/drafts/TITLE.wiki`, named as the page
 title, and pass `--title` to `article lint` and `review --draft-path`. Content
 under `wiki_content/` is the synced mirror, not a drafting area. When an

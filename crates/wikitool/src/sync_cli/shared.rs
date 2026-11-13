@@ -7,7 +7,8 @@ use wikitool_core::config::WikiConfig;
 use wikitool_core::runtime::{ResolvedPaths, RuntimeStatus};
 use wikitool_core::sync::{
     DiffBaselineStatus, DiffChangeType, NS_CATEGORY, NS_MAIN, NS_MEDIAWIKI, NS_MODULE, NS_TEMPLATE,
-    NS_USER, SyncPlanChange, SyncPlanReport, SyncSelection,
+    NS_USER, SyncBaselineScope, SyncBaselineScopeKind, SyncPlanChange, SyncPlanReport,
+    SyncSelection,
 };
 
 use crate::cli_support::normalize_path;
@@ -158,6 +159,36 @@ pub(super) fn status_display_changes(
         .collect()
 }
 
+/// Print the baseline a status or diff report rests on, so a reader never
+/// mistakes a pulled-titles comparison for whole-wiki coverage.
+pub(super) fn print_baseline_scope(prefix: &str, scope: &SyncBaselineScope) {
+    match scope.kind {
+        SyncBaselineScopeKind::Global => println!("{prefix}.scope: global"),
+        SyncBaselineScopeKind::PulledTitles => {
+            println!("{prefix}.scope: pulled_titles");
+            println!(
+                "{prefix}.scope.note: no global baseline; only titles recorded by `pull --title` or a scoped pull are compared. Review and push require `pull --full --all`."
+            );
+        }
+    }
+    println!(
+        "{prefix}.scope.baselined_titles: {}",
+        scope.baselined_titles
+    );
+    if scope.kind == SyncBaselineScopeKind::PulledTitles {
+        println!(
+            "{prefix}.scope.unbaselined_local: {}",
+            scope.unbaselined_local.len()
+        );
+        for file in &scope.unbaselined_local {
+            println!(
+                "{prefix}.scope.unbaselined: title={} path={}",
+                file.title, file.relative_path
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,6 +196,7 @@ mod tests {
     #[test]
     fn pull_all_includes_user_pages() {
         let args = PullArgs {
+            titles: Vec::new(),
             full: false,
             overwrite_local: false,
             category: None,

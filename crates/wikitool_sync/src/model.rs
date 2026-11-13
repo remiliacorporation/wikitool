@@ -468,6 +468,43 @@ pub struct DiffChange {
     pub unified_diff: Option<String>,
 }
 
+/// Which revision baseline a read-only inspection compared against.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncBaselineScopeKind {
+    /// The global baseline from a successful `pull --full --all`: every local
+    /// file without a ledger row is new.
+    Global,
+    /// No global baseline: only titles that a scoped or single-title pull
+    /// recorded can be compared. A local file without a ledger row may be new
+    /// or may exist remotely, so it is reported as unbaselined, not new.
+    PulledTitles,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct SyncUnbaselinedFile {
+    pub title: String,
+    pub relative_path: String,
+}
+
+/// The baseline a status or diff report rests on. Writes (push, delete,
+/// review's push preview) always require the global baseline.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct SyncBaselineScope {
+    pub kind: SyncBaselineScopeKind,
+    /// Ledger rows inside the requested selection.
+    pub baselined_titles: usize,
+    /// Selected local files with no ledger row; always empty for `global`.
+    pub unbaselined_local: Vec<SyncUnbaselinedFile>,
+}
+
+/// Whether a planning read may proceed without the global baseline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum BaselineRequirement {
+    Global,
+    PulledTitlesForInspection,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct DiffReport {
     pub new_local: usize,
@@ -475,6 +512,7 @@ pub struct DiffReport {
     pub deleted_local: usize,
     pub conflict_count: usize,
     pub changes: Vec<DiffChange>,
+    pub scope: SyncBaselineScope,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -515,6 +553,7 @@ pub struct SyncPlanReport {
     pub deleted_local: usize,
     pub conflict_count: usize,
     pub changes: Vec<SyncPlanChange>,
+    pub scope: SyncBaselineScope,
     pub request_count: usize,
 }
 
@@ -554,6 +593,7 @@ pub(super) struct SyncPlanningContext {
     pub(super) local_map: BTreeMap<String, ScannedFile>,
     pub(super) ledger: BTreeMap<String, SyncLedgerEntry>,
     pub(super) changes: Vec<PlannedSyncChangeInternal>,
+    pub(super) scope: SyncBaselineScope,
     pub(super) request_count: usize,
 }
 

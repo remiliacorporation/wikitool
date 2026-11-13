@@ -222,6 +222,15 @@ pub(super) fn load_article_document_with_title(
         Some(title) => title,
         None => relative_path_to_title(paths, &relative_path)?,
     };
+    Ok(parse_article_document(relative_path, title, content))
+}
+
+/// Parse page text under an already chosen title and display path.
+pub(super) fn parse_article_document(
+    relative_path: String,
+    title: String,
+    content: String,
+) -> ParsedArticleDocument {
     let namespace = namespace_from_title(&title).as_str().to_string();
     let (is_redirect, redirect_target) = parse_redirect(&content);
     let lines = collect_lines(&content);
@@ -234,7 +243,7 @@ pub(super) fn load_article_document_with_title(
     let literal_regions = extract_literal_regions(&content);
     let transclusions = extract_transclusion_spans(&content);
 
-    Ok(ParsedArticleDocument {
+    ParsedArticleDocument {
         relative_path,
         title,
         namespace,
@@ -250,7 +259,7 @@ pub(super) fn load_article_document_with_title(
         template_styles,
         literal_regions,
         transclusions,
-    })
+    }
 }
 
 /// Pair `{{` with `}}` the way `extract_template_occurrences` does, keeping every

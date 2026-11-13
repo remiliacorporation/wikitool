@@ -7,8 +7,11 @@ store and establish a fresh baseline; do not reuse production identity locally.
 so site policy becomes generic, and it keeps the default `article_path`; check
 `config show` and correct the path when the wiki serves pages under `/wiki/$1`.
 Global planning requires a successful explicit `pull --full --all`; scoped or
-legacy-migrated rows do not establish coverage, and `status`, `diff`, `review`
-and push preview refuse until that baseline exists.
+legacy-migrated rows do not establish coverage, and `review` and push preview
+refuse until that baseline exists. Read-only `status` and `diff` also run on
+the titles that `pull --title TITLE` or a scoped pull recorded; their output
+says `scope: pulled_titles` and lists local files without a recorded baseline
+as unbaselined, not new.
 
 Before a push, inspect scoped status, diff, and review. Preview the exact titles
 and summary, inspect the returned plan, then apply that plan ID with identical
@@ -52,10 +55,10 @@ or self-attest to satisfy it. `article accept` binds the exact bytes, target, an
 adapter policy to a named decision. Pass `--content-sha256` with the hash of the
 bytes the human read, or that the review recorded; accept then refuses, writing
 nothing, if the file no longer has that hash. The hash covers the raw file
-bytes; `article lint PATH --format json` reports it as `content_sha256` without
-recording anything. A coherent multi-article decision can use
-`article changeset prepare` then `article changeset accept`; later byte changes
-invalidate individual members. `prepare` freezes each member's hash and lint
+bytes; `article lint PATH --format json` reports it as `file_sha256` (equal to
+`content_sha256` for every file accept can take) without recording anything.
+A coherent multi-article decision can use `article changeset prepare` then
+`article changeset accept`; later byte changes invalidate individual members. `prepare` freezes each member's hash and lint
 result with one truthful `--prose-origin` in the manifest named by `--output`.
 `accept` refuses while any member has a lint error and, by default, a warning;
 `--warnings accept` records the human's decision to accept warnings. The
