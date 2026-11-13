@@ -48,6 +48,7 @@ The adapter can declare:
 - infobox preferences and category hints;
 - mechanically decidable style constraints and placeholder artifacts;
 - target extension and module availability contracts;
+- the ontology that `wikitool ontology export` vendors, in an `[ontology]` table;
 - relative supplemental guidance documents.
 
 Unknown fields are rejected. Source-review hosts must be normalized lowercase hostnames; URL
@@ -87,6 +88,26 @@ Three `[authoring]` preferences gate existing rules: `prefer_sentence_case_headi
 `style.sentence_case_heading`, `forbid_markdown` gates `structure.markdown_heading`, and
 `require_straight_quotes` enables `style.curly_quotes` as `[lint] forbid_curly_quotes` does.
 `prefer_wikitext_only` is recorded in the policy but no rule reads it yet.
+
+## Ontology
+
+An optional `[ontology]` table lets `wikitool ontology export --from <dir>` run without
+further flags:
+
+```toml
+[ontology]
+product = "example-wiki"                   # the wiki's name in product-uses.tsv
+source = "https://ontology.example/"       # recorded as source.ontology
+local_prefix = "wiki"                      # recorded with local_namespace as source.local
+local_namespace = "https://wiki.example/ns/"
+imports = "v1.0.0/imports"                 # product-uses.tsv and pinned extracts
+exclude_rename_prefixes = ["legacy"]       # rename subjects left out of the export
+```
+
+`imports` is relative to the ontology directory and may not leave it; `--imports` overrides
+it, and export fails when neither names it. `exclude_rename_prefixes` is empty by default and
+matches the CURIE prefix before the colon exactly, so `legacy` does not exclude `legacyx:`.
+`--product` overrides `product`.
 
 ## Supplemental guidance
 

@@ -359,7 +359,9 @@ Options:
       --data-dir <PATH>
       --product <NAME>       The wiki's product name in the ontology's product-uses.tsv; defaults to the site adapter's
       --config <PATH>
+      --imports <PATH>       The directory with product-uses.tsv and the pinned extracts, relative to --from; defaults to the site adapter's [ontology] imports
       --diagnostics          Print resolved runtime diagnostics
+      --format <FORMAT>      Output format: text|json [default: text] [possible values: text, json]
   -h, --help                 Print help
 ```
 
@@ -374,6 +376,7 @@ Options:
       --check                Fail if the module is out of date, without writing
       --project-root <PATH>
       --data-dir <PATH>
+      --format <FORMAT>      Output format: text|json [default: text] [possible values: text, json]
       --config <PATH>
       --diagnostics          Print resolved runtime diagnostics
   -h, --help                 Print help
