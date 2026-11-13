@@ -38,6 +38,12 @@ jobs:
       # The rust-tests job runs the same tests against the maintainer build.
       - name: Public CLI regressions against the default binary
         run: cargo test --package wikitool
+      # rust-tests runs on Linux only; this covers the Windows ACL and ownership
+      # code that protects stored source-session cookies. It also runs after a
+      # failed CLI step, because its panics print the full storage error.
+      - name: Source-session storage tests on Windows
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        run: cargo test --package wikitool_core --lib source::session
 
   rust-lint:
     runs-on: ubuntu-latest
