@@ -26,13 +26,7 @@ Review applies the same rule. A reviewer reports contributed content only for th
 
 Define every subject on its own terms. A page's presence on Remilia Wiki does not make Remilia, Charlotte Fang, Milady Maker, or “the community” part of the subject's definition.
 
-Include a relationship to those entities only when all three conditions hold:
-
-1. the relationship is real: a source establishes it, or an editor or contributor supplies it (see Sources and evidence);
-2. the relationship materially helps a reader understand the subject;
-3. its placement and length are proportionate to its importance to the subject.
-
-Do not create a default “Relation to Remilia” section. Do not open a lead with local relevance or use Charlotte Fang as a prestige anchor. If the relationship merely explains why an editor encountered the subject, keep it out of article prose.
+Keep every real relationship to those entities, including influence, lineage and aesthetic connections, as plain sentences in the body. A relationship is real when a source establishes it or an editor or contributor supplies it (see Sources and evidence). Cut one only when it is shown wrong. The wiki draws subjects back to Remilia subtly, and placement keeps it subtle: the lead names Remilia only when Remilia is part of what the subject is, there is no “Relation to Remilia” section, and the relationship is not the article's closing paragraph. Do not use Charlotte Fang as a prestige anchor. If the relationship merely explains why an editor encountered the subject, keep it out of article prose.
 
 Remilia Wiki preserves niche and early material that lacks broad secondary coverage, much of it oral lore. A short, honest article or redirect is better than an inflated standalone page.
 
