@@ -163,7 +163,7 @@ pub(crate) struct ArticleAcceptArgs {
         long,
         value_name = "SHA256",
         value_parser = parse_content_sha256,
-        help = "Refuse, recording nothing, unless the file still has this SHA-256 of the exact bytes the human read: the raw file bytes without line-ending or encoding normalization, as `sha256sum PATH` prints and `article lint PATH --format json` reports in content_sha256"
+        help = "Refuse, recording nothing, unless the file still has this SHA-256 of the exact bytes the human read: the raw file bytes without line-ending or encoding normalization, as `sha256sum PATH` prints and `article lint PATH --format json` reports in file_sha256"
     )]
     content_sha256: Option<String>,
     #[arg(

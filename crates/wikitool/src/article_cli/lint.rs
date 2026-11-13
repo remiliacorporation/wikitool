@@ -3,7 +3,8 @@ use std::path::Path;
 use anyhow::{Result, bail};
 use serde::Serialize;
 use wikitool_core::article_lint::{
-    ArticleLintReport, lint_article_file, lint_article_with_resources, load_article_lint_resources,
+    ArticleFileLintReport, lint_article_file, lint_article_file_with_resources,
+    load_article_lint_resources,
 };
 
 use crate::cli_support::{normalize_path, resolve_runtime_paths};
@@ -24,7 +25,7 @@ struct ArticleLintBatchReport {
     total_errors: usize,
     total_warnings: usize,
     total_suggestions: usize,
-    reports: Vec<ArticleLintReport>,
+    reports: Vec<ArticleFileLintReport>,
 }
 
 pub(super) fn run_article_lint(runtime: &RuntimeOptions, args: ArticleLintArgs) -> Result<()> {
@@ -60,6 +61,7 @@ pub(super) fn run_article_lint(runtime: &RuntimeOptions, args: ArticleLintArgs) 
                     header.revision_id.as_deref().unwrap_or("<none>")
                 );
                 println!("export_header.line_count: {}", header.line_count);
+                println!("file_sha256: {}", file_report.file_sha256);
             }
             print_report(report);
             println!("policy: {LOCAL_DB_POLICY_MESSAGE}");
@@ -90,12 +92,12 @@ pub(super) fn run_article_lint(runtime: &RuntimeOptions, args: ArticleLintArgs) 
     let reports = target_paths
         .iter()
         .map(|relative_path| {
-            lint_article_with_resources(&paths, Path::new(relative_path), None, &resources)
+            lint_article_file_with_resources(&paths, Path::new(relative_path), None, &resources)
         })
         .collect::<Result<Vec<_>>>()?;
-    let total_errors = reports.iter().map(|report| report.errors).sum();
-    let total_warnings = reports.iter().map(|report| report.warnings).sum();
-    let total_suggestions = reports.iter().map(|report| report.suggestions).sum();
+    let total_errors = reports.iter().map(|file| file.report.errors).sum();
+    let total_warnings = reports.iter().map(|file| file.report.warnings).sum();
+    let total_suggestions = reports.iter().map(|file| file.report.suggestions).sum();
     let batch_report = ArticleLintBatchReport {
         project_root: normalize_path(&paths.project_root),
         strict: args.strict,
@@ -121,9 +123,9 @@ pub(super) fn run_article_lint(runtime: &RuntimeOptions, args: ArticleLintArgs) 
         if batch_report.reports.is_empty() {
             println!("reports: <none>");
         } else {
-            for report in &batch_report.reports {
+            for file in &batch_report.reports {
                 println!();
-                print_report(report);
+                print_report(&file.report);
             }
         }
         println!("policy: {LOCAL_DB_POLICY_MESSAGE}");

@@ -20,16 +20,19 @@ or before a write. Keep credentials out of reports.
 
 To read one live page, use `export PAGE_URL --format wikitext` or
 `source fetch PAGE_URL --format wikitext`. `pull --title TITLE` brings one page
-into the mirror and records its revision baseline. To check whether a page exists, use
-`source wiki-search TERM --what nearmatch`; some wikis reject `--what title`.
-`article scout TOPIC` also reports the exact title's `live_existence` on the
-configured wiki, or `unchecked` with the reason.
-`article lint PATH` reads any file. An export's metadata header supplies the
-title and is not linted; a file without one outside `wiki_content/` or
-`templates/` needs `--title`. Batch selectors (`--path`, `--titles-file`,
-`--changed`) cover `wiki_content/` only; lint an off-mirror draft one path at a
-time. `export --urls-file` writes Markdown only; export
-several pages as wikitext with one `export PAGE_URL` call each.
+into the mirror and records its revision baseline. To check whether a page
+exists, use `source wiki-search TERM --what nearmatch`; some wikis reject
+`--what title`. `article scout TOPIC` also reports the exact title's
+`live_existence` on the configured wiki, or `unchecked` with the reason.
+
+`article lint PATH` reads any file. Under `wiki_content/`, `templates/` or
+`.wikitool/` the file is linted whole, as accept and push read it, and an export
+header there is an error because it would be published. Elsewhere an export's
+header supplies the title and is set aside; a file outside the project without
+one needs `--title`. `file_sha256` is the hash `article accept --content-sha256`
+takes. Batch selectors (`--path`, `--titles-file`, `--changed`) cover
+`wiki_content/` only. `export --urls-file` writes Markdown only; export several
+pages as wikitext with one `export PAGE_URL` call each.
 
 For template parameters, start with `templates show NAME --format json --view brief` and follow
 its full-view command when all parameters are needed. This is local catalog
@@ -42,8 +45,9 @@ from help. Inspect coverage limits.
 `pull --full --all`. Without it, `status` and `diff` compare only titles that
 `pull --title` or a scoped pull recorded and say `scope: pulled_titles`; a
 local file without a recorded baseline is listed as unbaselined, not new.
-Read-only retrieval never needs a baseline. Whole-mirror `validate` reports the live
-wiki's existing red links and orphans; scope it with `--title` for a change.
+Read-only retrieval never needs a baseline. Whole-mirror `validate` reports the
+live wiki's existing red links and orphans; scope it with `--title` for a
+change.
 
 Before editing, inspect relevant local changes; include template-scoped status
 for template work. Refresh catalogs or capabilities only when missing or stale

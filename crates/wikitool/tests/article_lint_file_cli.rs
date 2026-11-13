@@ -86,11 +86,28 @@ fn lint_reads_exports_and_files_outside_the_content_directories() {
     let outside_export = wt.run(&["article", "lint", &exported_outside, "--format", "json"]);
     outside_export.assert_json("/title", "Lint Target");
 
+    // --title wins over the header, which is still set aside.
+    wt.run(&[
+        "article",
+        "lint",
+        "exports/Lint_Target.wiki",
+        "--title",
+        "Other Title",
+        "--format",
+        "json",
+    ])
+    .assert_json("/title", "Other Title")
+    .assert_json("/export_header/title", "Lint Target");
+
     // The header is not page text: the same body hashes the same and its findings move down
     // by exactly the header's lines.
     let plain_json = plain_report.json();
     let export_json = outside_export.json();
     assert_eq!(plain_json["content_sha256"], export_json["content_sha256"]);
+    // file_sha256 is the whole file, the hash accept compares; it differs only when a
+    // header was set aside.
+    assert_eq!(plain_json["content_sha256"], plain_json["file_sha256"]);
+    assert_ne!(export_json["content_sha256"], export_json["file_sha256"]);
     let plain_lines = issue_lines(&plain_json);
     assert!(
         !plain_lines.is_empty(),
@@ -108,4 +125,87 @@ fn lint_reads_exports_and_files_outside_the_content_directories() {
     wt.run(&["article", "lint", "--path", "exports/Lint_Target.wiki"])
         .assert_code(1)
         .assert_stderr_contains("wiki_content");
+}
+
+#[test]
+fn a_header_in_a_project_owned_file_is_linted_as_page_text_and_reported() {
+    const RULE: &str = "structure.export_header_on_publication_path";
+    let wt = Project::new(env!("CARGO_BIN_EXE_wikitool"));
+    wt.run(&["init", "--no-network"]).assert_code(0);
+    fs::create_dir_all(wt.path().join("wiki_content/Main")).expect("mirror dir");
+    fs::write(
+        wt.path().join("wiki_content/Main/Foo.wiki"),
+        format!("{HEADER}{BODY}"),
+    )
+    .expect("mirrored page");
+
+    // The path's title wins over the header's, and the header is page text that
+    // push would publish.
+    let single = wt.run(&[
+        "article",
+        "lint",
+        "wiki_content/Main/Foo.wiki",
+        "--format",
+        "json",
+    ]);
+    single
+        .assert_code(1)
+        .assert_json("/title", "Foo")
+        .assert_json_item("/issues", "/rule_id", RULE)
+        .assert_json_item("/issues", "/span/line", 1);
+    let single = single.json();
+    assert!(single["export_header"].is_null());
+    assert_eq!(single["content_sha256"], single["file_sha256"]);
+
+    // Every way of naming the file agrees on title and hash.
+    let absolute = wt
+        .path()
+        .join("wiki_content/Main/Foo.wiki")
+        .to_string_lossy()
+        .into_owned();
+    let by_absolute = wt.run(&["article", "lint", &absolute, "--format", "json"]);
+    by_absolute
+        .assert_code(1)
+        .assert_json("/title", "Foo")
+        .assert_json_item("/issues", "/rule_id", RULE);
+    assert_eq!(
+        by_absolute.json()["content_sha256"],
+        single["content_sha256"]
+    );
+    let batch = wt.run(&[
+        "article",
+        "lint",
+        "--path",
+        "wiki_content/Main/Foo.wiki",
+        "--format",
+        "json",
+    ]);
+    batch
+        .assert_code(1)
+        .assert_json("/reports/0/title", "Foo")
+        .assert_json_item("/reports/0/issues", "/rule_id", RULE);
+    assert_eq!(
+        batch.json()["reports"][0]["content_sha256"],
+        single["content_sha256"]
+    );
+
+    // A draft is promoted byte for byte, so a header there is reported too.
+    fs::create_dir_all(wt.path().join(".wikitool/drafts")).expect("drafts dir");
+    fs::write(
+        wt.path().join(".wikitool/drafts/Foo.wiki"),
+        format!("{HEADER}{BODY}"),
+    )
+    .expect("draft");
+    wt.run(&[
+        "article",
+        "lint",
+        ".wikitool/drafts/Foo.wiki",
+        "--title",
+        "Foo",
+        "--format",
+        "json",
+    ])
+    .assert_code(1)
+    .assert_json("/title", "Foo")
+    .assert_json_item("/issues", "/rule_id", RULE);
 }

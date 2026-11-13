@@ -13,7 +13,10 @@ use anyhow::Result;
 use crate::runtime::ResolvedPaths;
 use crate::support::atomic_write;
 
-pub use file::{ArticleFileLintReport, ExportMetadataHeader, lint_article_file};
+pub use file::{
+    ArticleFileLintReport, ExportMetadataHeader, lint_article_file,
+    lint_article_file_with_resources,
+};
 pub use model::{
     AppliedFixRecord, ArticleFixApplyMode, ArticleFixResult, ArticleLintIssue, ArticleLintReport,
     ArticleLintResourcesStatus, ArticleLintSeverity, SuggestedFix, SuggestedFixKind, TextSpan,
