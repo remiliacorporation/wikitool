@@ -28,6 +28,7 @@ Commands:
   review      Run the structured pre-push review gate
   module      Run Lua module linting and related checks
   export      Export a remote wiki page tree to local files
+  ontology    Vendor the pinned ontology and generate Module:Ontology/data
   delete      Delete a page from the live wiki
   upload      Upload a media file to the live wiki
   mutation    Inspect and reconcile durable remote mutation receipts
@@ -323,6 +324,59 @@ Options:
       --combined              With --subpages, combine all pages into one output
       --limit <N>             Maximum total pages to export with --subpages, including the parent page
   -h, --help                  Print help
+```
+
+## ontology
+
+```text
+Vendor the pinned ontology and generate Module:Ontology/data
+
+Usage: wikitool ontology [OPTIONS] <COMMAND>
+
+Commands:
+  export    Export an ontology checkout into the vendored copy and regenerate the module
+  generate  Generate Module:Ontology/data from the vendored copy
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+      --project-root <PATH>
+      --data-dir <PATH>
+      --config <PATH>
+      --diagnostics          Print resolved runtime diagnostics
+  -h, --help                 Print help
+```
+
+## ontology export
+
+```text
+Export an ontology checkout into the vendored copy and regenerate the module
+
+Usage: wikitool ontology export [OPTIONS] --from <PATH>
+
+Options:
+      --from <PATH>          The ontology directory (with registry/ and mappings.sssom.tsv) in a clean git checkout
+      --project-root <PATH>
+      --data-dir <PATH>
+      --product <NAME>       The wiki's product name in the ontology's product-uses.tsv; defaults to the site adapter's
+      --config <PATH>
+      --diagnostics          Print resolved runtime diagnostics
+  -h, --help                 Print help
+```
+
+## ontology generate
+
+```text
+Generate Module:Ontology/data from the vendored copy
+
+Usage: wikitool ontology generate [OPTIONS]
+
+Options:
+      --check                Fail if the module is out of date, without writing
+      --project-root <PATH>
+      --data-dir <PATH>
+      --config <PATH>
+      --diagnostics          Print resolved runtime diagnostics
+  -h, --help                 Print help
 ```
 
 ## delete

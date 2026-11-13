@@ -14,6 +14,7 @@ pub mod graph;
 pub mod import_cargo;
 pub mod lint;
 pub mod mw;
+pub mod ontology;
 pub mod publication;
 pub mod runtime;
 pub mod schema;

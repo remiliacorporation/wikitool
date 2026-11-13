@@ -192,7 +192,7 @@ fn inspect_run(path: &Path, repository: &Path, receipt: RunReceipt) -> Result<Re
     checks.push(InspectionCheck {
         name: "completeness_state".to_owned(),
         passed: receipt.output_truncated == observed_truncation
-            && receipt.complete == !observed_truncation,
+            && receipt.complete != observed_truncation,
         detail: format!(
             "complete={}, output_truncated={}, observed_truncation={observed_truncation}",
             receipt.complete, receipt.output_truncated

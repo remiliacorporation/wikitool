@@ -99,6 +99,21 @@ pub struct LintRules {
     pub citation_needed: LintRuleLevel,
 }
 
+/// The ontology a wiki types its pages and infobox fields with. The adapter
+/// names it so `wikitool ontology` needs no flags for the adapter's wiki.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct OntologyRules {
+    /// The wiki's product name in the ontology's `product-uses.tsv`.
+    pub product: String,
+    /// Where the ontology is published.
+    pub source: String,
+    /// The prefix of the wiki's own terms, such as `wiki`.
+    pub local_prefix: String,
+    /// The namespace IRI of the wiki's own terms.
+    pub local_namespace: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct SiteAdapter {
@@ -116,6 +131,8 @@ pub struct SiteAdapter {
     pub lint: LintRules,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extension_contracts: Vec<ExtensionContractRule>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ontology: Option<OntologyRules>,
     pub resolved_at: String,
 }
 

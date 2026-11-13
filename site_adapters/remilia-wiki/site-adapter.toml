@@ -48,12 +48,12 @@ reason = "Tertiary source: inspect and cite the underlying source for article cl
 [[citations.source_review_rules]]
 label = "IQ.wiki"
 host = "iq.wiki"
-reason = "Community-edited tertiary source with uneven provenance; verify the claim against its underlying evidence."
+reason = "Community-edited tertiary wiki: cite the underlying source it summarizes where it has one."
 
 [[citations.source_review_rules]]
 label = "Know Your Meme"
 host = "knowyourmeme.com"
-reason = "Tertiary chronology and meme database; inspect cited originals and use stronger reporting for consequential claims."
+reason = "Meme database that summarizes originals: cite the original post or artifact where it gives one."
 
 [[citations.source_review_rules]]
 label = "NFT Price Floor"
@@ -63,7 +63,7 @@ reason = "Aggregator data may be volatile or methodology-dependent; verify the e
 [[citations.source_review_rules]]
 label = "Urban Dictionary"
 host = "urbandictionary.com"
-reason = "User-submitted definitions lack editorial control; use only when the entry itself is the primary artifact under discussion."
+reason = "User-submitted definitions: citable for how a term is used; cite the original usage where one is known."
 
 [templates]
 
@@ -204,3 +204,11 @@ name = "D3Chart"
 provider = "local"
 syntax = "module_invoke"
 body_required = false
+
+# The Remilia ontology types the wiki's pages and infobox fields (RSV-D867).
+# The wiki's own terms use the wiki: namespace until an intake moves them.
+[ontology]
+product = "remilia-wiki"
+source = "https://ontology.remilia.org/"
+local_prefix = "wiki"
+local_namespace = "https://wiki.remilia.org/ns/"

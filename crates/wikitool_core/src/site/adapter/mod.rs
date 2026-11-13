@@ -11,7 +11,7 @@ use crate::support::{compute_sha256, normalize_path, unix_timestamp};
 
 use self::model::{
     AdapterSourceDocument, AuthoringRules, CategoryRules, CitationRules, ExtensionContractRule,
-    LintRules, SiteAdapter, TemplateRules,
+    LintRules, OntologyRules, SiteAdapter, TemplateRules,
 };
 
 pub mod model;
@@ -52,6 +52,8 @@ struct SiteAdapterDocument {
     lint: LintRules,
     #[serde(default)]
     extension_contracts: Vec<ExtensionContractRule>,
+    #[serde(default)]
+    ontology: Option<OntologyRules>,
 }
 
 pub fn load_site_adapter(paths: &ResolvedPaths) -> Result<SiteAdapter> {
@@ -135,6 +137,7 @@ pub fn load_site_adapter_with_config(
         categories: policy.categories,
         lint: policy.lint,
         extension_contracts: policy.extension_contracts,
+        ontology: policy.ontology,
         resolved_at: unix_timestamp()?.to_string(),
     })
 }
