@@ -238,3 +238,4 @@ local_prefix = "wiki"
 local_namespace = "https://wiki.remilia.org/ns/"
 imports = "v0.1.0/imports"
 exclude_rename_prefixes = ["rn", "rns"]
+module_sections = ["classes", "properties", "relations"]
