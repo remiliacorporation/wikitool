@@ -18,7 +18,7 @@ Every paragraph should have a defensible job. Prefer concrete actors, actions, d
 - abstract nouns that replace an actual event or mechanism;
 - transitions that repeat the preceding sentence;
 - “context” that never returns to the subject;
-- ornamental quotations;
+- ornamental quotations, or quotations that run past the part that carries meaning;
 - conclusions that merely restate the lead;
 - paragraph templates that could accept another subject name unchanged;
 - defensive hedging and attribution stacking that make settled or first-party facts sound doubtful;

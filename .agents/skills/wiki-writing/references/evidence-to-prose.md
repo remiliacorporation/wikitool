@@ -58,6 +58,8 @@ Secondary sources are required when prose synthesizes significance or situates a
 
 Quote only when the exact wording is itself useful. Verify the words against the source, keep context, identify the speaker, and cite the source that contains the quotation. Paraphrase routine facts. Do not assemble a paragraph around ornamental quotations.
 
+Quote as much as carries the meaning, and no more. Conversational asides and remarks aimed at an interlocutor usually add tone rather than information. A block quotation suits a text the reader needs whole, such as a definition, a license or an essay passage; a passing remark reads better inline. Name the speaker once rather than both in the lead-in and a byline.
+
 ## Failure patterns that block drafting
 
 - a central fact is supported only by a search snippet or another wiki;
