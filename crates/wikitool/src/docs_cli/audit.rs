@@ -748,8 +748,8 @@ mod tests {
     #[test]
     fn ticket_handles_are_whole_words_with_an_identifier() {
         assert_eq!(
-            private_ticket_handles("Fixes RSV-D867 and (RSV-12); not XRSV-3, RSV- or rsv-4."),
-            ["RSV-D867", "RSV-12"]
+            private_ticket_handles("Fixes RSV-A123 and (RSV-12); not XRSV-3, RSV- or rsv-4."),
+            ["RSV-A123", "RSV-12"]
         );
     }
 
@@ -765,7 +765,7 @@ mod tests {
         fs::create_dir_all(repo.path().join("adapter")).expect("adapter dir");
         fs::write(
             repo.path().join("adapter/site-adapter.toml"),
-            "# Tracked as RSV-D867.\n",
+            "# Tracked as RSV-A123.\n",
         )
         .expect("adapter");
         let mut checks = Vec::new();
@@ -775,7 +775,7 @@ mod tests {
         assert!(
             checks[0]
                 .message
-                .contains("adapter/site-adapter.toml contains `RSV-D867`")
+                .contains("adapter/site-adapter.toml contains `RSV-A123`")
         );
     }
 
