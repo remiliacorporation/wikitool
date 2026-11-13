@@ -616,3 +616,38 @@ fn scout_lists_probable_classes_and_what_applies_to_them() {
     // The person kind lists affiliation for remilia:memberOf, so it wins over member_of.
     assert_eq!(relations[0]["field"], "affiliation");
 }
+
+/// A file linted through the any-path route, here an exported page outside the project whose
+/// export header lint sets aside, gets the same ontology checks, with lines counted from the top
+/// of the file.
+#[test]
+fn files_outside_the_project_get_the_ontology_checks() {
+    let wt = project("", true, true);
+    let outside = tempfile::tempdir().expect("tempdir");
+    let path = outside.path().join("Typed export.wiki");
+    fs::write(
+        &path,
+        format!("---\ntitle: \"Typed\"\n---\n{TYPED_ARTICLE}"),
+    )
+    .expect("export");
+    let output = wt.run(&[
+        "article",
+        "lint",
+        path.to_str().expect("UTF-8 path"),
+        "--format",
+        "json",
+    ]);
+    let report = output.json();
+    assert_eq!(report["export_header"]["line_count"], 3);
+    assert_eq!(report["ontology"]["ontology_commit"], "fixture-commit");
+    let issues = ontology_issues(&report);
+    assert_eq!(issues.len(), 8, "{issues:#?}");
+    let unknown = report["issues"]
+        .as_array()
+        .expect("issues")
+        .iter()
+        .find(|issue| issue["rule_id"] == "ontology.unknown_class")
+        .expect("unknown class");
+    // {{Instance of}} is line 2 of the page text and line 5 of the file.
+    assert_eq!(unknown["span"]["line"], 5);
+}
