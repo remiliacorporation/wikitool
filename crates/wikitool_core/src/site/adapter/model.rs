@@ -163,6 +163,14 @@ pub struct OntologyRules {
     pub local_prefix: String,
     /// The namespace IRI of the wiki's own terms.
     pub local_namespace: String,
+    /// The directory holding `product-uses.tsv` and the pinned extracts,
+    /// relative to the ontology directory, such as `v0.1.0/imports`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imports: Option<String>,
+    /// CURIE prefixes whose renames are left out of the export, matched
+    /// exactly against the part before the colon.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude_rename_prefixes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

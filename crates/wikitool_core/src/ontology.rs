@@ -8,68 +8,227 @@
 //! `Module:Ontology/data`, a Lua table that infoboxes load with `mw.loadData`.
 //! The wiki's own terms are edited on the wiki, not here.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use serde_json::{Map, Value, json};
 
-/// Where the wiki project keeps the vendored copy.
+use crate::runtime::ResolvedPaths;
+use crate::support::normalize_path;
+
+mod ntriples;
+
+use self::ntriples::{LineParser, Literal, Term};
+
+/// Where the wiki project keeps the vendored copy, relative to its root.
 pub const EXPORT_PATH: &str = "vendor/ontology/ontology.json";
-/// Where the generated module lives; it syncs as `Module:Ontology/data`.
-pub const MODULE_PATH: &str = "templates/ontology/Module_Ontology/data.lua";
+/// The wiki page that `generate` writes.
+pub const MODULE_TITLE: &str = "Module:Ontology/data";
+/// The folder under the templates directory that holds the ontology modules.
+/// Sync reads a template file's title from its path alone, so the folder is a
+/// layout choice; the title-to-path mapping takes it as a layout hint.
+const MODULE_FOLDER: &str = "ontology";
 const NO_TERM: &str = "sssom:NoTermFound";
 const SECTIONS: [&str; 5] = ["classes", "families", "properties", "relations", "schemes"];
 
+/// What `export` needs besides the ontology directory.
+#[derive(Debug, Clone, Copy)]
+pub struct ExportOptions<'a> {
+    /// The wiki's product name in the ontology's `product-uses.tsv`.
+    pub product: &'a str,
+    /// The directory holding `product-uses.tsv` and the pinned extracts,
+    /// relative to the ontology directory.
+    pub imports: &'a Path,
+    /// CURIE prefixes whose renames never reach the wiki, matched exactly.
+    pub excluded_rename_prefixes: &'a [String],
+    /// Where the ontology is published, recorded as `source.ontology`.
+    pub published_at: Option<&'a str>,
+    /// The prefix and namespace IRI of the wiki's own terms, recorded as
+    /// `source.local`.
+    pub local: Option<(&'a str, &'a str)>,
+}
+
+/// The project-relative path of `Module:Ontology/data`, derived from its
+/// title by the same mapping that sync uses.
+pub fn module_relative_path(paths: &ResolvedPaths) -> Result<String> {
+    let sync_paths = wikitool_sync::SyncProjectPaths {
+        project_root: paths.project_root.clone(),
+        wiki_content_dir: paths.wiki_content_dir.clone(),
+        templates_dir: paths.templates_dir.clone(),
+        sync_store_path: paths.sync_store_path(),
+        custom_namespaces: Vec::new(),
+        template_category_mappings: vec![(MODULE_TITLE.to_string(), MODULE_FOLDER.to_string())],
+    };
+    wikitool_sync::title_to_relative_path(&sync_paths, MODULE_TITLE, false)
+}
+
 /// Build the vendored copy from an ontology directory inside a git checkout.
-/// `product` names the wiki in the ontology's `product-uses.tsv`.
-pub fn export(ontology_dir: &Path, product: &str) -> Result<Value> {
-    let commit = clean_commit(ontology_dir)?;
-    let mut out = read_registry(&ontology_dir.join("registry"))?;
+pub fn export(ontology_dir: &Path, options: &ExportOptions<'_>) -> Result<Value> {
+    // Fail on a bad path before asking git anything about it.
+    relative_inside(options.imports).with_context(|| {
+        format!(
+            "the imports directory {} must be relative to the ontology directory",
+            normalize_path(options.imports)
+        )
+    })?;
+    let checkout = Checkout::open(ontology_dir)?;
+    let mut out = read_registry(&checkout)?;
     out.insert(
         "mappings".into(),
-        read_mappings(&ontology_dir.join("mappings.sssom.tsv"))?,
+        read_mappings(&checkout, Path::new("mappings.sssom.tsv"))?,
     );
-
-    // Renames of legacy RemiliaNET names (rn:, rns:) never reach the wiki.
-    let mut renames = Map::new();
-    for row in read_tsv(&ontology_dir.join("renames.sssom.tsv"))? {
-        let (Some(subject), Some(object)) = (row.get("subject_id"), row.get("object_id")) else {
-            continue;
-        };
-        if subject.starts_with("rn:") || subject.starts_with("rns:") {
-            continue;
-        }
-        renames.insert(subject.clone(), Value::String(object.clone()));
-    }
-    out.insert("renames".into(), Value::Object(renames));
+    out.insert(
+        "renames".into(),
+        read_renames(
+            &checkout,
+            Path::new("renames.sssom.tsv"),
+            options.excluded_rename_prefixes,
+        )?,
+    );
     out.insert(
         "external".into(),
-        Value::Object(external_terms(ontology_dir, product)?),
+        Value::Object(external_terms(&checkout, options.imports, options.product)?),
     );
-    out.insert(
-        "source".into(),
-        json!({ "commit": commit, "product": product }),
-    );
+    let mut source = json!({ "commit": checkout.commit, "product": options.product });
+    if let Some(published_at) = options.published_at {
+        source["ontology"] = Value::String(published_at.to_string());
+    }
+    if let Some((prefix, namespace)) = options.local {
+        source["local"] = json!({ prefix: namespace });
+    }
+    out.insert("source".into(), source);
     Ok(canonical(Value::Object(out)))
 }
 
-fn read_registry(registry: &Path) -> Result<Map<String, Value>> {
+/// An ontology directory at one clean commit. Every file `export` reads goes
+/// through [`Checkout::read`], which refuses files that the commit does not
+/// contain: `git status` does not report ignored files, so an ignored file
+/// would otherwise reach the export under a commit that lacks it.
+struct Checkout<'a> {
+    dir: &'a Path,
+    commit: String,
+    tracked: BTreeSet<String>,
+}
+
+impl<'a> Checkout<'a> {
+    fn open(dir: &'a Path) -> Result<Self> {
+        let dirty = git(dir, &["status", "--porcelain", "--", "."])?;
+        if !dirty.trim().is_empty() {
+            bail!(
+                "{} has uncommitted changes; export from a clean checkout of one commit",
+                normalize_path(dir)
+            );
+        }
+        let commit = git(dir, &["rev-parse", "--verify", "HEAD"])?
+            .trim()
+            .to_string();
+        // Paths are relative to `dir`, NUL-separated and never quoted.
+        let tracked = git(dir, &["ls-files", "-z", "--", "."])?
+            .split('\0')
+            .filter(|path| !path.is_empty())
+            .map(str::to_string)
+            .collect();
+        Ok(Self {
+            dir,
+            commit,
+            tracked,
+        })
+    }
+
+    fn path(&self, relative: &Path) -> PathBuf {
+        self.dir.join(relative)
+    }
+
+    /// Read a committed text file. A UTF-8 byte order mark is dropped; line
+    /// endings are left to the parsers, which all accept LF and CRLF, so a
+    /// checkout with `core.autocrlf` exports the same bytes.
+    fn read(&self, relative: &Path) -> Result<String> {
+        let path = self.path(relative);
+        let key = relative_inside(relative).with_context(|| {
+            format!(
+                "{} is not a path inside the ontology directory",
+                normalize_path(relative)
+            )
+        })?;
+        if !self.tracked.contains(&key) {
+            bail!(
+                "{} is not committed at {}; export reads only files in the commit",
+                normalize_path(&path),
+                self.commit
+            );
+        }
+        let text = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read {}", normalize_path(&path)))?;
+        Ok(match text.strip_prefix('\u{feff}') {
+            Some(rest) => rest.to_string(),
+            None => text,
+        })
+    }
+}
+
+fn git(dir: &Path, args: &[&str]) -> Result<String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .context("failed to run git")?;
+    if !output.status.success() {
+        bail!(
+            "git {} failed in {}: {}",
+            args.join(" "),
+            normalize_path(dir),
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// The `/`-separated form of a relative path that stays inside its base, or
+/// an error for an absolute path or one that climbs out with `..`.
+fn relative_inside(path: &Path) -> Result<String> {
+    let mut parts = Vec::new();
+    for component in path.components() {
+        match component {
+            Component::Normal(part) => parts.push(
+                part.to_str()
+                    .context("the path is not valid UTF-8")?
+                    .to_string(),
+            ),
+            Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                bail!("only a relative path without `..` is accepted")
+            }
+        }
+    }
+    ensure!(!parts.is_empty(), "the path is empty");
+    Ok(parts.join("/"))
+}
+
+fn read_registry(checkout: &Checkout<'_>) -> Result<Map<String, Value>> {
     let mut sections: BTreeMap<&str, Map<String, Value>> =
         SECTIONS.iter().map(|kind| (*kind, Map::new())).collect();
-    let mut files: Vec<PathBuf> = fs::read_dir(registry)
-        .with_context(|| format!("failed to read {}", registry.display()))?
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| path.extension().is_some_and(|ext| ext == "jsonld"))
-        .collect();
+    let registry = checkout.path(Path::new("registry"));
+    let mut files: Vec<PathBuf> = Vec::new();
+    for entry in fs::read_dir(&registry)
+        .with_context(|| format!("failed to read {}", normalize_path(&registry)))?
+    {
+        let entry =
+            entry.with_context(|| format!("failed to read {}", normalize_path(&registry)))?;
+        let name = PathBuf::from(entry.file_name());
+        if name.extension().is_some_and(|ext| ext == "jsonld") {
+            files.push(Path::new("registry").join(name));
+        }
+    }
     files.sort();
-    for path in files {
-        let text = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
-        let mut entry: Map<String, Value> = serde_json::from_str(&text)
-            .with_context(|| format!("failed to parse {}", path.display()))?;
+    for relative in files {
+        let path = normalize_path(checkout.path(&relative));
+        let text = checkout.read(&relative)?;
+        let mut entry: Map<String, Value> =
+            serde_json::from_str(&text).with_context(|| format!("failed to parse {path}"))?;
         entry.remove("@context");
         let id = take_string(&mut entry, "@id", &path)?;
         let kind = take_string(&mut entry, "@type", &path)?;
@@ -79,23 +238,26 @@ fn read_registry(registry: &Path) -> Result<Map<String, Value>> {
             "OntologyProperty" => "properties",
             "OntologyRelationType" => "relations",
             "OntologyScheme" => "schemes",
-            other => bail!("{}: unknown @type {other}", path.display()),
+            other => bail!("{path}: unknown @type {other}"),
         };
         if let Some(Value::Array(members)) = entry.remove("members") {
             let mut keyed = Map::new();
             for member in members {
                 let Value::Object(mut member) = member else {
-                    bail!("{}: a member is not an object", path.display());
+                    bail!("{path}: a member is not an object");
                 };
                 let member_id = take_string(&mut member, "@id", &path)?;
                 member.remove("@type");
+                if keyed.contains_key(&member_id) {
+                    bail!("{path}: member {member_id} is listed twice");
+                }
                 keyed.insert(member_id, Value::Object(member));
             }
             entry.insert("members".into(), Value::Object(keyed));
         }
         let section = sections.get_mut(section).expect("section exists");
         if section.contains_key(&id) {
-            bail!("{}: {id} is defined twice", path.display());
+            bail!("{path}: {id} is defined twice");
         }
         section.insert(id, Value::Object(entry));
     }
@@ -105,23 +267,20 @@ fn read_registry(registry: &Path) -> Result<Map<String, Value>> {
         .collect())
 }
 
-fn read_mappings(path: &Path) -> Result<Value> {
+fn read_mappings(checkout: &Checkout<'_>, relative: &Path) -> Result<Value> {
+    let table = Tsv::parse(&checkout.path(relative), &checkout.read(relative)?)?;
+    let [subject, predicate, object] =
+        table.columns(["subject_id", "predicate_id", "object_id"])?;
     let mut mappings: BTreeMap<String, Vec<Value>> = BTreeMap::new();
-    for row in read_tsv(path)? {
-        let (Some(subject), Some(predicate), Some(object)) = (
-            row.get("subject_id"),
-            row.get("predicate_id"),
-            row.get("object_id"),
-        ) else {
-            continue;
-        };
+    for row in &table.rows {
+        let object = &row.cells[object];
         if object == NO_TERM || object.is_empty() {
             continue;
         }
         mappings
-            .entry(subject.clone())
+            .entry(row.cells[subject].clone())
             .or_default()
-            .push(json!({ "predicate": predicate, "object": object }));
+            .push(json!({ "predicate": row.cells[predicate], "object": object }));
     }
     Ok(Value::Object(
         mappings
@@ -131,63 +290,101 @@ fn read_mappings(path: &Path) -> Result<Value> {
     ))
 }
 
+fn read_renames(
+    checkout: &Checkout<'_>,
+    relative: &Path,
+    excluded_prefixes: &[String],
+) -> Result<Value> {
+    let table = Tsv::parse(&checkout.path(relative), &checkout.read(relative)?)?;
+    let [subject, object] = table.columns(["subject_id", "object_id"])?;
+    let mut renames = Map::new();
+    for row in &table.rows {
+        let subject = &row.cells[subject];
+        let excluded = subject.split_once(':').is_some_and(|(prefix, _)| {
+            excluded_prefixes
+                .iter()
+                .any(|excluded| excluded.as_str() == prefix)
+        });
+        if !excluded {
+            renames.insert(subject.clone(), Value::String(row.cells[object].clone()));
+        }
+    }
+    Ok(Value::Object(renames))
+}
+
 /// The labels and definitions of the outside terms the wiki uses, read from
 /// the pinned extracts that `product-uses.tsv` names for the wiki.
-fn external_terms(ontology_dir: &Path, product: &str) -> Result<Map<String, Value>> {
-    let imports = ontology_dir.join("v0.1.0/imports");
-    let uses_path = imports.join("product-uses.tsv");
-    let curie_map = read_curie_map(&uses_path)?;
+fn external_terms(
+    checkout: &Checkout<'_>,
+    imports: &Path,
+    product: &str,
+) -> Result<Map<String, Value>> {
+    let uses_relative = imports.join("product-uses.tsv");
+    let uses_path = normalize_path(checkout.path(&uses_relative));
+    let uses_text = checkout.read(&uses_relative)?;
+    let curie_map = read_curie_map(&uses_text);
+    let table = Tsv::parse(&checkout.path(&uses_relative), &uses_text)?;
+    let [product_column, iri_column, pin_column] = table.columns(["product", "iri", "pin"])?;
     let mut wanted: BTreeMap<String, (String, String)> = BTreeMap::new();
-    for row in read_tsv(&uses_path)? {
-        if row.get("product").map(String::as_str) != Some(product) {
+    for row in &table.rows {
+        if row.cells[product_column] != product {
             continue;
         }
-        let (Some(curie), Some(pin)) = (row.get("iri"), row.get("pin")) else {
-            continue;
-        };
+        let curie = &row.cells[iri_column];
         let iri = expand(curie, &curie_map)
-            .with_context(|| format!("{}: no prefix for {curie}", uses_path.display()))?;
-        wanted.insert(iri, (curie.clone(), pin.clone()));
+            .with_context(|| format!("{uses_path}:{}: no prefix for {curie}", row.line))?;
+        wanted.insert(iri, (curie.clone(), row.cells[pin_column].clone()));
     }
 
-    let mut by_pin: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    let mut by_pin: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
     for (iri, (_, pin)) in &wanted {
-        by_pin.entry(pin.as_str()).or_default().push(iri.as_str());
+        by_pin.entry(pin.as_str()).or_default().insert(iri.as_str());
     }
-    let mut found: BTreeMap<String, Map<String, Value>> = BTreeMap::new();
+    let mut best: BTreeMap<(String, &'static str), Candidate> = BTreeMap::new();
     for (pin, iris) in by_pin {
-        let path = imports.join(pin);
-        let text = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
-        for line in text.lines() {
-            let Some((subject, rest)) = line.strip_prefix('<').and_then(|l| l.split_once("> <"))
-            else {
+        let relative = imports.join(pin);
+        let path = normalize_path(checkout.path(&relative));
+        let text = checkout.read(&relative)?;
+        for (index, line) in text.lines().enumerate() {
+            let at = |error: String| anyhow::anyhow!("{path}:{}: {error}", index + 1);
+            let mut parser = LineParser::new(line);
+            // An unreadable subject could be any term, so it always fails.
+            let Some(Term::Iri(subject)) = parser.subject().map_err(at)? else {
                 continue;
             };
-            if !iris.contains(&subject) {
+            if !iris.contains(subject.as_str()) {
                 continue;
             }
-            let Some((predicate, object)) = rest.split_once("> ") else {
+            let (predicate, object) = parser.predicate_object().map_err(at)?;
+            let Some((field, predicate_rank)) = field_of(&predicate) else {
                 continue;
             };
-            let field = match predicate {
-                "http://www.w3.org/2000/01/rdf-schema#label"
-                | "http://www.w3.org/2004/02/skos/core#prefLabel" => "label",
-                "http://www.w3.org/2000/01/rdf-schema#comment"
-                | "http://www.w3.org/2004/02/skos/core#definition" => "definition",
-                _ => continue,
-            };
-            let Some(literal) = english_literal(object) else {
+            let Term::Literal(literal) = object else {
                 continue;
             };
-            found
-                .entry(subject.to_string())
-                .or_default()
-                .entry(field)
-                .or_insert(Value::String(literal));
+            let Some(candidate) = Candidate::new(literal, predicate_rank) else {
+                continue;
+            };
+            match best.entry((subject, field)) {
+                std::collections::btree_map::Entry::Vacant(slot) => {
+                    slot.insert(candidate);
+                }
+                std::collections::btree_map::Entry::Occupied(mut slot) => {
+                    if candidate < *slot.get() {
+                        slot.insert(candidate);
+                    }
+                }
+            }
         }
     }
 
+    let mut found: BTreeMap<String, Map<String, Value>> = BTreeMap::new();
+    for ((iri, field), candidate) in best {
+        found
+            .entry(iri)
+            .or_default()
+            .insert(field.to_string(), Value::String(candidate.value));
+    }
     let mut out = Map::new();
     for (iri, (curie, _)) in wanted {
         let mut entry = found.remove(&iri).unwrap_or_default();
@@ -197,20 +394,55 @@ fn external_terms(ontology_dir: &Path, product: &str) -> Result<Map<String, Valu
     Ok(out)
 }
 
-/// Parse an N-Triples object that is an English (or untagged) literal.
-fn english_literal(object: &str) -> Option<String> {
-    let object = object.trim_end().strip_suffix('.')?.trim_end();
-    let body = object.strip_prefix('"')?;
-    let (text, tag) = body.rsplit_once('"')?;
-    if !(tag.is_empty() || tag == "@en" || tag.starts_with("^^")) {
-        return None;
-    }
-    serde_json::from_str::<String>(&format!("\"{text}\"")).ok()
+/// The exported field a predicate supplies, and its rank among the
+/// predicates for that field. The SKOS properties are the more specific
+/// ones (`skos:prefLabel` is the preferred label, `skos:definition` a
+/// definition rather than any comment), so they rank first.
+fn field_of(predicate: &str) -> Option<(&'static str, u8)> {
+    Some(match predicate {
+        "http://www.w3.org/2004/02/skos/core#prefLabel" => ("label", 0),
+        "http://www.w3.org/2000/01/rdf-schema#label" => ("label", 1),
+        "http://www.w3.org/2004/02/skos/core#definition" => ("definition", 0),
+        "http://www.w3.org/2000/01/rdf-schema#comment" => ("definition", 1),
+        _ => return None,
+    })
 }
 
-fn read_curie_map(path: &Path) -> Result<BTreeMap<String, String>> {
-    let text =
-        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+/// A literal that may supply a field. Candidates order by language (`@en`,
+/// then another `@en-*` tag, then an untagged literal), then by predicate,
+/// then by tag and text, so the choice never depends on line order. A literal
+/// in any other language is never a candidate.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Candidate {
+    language_rank: u8,
+    predicate_rank: u8,
+    language: String,
+    value: String,
+}
+
+impl Candidate {
+    fn new(literal: Literal, predicate_rank: u8) -> Option<Self> {
+        let language = literal.language.unwrap_or_default().to_ascii_lowercase();
+        let language_rank = if language == "en" {
+            0
+        } else if language.starts_with("en-") {
+            1
+        } else if language.is_empty() {
+            2
+        } else {
+            return None;
+        };
+        Some(Self {
+            language_rank,
+            predicate_rank,
+            language,
+            value: literal.value,
+        })
+    }
+}
+
+/// The prefixes in the `# curie_map:` block of an SSSOM metadata header.
+fn read_curie_map(text: &str) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
     for line in text.lines().take_while(|line| line.starts_with('#')) {
         let line = line.trim_start_matches('#').trim();
@@ -221,7 +453,7 @@ fn read_curie_map(path: &Path) -> Result<BTreeMap<String, String>> {
             map.insert(prefix.to_string(), iri.trim().to_string());
         }
     }
-    Ok(map)
+    map
 }
 
 fn expand(curie: &str, map: &BTreeMap<String, String>) -> Option<String> {
@@ -229,60 +461,88 @@ fn expand(curie: &str, map: &BTreeMap<String, String>) -> Option<String> {
     map.get(prefix).map(|base| format!("{base}{local}"))
 }
 
-fn read_tsv(path: &Path) -> Result<Vec<BTreeMap<String, String>>> {
-    let text =
-        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
-    let mut lines = text.lines().filter(|line| !line.starts_with('#'));
-    let Some(header) = lines.next() else {
-        return Ok(Vec::new());
-    };
-    let columns: Vec<&str> = header.split('\t').collect();
-    Ok(lines
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| {
-            columns
-                .iter()
-                .zip(line.split('\t'))
-                .map(|(column, value)| (column.to_string(), value.to_string()))
-                .collect()
-        })
-        .collect())
+/// A tab-separated table such as an SSSOM/TSV file: `#` lines (the SSSOM
+/// metadata header) and blank lines are skipped, the first other line is the
+/// header, and every later line is a row.
+///
+/// Every row must have exactly one cell per header column. IANA's
+/// `text/tab-separated-values` requires each record to have the same number
+/// of fields, and SSSOM tooling writes every column. A row that is short
+/// because an editor stripped its trailing tabs cannot be told apart from one
+/// that lost a tab in the middle, which would shift values into the wrong
+/// columns, so a short row is an error rather than padded with empty cells.
+#[derive(Debug)]
+struct Tsv {
+    path: String,
+    header: Vec<String>,
+    rows: Vec<TsvRow>,
 }
 
-fn take_string(entry: &mut Map<String, Value>, key: &str, path: &Path) -> Result<String> {
+#[derive(Debug)]
+struct TsvRow {
+    /// The 1-based line number in the file.
+    line: usize,
+    cells: Vec<String>,
+}
+
+impl Tsv {
+    fn parse(path: &Path, text: &str) -> Result<Self> {
+        let path = normalize_path(path);
+        let mut header: Option<Vec<String>> = None;
+        let mut rows = Vec::new();
+        for (index, line) in text.lines().enumerate() {
+            if line.starts_with('#') || line.trim().is_empty() {
+                continue;
+            }
+            let cells: Vec<String> = line.split('\t').map(str::to_string).collect();
+            let Some(columns) = &header else {
+                let mut seen = BTreeSet::new();
+                for column in &cells {
+                    ensure!(
+                        seen.insert(column.as_str()),
+                        "{path}:{}: the header names column {column} twice",
+                        index + 1
+                    );
+                }
+                header = Some(cells);
+                continue;
+            };
+            ensure!(
+                cells.len() == columns.len(),
+                "{path}:{}: the row has {} cells but the header has {} columns; \
+                 an empty trailing cell still needs its tab",
+                index + 1,
+                cells.len(),
+                columns.len()
+            );
+            rows.push(TsvRow {
+                line: index + 1,
+                cells,
+            });
+        }
+        let header = header.with_context(|| format!("{path} has no header row"))?;
+        Ok(Self { path, header, rows })
+    }
+
+    /// The indices of the named columns, which must all be present.
+    fn columns<const N: usize>(&self, names: [&str; N]) -> Result<[usize; N]> {
+        let mut indices = [0; N];
+        for (slot, name) in indices.iter_mut().zip(names) {
+            *slot = self
+                .header
+                .iter()
+                .position(|column| column == name)
+                .with_context(|| format!("{} has no {name} column", self.path))?;
+        }
+        Ok(indices)
+    }
+}
+
+fn take_string(entry: &mut Map<String, Value>, key: &str, path: &str) -> Result<String> {
     match entry.remove(key) {
         Some(Value::String(value)) => Ok(value),
-        _ => bail!("{}: missing {key}", path.display()),
+        _ => bail!("{path}: missing {key}"),
     }
-}
-
-/// The commit of the checkout, refusing uncommitted changes to the ontology.
-fn clean_commit(ontology_dir: &Path) -> Result<String> {
-    let git = |args: &[&str]| -> Result<String> {
-        let output = Command::new("git")
-            .arg("-C")
-            .arg(ontology_dir)
-            .args(args)
-            .output()
-            .context("failed to run git")?;
-        if !output.status.success() {
-            bail!(
-                "git {} failed in {}: {}",
-                args.join(" "),
-                ontology_dir.display(),
-                String::from_utf8_lossy(&output.stderr).trim()
-            );
-        }
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    };
-    let dirty = git(&["status", "--porcelain", "--", "."])?;
-    if !dirty.is_empty() {
-        bail!(
-            "{} has uncommitted changes; export from a clean checkout of one commit",
-            ontology_dir.display()
-        );
-    }
-    git(&["rev-parse", "HEAD"])
 }
 
 /// Rebuild every object with its keys in sorted order.
@@ -301,63 +561,80 @@ fn canonical(value: Value) -> Value {
 }
 
 /// Render the export as the source of `Module:Ontology/data`.
+///
+/// `mw.loadData` accepts only tables, strings, numbers and booleans. A null
+/// object member is left out (an absent key reads as `nil`); a null in an
+/// array is an error, because it would leave a hole that breaks `#` and
+/// `ipairs`.
 pub fn generate_module(export: &Value) -> Result<String> {
     let commit = export
         .pointer("/source/commit")
         .and_then(Value::as_str)
         .context("the export has no source commit")?;
     let mut out = String::new();
-    out.push_str(
-        "-- Generated by `wikitool ontology generate` from vendor/ontology/ontology.json\n",
-    );
     out.push_str(&format!(
-        "-- at ontology commit {commit} Do not edit by hand.\n"
+        "-- Generated by `wikitool ontology generate` from {EXPORT_PATH}\n"
+    ));
+    out.push_str(&format!(
+        "-- at ontology commit {commit}. Do not edit by hand.\n"
     ));
     out.push_str("return ");
-    write_lua(&mut out, export, 0);
+    write_lua(&mut out, export, 0, &mut String::new())?;
     out.push('\n');
     Ok(out)
 }
 
-fn write_lua(out: &mut String, value: &Value, depth: usize) {
+fn write_lua(out: &mut String, value: &Value, depth: usize, pointer: &mut String) -> Result<()> {
     match value {
-        Value::Null => out.push_str("nil"),
+        Value::Null => bail!(
+            "the export has null at JSON pointer {pointer}; {MODULE_TITLE} cannot hold null in an array"
+        ),
         Value::Bool(flag) => out.push_str(if *flag { "true" } else { "false" }),
-        Value::Number(number) => out.push_str(&number.to_string()),
+        Value::Number(number) => {
+            // Unreachable unless serde_json's arbitrary_precision is enabled,
+            // which lets a Value hold a number such as 1e400.
+            ensure!(
+                number.as_f64().is_some_and(f64::is_finite),
+                "the export has the non-finite number {number} at JSON pointer {pointer}"
+            );
+            out.push_str(&number.to_string());
+        }
         Value::String(text) => write_lua_string(out, text),
         Value::Array(items) => {
             if items.is_empty() {
                 out.push_str("{}");
-                return;
+                return Ok(());
             }
             let scalar = items
                 .iter()
                 .all(|item| !item.is_object() && !item.is_array());
-            if scalar {
-                out.push('{');
-                for (index, item) in items.iter().enumerate() {
-                    if index > 0 {
-                        out.push_str(", ");
-                    }
-                    write_lua(out, item, depth + 1);
+            out.push_str(if scalar { "{" } else { "{\n" });
+            for (index, item) in items.iter().enumerate() {
+                if scalar && index > 0 {
+                    out.push_str(", ");
                 }
-                out.push('}');
-                return;
+                if !scalar {
+                    indent(out, depth + 1);
+                }
+                let length = pointer.len();
+                pointer.push('/');
+                pointer.push_str(&index.to_string());
+                write_lua(out, item, depth + 1, pointer)?;
+                pointer.truncate(length);
+                if !scalar {
+                    out.push_str(",\n");
+                }
             }
-            out.push_str("{\n");
-            for item in items {
-                indent(out, depth + 1);
-                write_lua(out, item, depth + 1);
-                out.push_str(",\n");
+            if !scalar {
+                indent(out, depth);
             }
-            indent(out, depth);
             out.push('}');
         }
         Value::Object(map) => {
             let mut keys: Vec<&String> = map.keys().filter(|key| !map[*key].is_null()).collect();
             if keys.is_empty() {
                 out.push_str("{}");
-                return;
+                return Ok(());
             }
             keys.sort();
             out.push_str("{\n");
@@ -366,15 +643,23 @@ fn write_lua(out: &mut String, value: &Value, depth: usize) {
                 out.push('[');
                 write_lua_string(out, key);
                 out.push_str("] = ");
-                write_lua(out, &map[key], depth + 1);
+                let length = pointer.len();
+                pointer.push('/');
+                pointer.push_str(&key.replace('~', "~0").replace('/', "~1"));
+                write_lua(out, &map[key], depth + 1, pointer)?;
+                pointer.truncate(length);
                 out.push_str(",\n");
             }
             indent(out, depth);
             out.push('}');
         }
     }
+    Ok(())
 }
 
+/// A Lua 5.1 double-quoted string. Lua strings are bytes, so UTF-8 passes
+/// through unchanged; other control characters use a three-digit decimal
+/// escape, which a following digit cannot extend.
 fn write_lua_string(out: &mut String, text: &str) {
     out.push('"');
     for ch in text.chars() {
@@ -400,47 +685,4 @@ fn indent(out: &mut String, depth: usize) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn lua_output_is_sorted_and_escaped() {
-        let value = json!({
-            "source": { "commit": "abc" },
-            "b": ["x", "y\"z"],
-            "a": { "label": "line\nbreak", "skip": null },
-        });
-        let lua = generate_module(&value).expect("module");
-        let body = lua.split_once("return ").expect("return").1;
-        assert!(body.find("[\"a\"]").unwrap() < body.find("[\"b\"]").unwrap());
-        assert!(body.contains("[\"label\"] = \"line\\nbreak\""));
-        assert!(body.contains("{\"x\", \"y\\\"z\"}"));
-        assert!(!body.contains("skip"));
-    }
-
-    #[test]
-    fn english_literal_reads_tagged_and_escaped_text() {
-        assert_eq!(
-            english_literal("\"human \\\"being\\\"\"@en .").as_deref(),
-            Some("human \"being\"")
-        );
-        assert_eq!(english_literal("\"Mensch\"@de ."), None);
-        assert_eq!(english_literal("<http://example.org/x> ."), None);
-    }
-
-    #[test]
-    fn curie_map_reads_the_comment_header() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let path = dir.path().join("uses.tsv");
-        fs::write(
-            &path,
-            "# curie_map:\n#  wd: http://www.wikidata.org/entity/\niri\tproduct\n",
-        )
-        .expect("write");
-        let map = read_curie_map(&path).expect("map");
-        assert_eq!(
-            expand("wd:Q5", &map).as_deref(),
-            Some("http://www.wikidata.org/entity/Q5")
-        );
-    }
-}
+mod tests;
