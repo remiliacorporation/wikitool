@@ -52,7 +52,7 @@ Event keeps "Background" because there it names the lead-up to a dated event. Dr
 
 ## Mechanics
 
-Wikitool's `article lint` enforces three of these rules: curly quotes (`style.curly_quotes`), footnote placement (`citation.after_punctuation`), and heading capitalization (`style.sentence_case_heading`, which catches title case in headings of three or more words, not every miscapitalization). Writers and reviewers check the rest.
+Wikitool's `article lint` enforces these rules: curly quotes (`style.curly_quotes`), footnote placement (`citation.after_punctuation`), heading capitalization (`style.sentence_case_heading`, which catches title case in headings of three or more words, not every miscapitalization), a heading that begins with "The", "A", or "An" (`style.heading_leading_article`), ends in punctuation (`style.heading_trailing_punctuation`), contains a template, ref, or math (`style.heading_markup`; links in headings are not checked), or repeats the article title (`style.heading_repeats_title`), two or more blank lines in a row (`style.consecutive_blank_lines`), and a lead of more than four paragraphs (`structure.lead_paragraph_limit`). The heading warnings cannot tell a name from a fault, so a heading that is a name keeps its "The" or its final "!". Writers and reviewers check the rest.
 
 These rules set spelling, punctuation, and form. They follow Wikipedia's Manual of Style, with the choices below made for this wiki. A rule that says "keep consistent" means the article may not mix the two forms.
 

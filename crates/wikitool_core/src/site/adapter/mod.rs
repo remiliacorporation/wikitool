@@ -490,6 +490,39 @@ mod tests {
     }
 
     #[test]
+    fn style_lint_rules_left_off_stay_out_of_the_hashed_policy() {
+        // The publication policy hash serializes `LintRules`. A rule an adapter
+        // does not enable must leave that serialization, and so the hash, as it was.
+        let lint_keys = |source: &str| {
+            let policy = parse_site_adapter(source).expect("adapter");
+            let mut keys = serde_json::to_value(&policy.lint)
+                .expect("lint json")
+                .as_object()
+                .expect("lint object")
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>();
+            keys.sort();
+            keys
+        };
+        assert_eq!(
+            lint_keys(EMBEDDED_GENERIC_ADAPTER),
+            [
+                "citation_needed",
+                "forbid_curly_quotes",
+                "forbid_placeholder_fragments",
+                "proper_nouns"
+            ]
+        );
+        let enabled = EMBEDDED_GENERIC_ADAPTER.replace(
+            "[lint]\n",
+            "[lint]\nheading_markup = \"warning\"\nmax_lead_paragraphs = 3\n",
+        );
+        assert!(lint_keys(&enabled).contains(&"heading_markup".to_string()));
+        assert!(lint_keys(&enabled).contains(&"max_lead_paragraphs".to_string()));
+    }
+
+    #[test]
     fn docs_profile_resolution_uses_adapter_default_and_preserves_explicit_choice() {
         let temp = tempdir().expect("tempdir");
         let paths = paths(temp.path());

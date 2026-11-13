@@ -77,6 +77,30 @@ pub(super) struct TemplateStylesOccurrence {
     pub(super) end: usize,
 }
 
+/// A byte range of the page source.
+#[derive(Debug, Clone)]
+pub(super) struct ByteSpan {
+    pub(super) start: usize,
+    pub(super) end: usize,
+}
+
+/// Tags whose content MediaWiki passes through without parsing headings,
+/// paragraphs or templates.
+const LITERAL_TAGS: &[&str] = &[
+    "nowiki",
+    "pre",
+    "syntaxhighlight",
+    "source",
+    "math",
+    "chem",
+    "score",
+    "templatedata",
+    "timeline",
+    "graph",
+    "hiero",
+    "gallery",
+];
+
 #[derive(Debug, Clone)]
 pub(super) struct ParsedArticleDocument {
     pub(super) relative_path: String,
@@ -92,9 +116,32 @@ pub(super) struct ParsedArticleDocument {
     pub(super) references: Vec<RefOccurrence>,
     pub(super) parser_tags: Vec<ParserTagOccurrence>,
     pub(super) template_styles: Vec<TemplateStylesOccurrence>,
+    /// Spans MediaWiki does not parse as wikitext: HTML comments and literal
+    /// tags such as `<pre>`, `<nowiki>` or `<syntaxhighlight>`, markup included.
+    /// Headings, blank lines and markup inside one are not article structure.
+    pub(super) literal_regions: Vec<ByteSpan>,
+    /// Every matched `{{...}}` span: templates, parser functions such as
+    /// `{{SHORTDESC:...}}` or `{{#if:...}}`, and magic words. `templates` holds
+    /// only the ones that name a template.
+    pub(super) transclusions: Vec<ByteSpan>,
 }
 
 impl ParsedArticleDocument {
+    /// Whether `offset` falls inside a comment or literal tag, including its
+    /// opening and closing markup.
+    pub(super) fn in_literal_region(&self, offset: usize) -> bool {
+        self.literal_regions
+            .iter()
+            .any(|region| offset >= region.start && offset < region.end)
+    }
+
+    /// Whether `offset` falls inside any `{{...}}` construct.
+    pub(super) fn in_transclusion(&self, offset: usize) -> bool {
+        self.transclusions
+            .iter()
+            .any(|span| offset >= span.start && offset < span.end)
+    }
+
     pub(super) fn span_for_range(&self, start: usize, end: usize) -> Option<TextSpan> {
         let line = self.line_for_offset(start)?;
         let end_line = self.line_for_offset(end.min(self.content.len()))?;
@@ -184,6 +231,8 @@ pub(super) fn load_article_document_with_title(
     let references = extract_ref_occurrences(&content);
     let parser_tags = extract_open_tag_occurrences(&content);
     let template_styles = extract_templatestyles_occurrences(&content);
+    let literal_regions = extract_literal_regions(&content);
+    let transclusions = extract_transclusion_spans(&content);
 
     Ok(ParsedArticleDocument {
         relative_path,
@@ -199,7 +248,84 @@ pub(super) fn load_article_document_with_title(
         references,
         parser_tags,
         template_styles,
+        literal_regions,
+        transclusions,
     })
+}
+
+/// Pair `{{` with `}}` the way `extract_template_occurrences` does, keeping every
+/// pair rather than only those that name a template.
+fn extract_transclusion_spans(content: &str) -> Vec<ByteSpan> {
+    let bytes = content.as_bytes();
+    let mut out = Vec::new();
+    let mut cursor = 0usize;
+    let mut stack = Vec::new();
+
+    while cursor + 1 < bytes.len() {
+        if bytes[cursor] == b'{' && bytes[cursor + 1] == b'{' {
+            stack.push(cursor);
+            cursor += 2;
+            continue;
+        }
+        if bytes[cursor] == b'}' && bytes[cursor + 1] == b'}' {
+            if let Some(start) = stack.pop() {
+                out.push(ByteSpan {
+                    start,
+                    end: cursor + 2,
+                });
+            }
+            cursor += 2;
+            continue;
+        }
+        cursor += 1;
+    }
+
+    out
+}
+
+/// Scan for HTML comments and literal tags in document order. A region that is
+/// never closed runs to the end of the page, which errs toward treating text as
+/// literal and so toward fewer style findings rather than spurious ones.
+fn extract_literal_regions(content: &str) -> Vec<ByteSpan> {
+    let bytes = content.as_bytes();
+    let mut out = Vec::new();
+    let mut cursor = 0usize;
+
+    while cursor < bytes.len() {
+        if bytes[cursor] != b'<' {
+            cursor += 1;
+            continue;
+        }
+        if bytes[cursor..].starts_with(b"<!--") {
+            let end = content[cursor + 4..]
+                .find("-->")
+                .map(|offset| cursor + 4 + offset + 3)
+                .unwrap_or(content.len());
+            out.push(ByteSpan { start: cursor, end });
+            cursor = end;
+            continue;
+        }
+        let opened = LITERAL_TAGS.iter().find_map(|tag| {
+            parse_open_tag(content, cursor, tag).map(|(tag_end, _, self_closing)| {
+                if self_closing {
+                    tag_end
+                } else {
+                    find_closing_html_tag(content, tag_end, tag)
+                        .map(|(_, close_end)| close_end)
+                        .unwrap_or(content.len())
+                }
+            })
+        });
+        match opened {
+            Some(end) => {
+                out.push(ByteSpan { start: cursor, end });
+                cursor = end.max(cursor + 1);
+            }
+            None => cursor += 1,
+        }
+    }
+
+    out
 }
 
 fn normalize_title_override(title_override: Option<&str>) -> Result<Option<String>> {

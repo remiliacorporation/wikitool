@@ -122,6 +122,13 @@ preferred_categories = []
 [lint]
 forbid_curly_quotes = true
 citation_needed = "error"
+heading_leading_article = "warning"
+heading_trailing_punctuation = "warning"
+heading_markup = "warning"
+heading_repeats_title = "warning"
+consecutive_blank_lines = "warning"
+lead_paragraph_limit = "warning"
+max_lead_paragraphs = 4
 proper_nouns = ["Webring", "Milady", "Remilia", "Remilio", "Radbro", "Bonkler", "Pixelady", "Schizo"]
 forbid_placeholder_fragments = [
   "[Author Name]",

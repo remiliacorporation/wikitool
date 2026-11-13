@@ -13,6 +13,7 @@ pub use adapter::model::{
     InfoboxPreference, LintRuleLevel, LintRules, SiteAdapter, SourceReviewRule,
     TemplateCatalogSummary, TemplateRules,
 };
+pub use adapter::model::{DEFAULT_MAX_LEAD_PARAGRAPHS, LintAdvisoryLevel};
 pub use adapter::{
     PublicationPolicyIdentity, load_site_adapter, load_site_adapter_with_config,
     publication_policy_identity, publication_policy_identity_with_config,

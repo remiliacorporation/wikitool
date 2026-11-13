@@ -142,8 +142,12 @@ pub(super) fn lint_article_quality_banner(
 
 pub(super) fn lint_markdown_headings(
     document: &ParsedArticleDocument,
+    resources: &LoadedResources,
     matches: &mut Vec<IssueMatch>,
 ) {
+    if !resources.adapter.authoring.forbid_markdown {
+        return;
+    }
     for line in &document.lines {
         let Some((level, text)) = parse_markdown_heading(&line.text) else {
             continue;
@@ -276,6 +280,9 @@ pub(super) fn lint_sentence_case_headings(
     resources: &LoadedResources,
     matches: &mut Vec<IssueMatch>,
 ) {
+    if !resources.adapter.authoring.prefer_sentence_case_headings {
+        return;
+    }
     for section in &document.sections {
         let Some(heading) = &section.heading else {
             continue;
