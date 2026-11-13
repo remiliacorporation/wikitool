@@ -4,12 +4,13 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Subcommand};
+use serde::Serialize;
 use serde_json::Value;
 use wikitool_core::ontology::{self, ExportOptions};
 use wikitool_core::site::adapter::load_site_adapter;
 
 use crate::RuntimeOptions;
-use crate::cli_support::{normalize_path, resolve_runtime_paths};
+use crate::cli_support::{OutputFormat, normalize_path, resolve_runtime_paths};
 
 #[derive(Debug, Args)]
 pub(crate) struct OntologyArgs {
@@ -47,12 +48,51 @@ struct ExportArgs {
         help = "The directory with product-uses.tsv and the pinned extracts, relative to --from; defaults to the site adapter's [ontology] imports"
     )]
     imports: Option<PathBuf>,
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = OutputFormat::Text,
+        value_name = "FORMAT",
+        help = "Output format: text|json"
+    )]
+    format: OutputFormat,
 }
 
 #[derive(Debug, Args)]
 struct GenerateArgs {
     #[arg(long, help = "Fail if the module is out of date, without writing")]
     check: bool,
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = OutputFormat::Text,
+        value_name = "FORMAT",
+        help = "Output format: text|json"
+    )]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Serialize)]
+struct ExportReport {
+    schema_version: &'static str,
+    ontology_dir: String,
+    commit: String,
+    product: String,
+    export_path: String,
+    module_path: String,
+}
+
+#[derive(Debug, Serialize)]
+struct GenerateReport {
+    schema_version: &'static str,
+    commit: String,
+    product: Option<String>,
+    export_path: String,
+    module_path: String,
+    check: bool,
+    /// Whether the module on disk already matched the vendored copy.
+    up_to_date: bool,
+    written: bool,
 }
 
 pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Result<()> {
@@ -91,13 +131,22 @@ pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Resu
             let module = ontology::generate_module(&export)?;
             write(&export_path, &export_text)?;
             write(&module_path, &module)?;
-            println!(
-                "exported {} at {} to {} and {}",
-                normalize_path(&args.from),
-                export["source"]["commit"].as_str().unwrap_or("?"),
-                ontology::EXPORT_PATH,
-                module_relative
-            );
+            let report = ExportReport {
+                schema_version: "ontology_export_v1",
+                ontology_dir: normalize_path(&args.from),
+                commit: commit_of(&export),
+                product,
+                export_path: ontology::EXPORT_PATH.to_string(),
+                module_path: module_relative,
+            };
+            if args.format.is_json() {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                println!(
+                    "exported {} at {} to {} and {}",
+                    report.ontology_dir, report.commit, report.export_path, report.module_path
+                );
+            }
         }
         OntologySubcommand::Generate(args) => {
             let text = fs::read_to_string(&export_path)
@@ -116,20 +165,47 @@ pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Resu
             };
             // A checkout with CRLF line endings holds the same module.
             let up_to_date = current.is_some_and(|current| current.replace("\r\n", "\n") == module);
-            if args.check {
-                if !up_to_date {
-                    bail!("{module_relative} is out of date; run `wikitool ontology generate`");
-                }
-                println!("{module_relative} is up to date");
-            } else if up_to_date {
-                println!("{module_relative} is up to date");
-            } else {
+            let written = !args.check && !up_to_date;
+            if written {
                 write(&module_path, &module)?;
-                println!("wrote {module_relative}");
+            }
+            let report = GenerateReport {
+                schema_version: "ontology_generate_v1",
+                commit: commit_of(&export),
+                product: export
+                    .pointer("/source/product")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                export_path: ontology::EXPORT_PATH.to_string(),
+                module_path: module_relative,
+                check: args.check,
+                up_to_date,
+                written,
+            };
+            if args.format.is_json() {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else if written {
+                println!("wrote {}", report.module_path);
+            } else if up_to_date {
+                println!("{} is up to date", report.module_path);
+            }
+            if args.check && !up_to_date {
+                bail!(
+                    "{} is out of date; run `wikitool ontology generate`",
+                    report.module_path
+                );
             }
         }
     }
     Ok(())
+}
+
+fn commit_of(export: &Value) -> String {
+    export
+        .pointer("/source/commit")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string()
 }
 
 fn write(path: &Path, text: &str) -> Result<()> {
