@@ -234,3 +234,96 @@ fn the_site_adapter_supplies_the_export_settings() {
     );
     assert_eq!(export["source"]["ontology"], "https://ontology.example/");
 }
+
+#[test]
+fn generate_without_a_vendored_copy_explains_what_is_missing() {
+    let wt = Project::new(env!("CARGO_BIN_EXE_wikitool"));
+
+    wt.run(&["ontology", "generate"])
+        .assert_code(1)
+        .assert_stderr_contains("this project has no vendored ontology")
+        .assert_stderr_contains("a checkout of the ontology's source repository")
+        .assert_stderr_contains("A wiki that does not use an ontology needs neither command");
+
+    let output = wt.run(&["ontology", "generate", "--check", "--format", "json"]);
+    output
+        .assert_code(1)
+        .assert_json("/schema_version", "ontology_generate_v1")
+        .assert_json("/status", "not_ready")
+        .assert_json("/export_ready", false)
+        .assert_json("/commit", Value::Null)
+        .assert_json("/written", false);
+    assert!(
+        output
+            .json_str("/message")
+            .contains("`wikitool ontology export --from <dir>` produces it"),
+        "{}",
+        output.json_str("/message")
+    );
+    wt.assert_missing(EXPORT);
+    wt.assert_missing(MODULE);
+}
+
+fn copy_tree(source: &Path, destination: &Path) {
+    fs::create_dir_all(destination).expect("create directory");
+    for entry in fs::read_dir(source).expect("read directory") {
+        let entry = entry.expect("directory entry");
+        let target = destination.join(entry.file_name());
+        if entry.file_type().expect("file type").is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            fs::copy(entry.path(), target).expect("copy file");
+        }
+    }
+}
+
+/// The Remilia adapter declares `[ontology]`, but only the ontology commands read the vendored
+/// copy: everything else works in a project that never exported one.
+#[test]
+fn the_remilia_adapter_works_without_a_vendored_ontology() {
+    let wt = Project::new(env!("CARGO_BIN_EXE_wikitool"));
+    copy_tree(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../site_adapters/remilia-wiki"),
+        &wt.path().join("site-adapter"),
+    );
+    wt.run(&[
+        "init",
+        "--no-network",
+        "--api-url",
+        "https://wikitest.invalid/api.php",
+        "--adapter-path",
+        "site-adapter/site-adapter.toml",
+    ])
+    .assert_code(0);
+
+    wt.run(&["adapter", "inspect", "--format", "json"])
+        .assert_code(0)
+        .assert_json("/adapter/adapter_id", "remilia-wiki")
+        .assert_json("/adapter/ontology/product", "remilia-wiki")
+        .assert_json("/adapter/ontology/imports", "v0.1.0/imports");
+    wt.run(&["config", "show", "--format", "json"])
+        .assert_code(0)
+        .assert_json("/adapter_path", "site-adapter/site-adapter.toml");
+
+    fs::create_dir_all(wt.path().join("wiki_content/Main")).expect("content dir");
+    fs::write(
+        wt.path().join("wiki_content/Main/Example.wiki"),
+        "{{SHORTDESC:An example}}\n'''Example''' is a page.\n\n== References ==\n{{Reflist}}\n",
+    )
+    .expect("article");
+    wt.run(&["catalog", "build", "--format", "json"])
+        .assert_code(0);
+    wt.run(&[
+        "article",
+        "lint",
+        "wiki_content/Main/Example.wiki",
+        "--format",
+        "json",
+    ])
+    .assert_code(0);
+    wt.run(&["article", "scout", "Example", "--format", "json"])
+        .assert_code(0);
+
+    wt.assert_missing(EXPORT);
+    wt.assert_missing(MODULE);
+}

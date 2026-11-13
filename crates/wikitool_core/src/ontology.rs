@@ -44,8 +44,9 @@ pub struct ExportOptions<'a> {
     pub imports: &'a Path,
     /// CURIE prefixes whose renames never reach the wiki, matched exactly.
     pub excluded_rename_prefixes: &'a [String],
-    /// Where the ontology is published, recorded as `source.ontology`.
-    pub published_at: Option<&'a str>,
+    /// An identifier for the ontology, such as its namespace IRI, recorded as
+    /// `source.ontology`. It is never fetched and need not resolve.
+    pub source_identifier: Option<&'a str>,
     /// The prefix and namespace IRI of the wiki's own terms, recorded as
     /// `source.local`.
     pub local: Option<(&'a str, &'a str)>,
@@ -93,8 +94,8 @@ pub fn export(ontology_dir: &Path, options: &ExportOptions<'_>) -> Result<Value>
         Value::Object(external_terms(&checkout, options.imports, options.product)?),
     );
     let mut source = json!({ "commit": checkout.commit, "product": options.product });
-    if let Some(published_at) = options.published_at {
-        source["ontology"] = Value::String(published_at.to_string());
+    if let Some(identifier) = options.source_identifier {
+        source["ontology"] = Value::String(identifier.to_string());
     }
     if let Some((prefix, namespace)) = options.local {
         source["local"] = json!({ prefix: namespace });

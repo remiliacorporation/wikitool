@@ -85,7 +85,12 @@ struct ExportReport {
 #[derive(Debug, Serialize)]
 struct GenerateReport {
     schema_version: &'static str,
-    commit: String,
+    /// `not_ready` without a vendored copy, otherwise `up_to_date`,
+    /// `out_of_date` (with `--check`) or `written`.
+    status: &'static str,
+    /// Whether the project has a vendored copy to generate from.
+    export_ready: bool,
+    commit: Option<String>,
     product: Option<String>,
     export_path: String,
     module_path: String,
@@ -93,7 +98,14 @@ struct GenerateReport {
     /// Whether the module on disk already matched the vendored copy.
     up_to_date: bool,
     written: bool,
+    message: Option<&'static str>,
 }
+
+/// Why `generate` cannot run in a project that never vendored an ontology.
+const NO_VENDORED_COPY: &str = "this project has no vendored ontology at \
+    vendor/ontology/ontology.json; `wikitool ontology export --from <dir>` produces it from a \
+    checkout of the ontology's source repository. A wiki that does not use an ontology needs \
+    neither command.";
 
 pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Result<()> {
     let paths = resolve_runtime_paths(runtime)?;
@@ -120,7 +132,7 @@ pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Resu
                 excluded_rename_prefixes: rules
                     .as_ref()
                     .map_or(&[][..], |rules| &rules.exclude_rename_prefixes),
-                published_at: rules.as_ref().map(|rules| rules.source.as_str()),
+                source_identifier: rules.as_ref().map(|rules| rules.source.as_str()),
                 local: rules
                     .as_ref()
                     .map(|rules| (rules.local_prefix.as_str(), rules.local_namespace.as_str())),
@@ -149,8 +161,34 @@ pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Resu
             }
         }
         OntologySubcommand::Generate(args) => {
-            let text = fs::read_to_string(&export_path)
-                .with_context(|| format!("failed to read {}", normalize_path(&export_path)))?;
+            let text = match fs::read_to_string(&export_path) {
+                Ok(text) => text,
+                Err(error) if error.kind() == ErrorKind::NotFound => {
+                    if args.format.is_json() {
+                        let report = GenerateReport {
+                            schema_version: "ontology_generate_v1",
+                            status: "not_ready",
+                            export_ready: false,
+                            commit: None,
+                            product: None,
+                            export_path: ontology::EXPORT_PATH.to_string(),
+                            module_path: module_relative,
+                            check: args.check,
+                            up_to_date: false,
+                            written: false,
+                            message: Some(NO_VENDORED_COPY),
+                        };
+                        println!("{}", serde_json::to_string_pretty(&report)?);
+                        bail!("ontology generate requires a vendored ontology");
+                    }
+                    bail!("{NO_VENDORED_COPY}");
+                }
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("failed to read {}", normalize_path(&export_path))
+                    });
+                }
+            };
             let export: Value = serde_json::from_str(&text)
                 .with_context(|| format!("failed to parse {}", normalize_path(&export_path)))?;
             let module = ontology::generate_module(&export)?;
@@ -171,7 +209,15 @@ pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Resu
             }
             let report = GenerateReport {
                 schema_version: "ontology_generate_v1",
-                commit: commit_of(&export),
+                status: if written {
+                    "written"
+                } else if up_to_date {
+                    "up_to_date"
+                } else {
+                    "out_of_date"
+                },
+                export_ready: true,
+                commit: Some(commit_of(&export)),
                 product: export
                     .pointer("/source/product")
                     .and_then(Value::as_str)
@@ -181,6 +227,7 @@ pub(crate) fn run_ontology(runtime: &RuntimeOptions, args: OntologyArgs) -> Resu
                 check: args.check,
                 up_to_date,
                 written,
+                message: None,
             };
             if args.format.is_json() {
                 println!("{}", serde_json::to_string_pretty(&report)?);

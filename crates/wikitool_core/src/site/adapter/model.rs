@@ -157,7 +157,8 @@ pub struct LintRules {
 pub struct OntologyRules {
     /// The wiki's product name in the ontology's `product-uses.tsv`.
     pub product: String,
-    /// Where the ontology is published.
+    /// An identifier for the ontology, recorded in the export's metadata.
+    /// Wikitool never fetches it, so it need not resolve.
     pub source: String,
     /// The prefix of the wiki's own terms, such as `wiki`.
     pub local_prefix: String,

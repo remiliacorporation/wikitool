@@ -91,13 +91,18 @@ Three `[authoring]` preferences gate existing rules: `prefer_sentence_case_headi
 
 ## Ontology
 
-An optional `[ontology]` table lets `wikitool ontology export --from <dir>` run without
-further flags:
+A wiki may type its pages with an ontology. `wikitool ontology export --from <dir>` reads a
+checkout of the ontology's source repository and vendors it as `vendor/ontology/ontology.json`;
+`wikitool ontology generate` turns that copy into `Module:Ontology/data`. Only `export` needs
+the source checkout. A wiki that does not use an ontology needs neither command, and no other
+command reads the vendored copy.
+
+An optional `[ontology]` table lets `export` run without further flags:
 
 ```toml
 [ontology]
 product = "example-wiki"                   # the wiki's name in product-uses.tsv
-source = "https://ontology.example/"       # recorded as source.ontology
+source = "https://ontology.example/"       # an identifier recorded as source.ontology
 local_prefix = "wiki"                      # recorded with local_namespace as source.local
 local_namespace = "https://wiki.example/ns/"
 imports = "v1.0.0/imports"                 # product-uses.tsv and pinned extracts
@@ -107,7 +112,8 @@ exclude_rename_prefixes = ["legacy"]       # rename subjects left out of the exp
 `imports` is relative to the ontology directory and may not leave it; `--imports` overrides
 it, and export fails when neither names it. `exclude_rename_prefixes` is empty by default and
 matches the CURIE prefix before the colon exactly, so `legacy` does not exclude `legacyx:`.
-`--product` overrides `product`.
+`--product` overrides `product`. `source` is only recorded in the export's metadata; Wikitool
+never fetches it, so it need not resolve.
 
 ## Supplemental guidance
 

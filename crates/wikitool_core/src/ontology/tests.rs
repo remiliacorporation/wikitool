@@ -87,7 +87,7 @@ impl Fixture {
                 product: "test-wiki",
                 imports: Path::new(imports),
                 excluded_rename_prefixes: &excluded,
-                published_at: Some("https://ontology.example/"),
+                source_identifier: Some("https://ontology.example/"),
                 local: Some(("wiki", "https://wiki.example/ns/")),
             },
         )
