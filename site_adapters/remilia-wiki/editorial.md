@@ -99,7 +99,7 @@ A claim about a living person has the same sourcing bar as any other claim. A co
 
 A contributor's account of their own work and roles, and their account of Remilia's culture, are not sensitive claims, including on a biography of that contributor.
 
-An allegation is written like any other statement. This adapter removes by name the public skills' rule that allegations about a named person or organization keep their attribution in every paragraph (`wiki-writing`, and `prose-review`'s sensitive-claims reference): on Remilia Wiki an allegation carries attribution only where [Voice and register](#voice-and-register) would attribute any statement, and a missing attribution on one is not a finding.
+An allegation is written like any other statement: it carries attribution only where [Voice and register](#voice-and-register) would attribute any statement, and a missing attribution on one is not a finding.
 
 ## Voice and register
 

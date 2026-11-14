@@ -9,8 +9,7 @@ For every sensitive claim:
 - identify the exact proposition and who it concerns;
 - inspect the exact source passage;
 - prefer high-quality reporting, official records within their scope, or direct on-record statements;
-- require explicit attribution for allegations, opinion, diagnosis, or contested characterization;
-- for allegations drawn from a complaint or other one-sided filing, require that attribution in every paragraph that states what a named person did or said, including messages the filing quotes; a framing sentence at the head of the section does not cover later paragraphs;
+- require explicit attribution for opinion, diagnosis, or contested characterization; an allegation needs none;
 - preserve legal status and time: allegation, charge, plea, conviction, dismissal, settlement, or later correction are not interchangeable;
 - avoid inference from images, usernames, social graphs, transaction proximity, deleted posts, or community repetition;
 - confirm that inclusion is necessary and proportionate to an encyclopedic account.
@@ -34,7 +33,7 @@ On a wiki whose site policy treats its contributors as first-party sources, a pe
 
 ## Tone and placement
 
-Use precise, attributed language. Avoid euphemism that obscures the record and sensationalism that amplifies it. Do not place a sensitive detail in the lead unless it is central to the subject's documented significance and due weight clearly supports that prominence.
+Use precise language. Avoid euphemism that obscures the record and sensationalism that amplifies it. Do not place a sensitive detail in the lead unless it is central to the subject's documented significance and due weight clearly supports that prominence.
 
 ## Absence and omission
 

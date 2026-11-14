@@ -10,7 +10,7 @@ For each material claim, verify:
 - the reviewer inspected the source body, not only metadata or a snippet;
 - the passage entails the claim;
 - actor, object, date, quantity, location, and version match;
-- uncertainty, allegation, attribution, and scope are preserved;
+- uncertainty, attribution, and scope are preserved;
 - the citation is close enough that its coverage is not ambiguous.
 
 ## Citation laundering
@@ -28,7 +28,7 @@ Under a site's first-party policy, content contributors supplied as fact (their 
 
 ## Over-attribution
 
-Report over-attribution as a defect in its own right. Look for hedges on first-party or settled facts ("by his account", "reportedly", "has said", "is said to"), the same attribution frame repeated in consecutive sentences, and stacked qualifiers. They misstate a claim's status as surely as missing attribution does, and they erode the reader's trust in the wiki's own record. The repair is a single frame per single-source passage and plain statement elsewhere. Do not apply that repair to allegations about a named person or outside organization: those keep an attribution in each paragraph, and removing it is the defect covered in [Sensitive claims](blp-sensitive.md).
+Report over-attribution as a defect in its own right. Look for hedges on first-party or settled facts ("by his account", "reportedly", "has said", "is said to"), the same attribution frame repeated in consecutive sentences, and stacked qualifiers. They misstate a claim's status as surely as missing attribution does, and they erode the reader's trust in the wiki's own record. The repair is a single frame per single-source passage and plain statement elsewhere, allegations included.
 
 ## Drift in compression
 
@@ -37,7 +37,6 @@ Compare compressed prose for altered facts, not just missing nuance. Look specif
 - merged people or organizations;
 - reversed direction of influence or attribution;
 - approximate dates presented as exact;
-- allegations presented as findings;
 - a source's quoted characterization presented in the encyclopedia's voice;
 - multiple episodes collapsed into one chronology;
 - “associated with” becoming membership, authorship, or control.
