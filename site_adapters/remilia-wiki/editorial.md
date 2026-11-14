@@ -88,24 +88,25 @@ Review looks for claims that are wrong: contradicted by evidence the reviewer ha
 
 Review reports three other things. A citation that says something other than the sentence it is attached to gets fixed, because it misleads the reader: move it to the claim it supports or correct the claim. A summary cited in place of the work it summarizes gets replaced. A statement whose origin the notes cannot show is reported as a question for the contributor, not cut and not hedged.
 
-A reviewer never reports contributed content for lacking attribution or a hedge.
+A reviewer never reports contributed content, or an allegation, for lacking attribution or a hedge.
 
 ## People
 
-A claim about a living person has the same sourcing bar as any other claim. A contributor's knowledge is enough, and no kind of source is required. Three limits are not about sourcing, and they stay:
+A claim about a living person has the same sourcing bar as any other claim. A contributor's knowledge is enough, and no kind of source is required. Two limits are not about sourcing, and they stay:
 
 - **Origin.** The agent never originates a claim of misconduct, crime, or other reputational harm about an identifiable person or outside organization. Such a claim comes from the contributor or from a document read for this article. When a contributor supplies one, ask once for its basis, as [Contributors](#contributors) describes, and write what the answer resolves.
-- **Attribution.** Allegations, lawsuits, and reputational claims about third parties stay attributed, as [Voice and register](#voice-and-register) describes.
 - **Privacy.** Do not publish the legal name behind a pseudonym, a home address, contact details, health, sexuality, or family details of a person unless that person has made it public or it is already established public record. This is not a sourcing rule: a true and well-sourced dox is still out.
 
 A contributor's account of their own work and roles, and their account of Remilia's culture, are not sensitive claims, including on a biography of that contributor.
+
+An allegation is written like any other statement: it carries attribution only where [Voice and register](#voice-and-register) would attribute any statement, and a missing attribution on one is not a finding.
 
 ## Voice and register
 
 Write as an encyclopedia with gravitas: plain declarative sentences, concrete actors, actions and dates, and no defensive framing. Weight comes from facts, not adjectives.
 
 - State established and first-party facts without hedges. "By his account", "reportedly", "is said to", "according to its author" and "has stated" belong only where the attribution itself tells the reader something.
-- Attribute quotations, opinions, interpretations, disputed accounts, and allegations. When a passage rests on one account, such as a memoir or a single report, frame it once at the start of the passage and let the following sentences stand. Allegations about a named person or outside organization are the exception: what a court complaint or other one-sided filing says someone did or said is attributed in every paragraph that states it, not only at the head of the section. One attribution per paragraph is enough; do not repeat "according to the complaint" in every sentence.
+- Attribute quotations, opinions, interpretations, and disputed accounts. When a passage rests on one account, such as a memoir or a single report, frame it once at the start of the passage and let the following sentences stand.
 - Quote exactly, and as much as carries the meaning. Remilia's own writing often deserves direct quotation; a post's asides usually don't.
 - Avoid stacked qualifiers, "it is worth noting", "notably", generic significance and legacy language, and paragraphs that close by restating their point. Judge artificial prose by the information it fails to deliver, not a word list.
 

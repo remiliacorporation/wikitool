@@ -41,10 +41,8 @@ article structure or approve category membership.
 Write in a plain, confident encyclopedic register: concrete actors, actions
 and dates, no hedge on an established or first-party fact, no stacked
 qualifiers. Attribution is information: use it for quotations, opinions,
-interpretations, disputed claims and allegations. A single-source account such
-as a memoir needs one frame per passage. An allegation about a named person,
-such as one pleaded in a lawsuit, keeps its attribution in every paragraph that
-states it.
+interpretations and disputed claims. A single-source account such as a memoir
+needs one frame per passage. An allegation is written like any other statement.
 
 Choose detail for the work:
 - [Evidence to prose](references/evidence-to-prose.md): research, attribution,
