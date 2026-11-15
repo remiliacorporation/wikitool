@@ -297,6 +297,11 @@ const COMMAND_PURPOSES: &[(&str, Audience, &str)] = &[
     ("article lint", Agent, "check draft errors warnings"),
     ("article fix", Agent, "autofix safe"),
     ("article promote", Agent, "move draft publish"),
+    (
+        "article retype",
+        Agent,
+        "ontology class instance of category categories typing plan sign-off",
+    ),
     ("lsp generate-config", Operator, "editor language server"),
     ("lsp status", Operator, "editor language server"),
     ("lsp info", Operator, "editor language server"),

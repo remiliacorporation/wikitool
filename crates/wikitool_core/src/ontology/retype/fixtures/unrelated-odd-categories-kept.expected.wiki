@@ -1,0 +1,10 @@
+{{SHORTDESC:Omicron}}
+'''Omicron''' is a synthetic page.
+<!-- [[Category:Hidden]] -->
+{{Box|text=[[Category:Boxed]]}}
+<noinclude>[[Category:Template only]]</noinclude>
+<gallery>
+File:Omicron.png|[[Category:Gallery caption]]
+</gallery>
+
+[[Category:Topics]]

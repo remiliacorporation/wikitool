@@ -29,6 +29,21 @@ which forces a consuming projector to choose whether an outer template or one of
 owns a rewrite. With no replacements, output is byte-identical to the supplied source. The library
 does not expand source templates or silently assign target semantics.
 
+A plan can also remove a node with its line and insert text between nodes. A line removal takes
+the whole line and its line break when nothing but spaces, tabs, and other removed nodes is on
+it; a last line gives up the break before it instead. Otherwise it takes the node alone, with the
+spaces after it when the node starts the line. An insertion must fall at a byte offset no node
+spans across; several at one offset keep the order they were added in. `Document::resolve`
+returns every edit's exact source span and replacement in source order, and rejects any overlap,
+so a caller can report and verify precisely which bytes changed.
+
+Each protected node also reports its unparsed interior, so a caller can inspect what a comment or
+literal region holds without the parser reading it as wikitext. `Document::tag_regions` reports
+`includeonly`, `noinclude`, `onlyinclude`, and `gallery` regions found outside protected
+regions. They are not nodes, and their contents are parsed like the surrounding text. As in
+MediaWiki these tags do not nest: a region runs to the next closing tag of the same name, or to
+the end of the source when unclosed.
+
 Corpus producers remain adapters. They enumerate and refresh pages, store bytes and media, and
 produce their own manifests. A caller translates one verified page record into the neutral public
 document receipt; Wikitool does not import or run the producer. A target-specific projector owns

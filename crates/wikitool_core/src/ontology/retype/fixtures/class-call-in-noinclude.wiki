@@ -1,0 +1,3 @@
+{{SHORTDESC:Hidden call}}
+<noinclude>{{Instance of|test:Kind}}</noinclude>
+'''Hidden call''' is a synthetic page.

@@ -22,6 +22,7 @@ use crate::support::normalize_path;
 mod lua_data;
 mod ntriples;
 pub mod report;
+pub mod retype;
 pub mod scout;
 pub mod typing;
 mod values;

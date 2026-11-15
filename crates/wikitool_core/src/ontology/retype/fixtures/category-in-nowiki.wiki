@@ -1,0 +1,3 @@
+{{SHORTDESC:Kappa}}
+'''Kappa''' shows <nowiki>[[Category:Memes]]</nowiki> as text.
+[[Category:Memes]]

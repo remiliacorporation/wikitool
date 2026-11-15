@@ -1,0 +1,1 @@
+'''Delta''' is a synthetic page with no short description.

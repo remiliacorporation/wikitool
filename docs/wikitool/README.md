@@ -5,6 +5,7 @@
 - [Generated reference](reference.md): command flags; not a workflow to execute in order.
 - [Skill integration](skill-integration.md): select and evaluate the included agent guidance.
 - [Site adapters](site-adapters.md): explicit local policy and category governance.
+- [Retyping articles](article-retype.md): class statements and category links from a typing plan, and the report schema.
 - [Template engineering](template-engineering.md): interface changes, migrations, category and render evidence.
 - [Source access](source-access.md): human-solved challenges and scoped sessions.
 - [HTML conversion](html-to-wikitext.md): bounded DOM-to-MediaWiki conversion.

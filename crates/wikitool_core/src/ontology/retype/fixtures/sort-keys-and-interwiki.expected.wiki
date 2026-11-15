@@ -1,0 +1,5 @@
+{{Instance of|test:Kind}}
+'''Pi''' is a synthetic page; see [[:Category:Memes]] and [[wikt:pi]].
+
+[[Category:Kinds|Pi]]
+[[fr:Pi]]

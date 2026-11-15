@@ -209,23 +209,57 @@ pub fn load_project_ontology(
     };
     let (local_module, local) = load_module(paths, LOCAL_MODULE_TITLE)?;
     let (display_module, display) = load_module(paths, DISPLAY_MODULE_TITLE)?;
-    let infobox_types = rules
-        .infobox_types
-        .iter()
-        .filter_map(|(title, kind)| Some((template_key(title)?, kind.trim().to_lowercase())))
-        .collect();
-    Ok(OntologyAvailability::Ready(Box::new(ProjectOntology {
-        class_template: rules.class_template.as_deref().and_then(template_key),
-        typed_infobox_template: rules
-            .typed_infobox_template
-            .as_deref()
-            .and_then(template_key),
-        infobox_types,
+    Ok(OntologyAvailability::Ready(Box::new(ProjectOntology::new(
         rules,
-        vocabulary: Vocabulary::new(shared, local, display),
-        local_module,
-        display_module,
-    })))
+        shared,
+        (local_module, local),
+        (display_module, display),
+    ))))
+}
+
+impl ProjectOntology {
+    /// The project ontology from the adapter's rules, the vendored export and
+    /// the two modules as read.
+    pub(crate) fn new(
+        rules: OntologyRules,
+        shared: Value,
+        (local_module, local): (ModuleStatus, Value),
+        (display_module, display): (ModuleStatus, Value),
+    ) -> Self {
+        let infobox_types = rules
+            .infobox_types
+            .iter()
+            .filter_map(|(title, kind)| Some((template_key(title)?, kind.trim().to_lowercase())))
+            .collect();
+        Self {
+            class_template: rules.class_template.as_deref().and_then(template_key),
+            typed_infobox_template: rules
+                .typed_infobox_template
+                .as_deref()
+                .and_then(template_key),
+            infobox_types,
+            rules,
+            vocabulary: Vocabulary::new(shared, local, display),
+            local_module,
+            display_module,
+        }
+    }
+
+    /// The class template as MediaWiki compares titles, such as
+    /// `Template:Instance of`.
+    pub fn class_template(&self) -> Option<&str> {
+        self.class_template.as_deref()
+    }
+
+    /// Whether a template key is an infobox the adapter types.
+    pub(crate) fn is_typed_infobox(&self, key: &str) -> bool {
+        self.typed_infobox_template.as_deref() == Some(key) || self.infobox_types.contains_key(key)
+    }
+
+    /// Why the ontology modules cannot be read, if they cannot.
+    pub fn modules_unavailable_reason(&self) -> Option<String> {
+        self.modules_unavailable()
+    }
 }
 
 fn load_module(paths: &ResolvedPaths, title: &'static str) -> Result<(ModuleStatus, Value)> {
@@ -1063,7 +1097,7 @@ fn skip_all(reason: &str) -> Vec<SkippedCheck> {
 
 /// What a reader (and a module, after the preprocessor) sees of an argument:
 /// comments and markup gone, whitespace collapsed.
-fn plain_text(raw: &str) -> String {
+pub(crate) fn plain_text(raw: &str) -> String {
     display_parts(raw)
         .map(|parts| parts.join(" "))
         .unwrap_or_else(|| raw.trim().to_string())

@@ -1,0 +1,4 @@
+{{SHORTDESC:Double}}
+{{Instance of|test:Kind}}
+{{Instance of|test:Other}}
+'''Double''' states two calls.
