@@ -8,12 +8,13 @@
 //!
 //! It reads a page's draft under `.wikitool/drafts/`, or else its mirror
 //! file, and writes at most the draft. It never writes `wiki_content/`,
-//! contacts no wiki and records no acceptance.
+//! contacts no wiki and records no acceptance. Every result is checked
+//! before it is reported (see `guard`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use mediawiki_wikitext::{
@@ -24,17 +25,18 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use similar::TextDiff;
 
-use crate::filesystem::{Namespace, namespace_from_title, title_to_relative_path};
 use crate::runtime::ResolvedPaths;
 use crate::site::load_site_adapter;
 use crate::support::{atomic_write, compute_sha256, normalize_path};
 
 use super::typing::{
     OntologyAvailability, ProjectOntology, RENAMED_TERM, SkippedCheck, UNKNOWN_CLASS,
-    load_project_ontology, plain_text, template_key,
+    is_wikidata_item, load_project_ontology, plain_text, template_key,
 };
 use super::values::wikitext_profile;
 
+mod guard;
+mod pages;
 #[cfg(test)]
 mod proof;
 #[cfg(test)]
@@ -45,7 +47,8 @@ pub const PLAN_SCHEMA: &str = "wikitool.article-retype-plan.v1";
 /// The report's schema.
 pub const REPORT_SCHEMA: &str = "wikitool.article-retype.v1";
 
-/// Subclass hops followed to find a class's category, as `Module:Infobox` does.
+/// Classes `Module:Infobox`'s `categoryClass` looks at, the class and its
+/// superclasses, before it gives up.
 const MAX_CATEGORY_HOPS: usize = 15;
 
 /// A typing plan: what to state on each page.
@@ -161,10 +164,12 @@ pub struct RetypeEdit {
 pub struct Refusal {
     pub code: &'static str,
     pub message: String,
-    /// Where a link or call sits that cannot be edited: `template`,
-    /// `parameter`, `link`, `includeonly`, `noinclude`, `onlyinclude`,
-    /// `gallery`, `comment`, `nowiki`, `pre`, `source`, `syntaxhighlight`,
-    /// or `multiple` for more than one class call.
+    /// Where a link or call sits that cannot be edited, or where a new one
+    /// would land: `template`, `parameter`, `link`, `includeonly`,
+    /// `noinclude`, `onlyinclude`, `gallery`, `ref`, `math`, `score`,
+    /// `templatedata`, `comment`, `nowiki`, `pre`, `source`,
+    /// `syntaxhighlight`, `multiple` for more than one class call, or
+    /// `unreadable` for a link whose category cannot be read.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -201,6 +206,10 @@ pub const REFUSED_PAGE_MISSING: &str = "page_missing";
 pub const REFUSED_NOT_IN_PLAN: &str = "not_in_plan";
 pub const REFUSED_NOT_AN_ARTICLE: &str = "not_an_article";
 pub const REFUSED_REWRITE_FAILED: &str = "rewrite_failed";
+pub const REFUSED_RESULT_CHECK_FAILED: &str = "result_check_failed";
+pub const REFUSED_INVALID_TITLE: &str = "invalid_title";
+pub const REFUSED_AMBIGUOUS_DRAFT: &str = "ambiguous_draft";
+pub const REFUSED_DUPLICATE_TARGET: &str = "duplicate_target";
 
 /// A typing finding on the result, as `article lint` reports it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -274,7 +283,11 @@ struct CategoryLink {
     /// The link node; `None` inside a comment or literal region, which the
     /// parser does not read as wikitext.
     node: Option<NodeId>,
+    /// The normalized category name, or the raw text when `unreadable`.
     name: String,
+    /// The name holds markup, such as a template call, so which category
+    /// the link files the page in cannot be read from the text.
+    unreadable: bool,
     start: usize,
     end: usize,
     sort_key: bool,
@@ -298,6 +311,14 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
             )],
         );
     };
+    let class_refusals = planned_class_refusals(
+        ontology,
+        item,
+        class_key.trim_start_matches("Template:"),
+    );
+    if !class_refusals.is_empty() {
+        return PageRetype::refused(source, ontology, class_refusals);
+    }
     let profile = wikitext_profile(source);
     let document = match parse_profiled(ProfiledParseInput {
         source: &profile,
@@ -339,14 +360,10 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
     let mut editor = Editor {
         document: &document,
         source,
-        eol: if source.contains("\r\n") {
-            "\r\n"
-        } else {
-            "\n"
-        },
+        eol: majority_line_break(source),
         plan: RewritePlan::new(),
+        insertions: Vec::new(),
         kinds: BTreeMap::new(),
-        insert_kinds: Vec::new(),
         refusals: Vec::new(),
         notes: Vec::new(),
     };
@@ -363,21 +380,27 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
         })
         .collect();
     let template_name = class_key.trim_start_matches("Template:").to_string();
-    let mut final_classes: Vec<String> = Vec::new();
-    let mut has_call = false;
+    // The classes the class statement states after the edits; `None` when
+    // the page gets no class statement.
+    let mut stated: Option<Vec<String>> = None;
     match class_calls.as_slice() {
         [] => {
             if !item.classes.is_empty() {
                 if let Some(reason) = typed_infobox_states(ontology, &statements, item) {
                     editor.notes.push(reason);
+                    if item.drop_generated {
+                        editor.notes.push(
+                            "drop_generated removed nothing: the page gets no class statement, and its typed infobox files the page in categories of its own".to_string(),
+                        );
+                    }
                 } else {
                     editor.insert_class_call(ontology, &template_name, item);
-                    final_classes = item
-                        .classes
-                        .iter()
-                        .map(|id| id.trim().to_string())
-                        .collect();
-                    has_call = true;
+                    stated = Some(
+                        item.classes
+                            .iter()
+                            .map(|id| id.trim().to_string())
+                            .collect(),
+                    );
                 }
             } else if named_plan(item).values().any(Option::is_some) {
                 editor.refusals.push(Refusal::new(
@@ -397,8 +420,7 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
                 refusal.end = Some(call.span().end());
                 editor.refusals.push(refusal);
             } else {
-                has_call = true;
-                final_classes = if item.classes.is_empty() {
+                stated = Some(if item.classes.is_empty() {
                     statements
                         .class_calls
                         .first()
@@ -415,7 +437,7 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
                         .iter()
                         .map(|id| id.trim().to_string())
                         .collect()
-                };
+                });
                 editor.replace_class_call(call, item);
             }
         }
@@ -435,10 +457,15 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
     }
 
     // Category links.
-    let generated: Vec<String> = if has_call {
-        generated_categories(ontology, &final_classes)
-    } else {
-        Vec::new()
+    let generated: Vec<String> = match &stated {
+        Some(classes) => {
+            let (generated, notes) = generated_categories(ontology, classes);
+            if item.drop_generated {
+                editor.notes.extend(notes);
+            }
+            generated
+        }
+        None => Vec::new(),
     };
     let remove: Vec<String> = dedupe(
         item.remove_categories
@@ -470,6 +497,20 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
         relevant.extend(generated.iter().map(String::as_str));
     }
     for link in &links {
+        if link.unreadable && !relevant.is_empty() {
+            let mut refusal = Refusal::new(
+                REFUSED_CATEGORY_NOT_EDITABLE,
+                format!(
+                    "the link {:?} names its category with markup, so it may file the page in a category the plan edits",
+                    &source[link.start..link.end]
+                ),
+            );
+            refusal.context = Some("unreadable");
+            refusal.start = Some(link.start);
+            refusal.end = Some(link.end);
+            editor.refusals.push(refusal);
+            continue;
+        }
         if let Some(context) = link.context
             && relevant.contains(link.name.as_str())
         {
@@ -489,7 +530,7 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
     }
     let editable: Vec<&CategoryLink> = links
         .iter()
-        .filter(|link| link.context.is_none() && link.node.is_some())
+        .filter(|link| link.context.is_none() && link.node.is_some() && !link.unreadable)
         .collect();
     let mut removed: BTreeSet<NodeId> = BTreeSet::new();
     for name in &remove {
@@ -557,46 +598,30 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
             .iter()
             .rev()
             .find(|link| !removed.contains(&link.node.expect("editable links have nodes")));
-        if let Err(error) = editor.add_links(anchor.map(|link| link.end), &to_add) {
-            return PageRetype::refused(source, ontology, vec![rewrite_refusal(&error)]);
+        editor.add_links(anchor.map(|link| link.end), &to_add);
+        if !editor.refusals.is_empty() {
+            return PageRetype::refused(source, ontology, editor.refusals);
         }
     }
 
-    let notes = std::mem::take(&mut editor.notes);
-    let (result, edits) = match editor.finish() {
+    let mut notes = std::mem::take(&mut editor.notes);
+    let (result, edits) = match editor.finish(&mut notes) {
         Ok(done) => done,
-        Err(error) => return PageRetype::refused(source, ontology, vec![rewrite_refusal(&error)]),
+        Err(error) => {
+            return PageRetype::refused(source, ontology, vec![rewrite_refusal(&error)]);
+        }
     };
-
-    // The typing checks on the result decide whether the planned classes
-    // may be stated.
-    let typing = typing_of(ontology, &result);
-    let planned: BTreeSet<String> = item
-        .classes
-        .iter()
-        .flat_map(|id| {
-            let id = id.trim().to_string();
-            let current = ontology.vocabulary.current(&id);
-            [id, current]
-        })
-        .collect();
-    let refusals: Vec<Refusal> = typing
-        .findings
-        .iter()
-        .filter(|finding| {
-            finding.via == "class_template"
-                && (finding.code == UNKNOWN_CLASS || finding.code == RENAMED_TERM)
-                && planned.contains(&finding.term)
-        })
-        .map(|finding| {
-            let mut refusal = Refusal::new(finding.code, finding.message.clone());
-            refusal.term = Some(finding.term.clone());
-            refusal
-        })
-        .collect();
-    if !refusals.is_empty() {
-        return PageRetype::refused(source, ontology, refusals);
+    if let Err(error) = guard::check_result(source, &result, &edits, &class_key) {
+        return PageRetype::refused(
+            source,
+            ontology,
+            vec![Refusal::new(
+                REFUSED_RESULT_CHECK_FAILED,
+                format!("the result fails its check, so the page is left as it is: {error}"),
+            )],
+        );
     }
+    let typing = typing_of(ontology, &result);
     PageRetype {
         result,
         edits,
@@ -606,14 +631,74 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
     }
 }
 
+/// The planned class ids the typing checks would report, with the codes and
+/// wording of `article lint`'s class-statement check: a renamed id, and an
+/// id that is not a class. They are checked whether or not the page gets a
+/// class statement.
+fn planned_class_refusals(
+    ontology: &ProjectOntology,
+    item: &RetypePlanItem,
+    template_name: &str,
+) -> Vec<Refusal> {
+    let mut out = Vec::new();
+    for id in &item.classes {
+        let id = id.trim();
+        let current = ontology.vocabulary.current(id);
+        if current != id {
+            let mut refusal = Refusal::new(
+                RENAMED_TERM,
+                format!(
+                    "the plan states {{{{{template_name}|{id}}}}}, which the ontology renamed to {current}"
+                ),
+            );
+            refusal.term = Some(id.to_string());
+            out.push(refusal);
+            continue;
+        }
+        let message = match ontology.vocabulary.find(id) {
+            Some(term) if term.section == "classes" => continue,
+            Some(term) => format!(
+                "the plan states {{{{{template_name}|{id}}}}}, but {id} is among the {} of the ontology, not its classes",
+                term.section
+            ),
+            None => format!(
+                "the plan states {{{{{template_name}|{id}}}}}, but {id} is not a class in Module:Ontology/data or Module:Ontology/local"
+            ),
+        };
+        let mut refusal = Refusal::new(UNKNOWN_CLASS, message);
+        refusal.term = Some(id.to_string());
+        out.push(refusal);
+    }
+    out
+}
+
+/// `\r\n` when most of the page's line breaks are, else `\n`.
+fn majority_line_break(source: &str) -> &'static str {
+    let breaks = source.matches('\n').count();
+    let crlf = source.matches("\r\n").count();
+    if crlf * 2 > breaks { "\r\n" } else { "\n" }
+}
+
 fn dedupe(names: impl Iterator<Item = String>) -> Vec<String> {
     let mut seen = BTreeSet::new();
     names.filter(|name| seen.insert(name.clone())).collect()
 }
 
+/// Characters a class id may not hold: wikitext markup, the argument
+/// separators, and line breaks.
 const ID_FORBIDDEN: &[char] = &['|', '{', '}', '[', ']', '<', '>', '=', '\n', '\r'];
-const VALUE_FORBIDDEN: &[char] = &['|', '{', '}', ';', '\n', '\r'];
+/// Characters a field value may not hold: wikitext markup (links, calls,
+/// tags and comments), the argument and value separators, and line breaks.
+/// `=` is allowed, since only the first `=` of a named argument splits it.
+const VALUE_FORBIDDEN: &[char] = &['|', '{', '}', '[', ']', '<', '>', ';', '\n', '\r'];
 const CATEGORY_FORBIDDEN: &[char] = &['[', ']', '{', '}', '|', '#', '<', '>', '\n', '\r'];
+
+/// Text that holds markup the command must not write: a forbidden
+/// character, a control character, or a signature (`~~~`), which MediaWiki
+/// replaces when the page is saved.
+fn holds_markup(text: &str, forbidden: &[char]) -> bool {
+    text.contains(forbidden) || text.chars().any(char::is_control) || text.contains("~~~")
+}
 
 fn validate_item(item: &RetypePlanItem) -> Vec<Refusal> {
     let mut out = Vec::new();
@@ -621,7 +706,7 @@ fn validate_item(item: &RetypePlanItem) -> Vec<Refusal> {
     let mut classes = BTreeSet::new();
     for id in &item.classes {
         let id = id.trim();
-        if id.is_empty() || id.contains(ID_FORBIDDEN) {
+        if id.is_empty() || holds_markup(id, ID_FORBIDDEN) {
             invalid(format!(
                 "the class id {id:?} is empty or holds wikitext markup"
             ));
@@ -641,7 +726,7 @@ fn validate_item(item: &RetypePlanItem) -> Vec<Refusal> {
             invalid(format!("{name:?} is not a relation field name"));
         }
         for value in values {
-            if value.trim().is_empty() || value.contains(VALUE_FORBIDDEN) {
+            if value.trim().is_empty() || holds_markup(value, VALUE_FORBIDDEN) {
                 invalid(format!(
                     "the {name} value {value:?} is empty or holds a separator or markup"
                 ));
@@ -649,13 +734,16 @@ fn validate_item(item: &RetypePlanItem) -> Vec<Refusal> {
         }
     }
     if let Some(wikidata) = &item.wikidata
-        && wikidata.contains(VALUE_FORBIDDEN)
+        && !wikidata.trim().is_empty()
+        && !is_wikidata_item(wikidata.trim())
     {
-        invalid(format!("wikidata {wikidata:?} holds a separator or markup"));
+        invalid(format!(
+            "wikidata {wikidata:?} is not a Wikidata item id such as Q42"
+        ));
     }
     for name in item.remove_categories.iter().chain(&item.add_categories) {
         if normalize_category(name).is_empty()
-            || name.contains(CATEGORY_FORBIDDEN)
+            || holds_markup(name, CATEGORY_FORBIDDEN)
             || name.trim().starts_with(':')
         {
             invalid(format!("{name:?} is not a category name"));
@@ -734,18 +822,26 @@ fn typed_infobox_states(
 }
 
 /// The categories a class statement files a page in, as `Module:Infobox`'s
-/// `instanceOf` computes them: each class's entry in the display module's
-/// `classes`, or its nearest listed ancestor's, and for a `small` category
-/// also the nearest ancestor category that is not small.
-fn generated_categories(ontology: &ProjectOntology, classes: &[String]) -> Vec<String> {
+/// `instanceOf` computes them. It reads the positional classes up to the
+/// first empty one and skips an id that is not a class. Each class files the
+/// page in the category of its `categoryClass`: the class itself when
+/// `Module:Ontology/display` lists it in `classes`, else its superclass, and
+/// so on, through `subClassOf` read as one id, for at most fifteen classes.
+/// Like the module, the walk follows no renames (`Module:Ontology/data`
+/// holds none) and stops at a `subClassOf` that lists several classes. When
+/// that category is marked `small`, the page also goes in the category of
+/// the nearest superclass whose category is not small. The notes say which
+/// classes file the page in no category, and why.
+fn generated_categories(
+    ontology: &ProjectOntology,
+    classes: &[String],
+) -> (Vec<String>, Vec<String>) {
     let vocabulary = &ontology.vocabulary;
     let mut out = Vec::new();
-    let mut add = |class: Option<String>| {
-        let Some(class) = class else {
-            return;
-        };
+    let mut notes = Vec::new();
+    let mut add = |class: &str| {
         if let Some(name) = vocabulary
-            .display_class(&class)
+            .display_class(class)
             .and_then(|entry| entry.get("category"))
             .and_then(Value::as_str)
         {
@@ -755,52 +851,72 @@ fn generated_categories(ontology: &ProjectOntology, classes: &[String]) -> Vec<S
             }
         }
     };
-    for id in classes {
+    for id in classes.iter().take_while(|id| !id.trim().is_empty()) {
+        let id = id.trim();
         if vocabulary.term("classes", id).is_none() {
             continue;
         }
-        let owner = category_class(ontology, id, false);
-        let small = owner
-            .as_deref()
-            .and_then(|owner| vocabulary.display_class(owner))
-            .is_some_and(is_small);
-        if small {
-            let parent = owner
-                .as_deref()
-                .and_then(|owner| superclass(ontology, owner));
-            add(owner);
-            add(parent.and_then(|parent| category_class(ontology, &parent, true)));
-        } else {
-            add(owner);
+        match category_class(ontology, id, false) {
+            CategoryWalk::Found(owner) => {
+                add(&owner);
+                let small = vocabulary.display_class(&owner).is_some_and(is_small);
+                if small {
+                    let parent = vocabulary
+                        .term("classes", &owner)
+                        .and_then(|term| term.entry.get("subClassOf"))
+                        .and_then(Value::as_str);
+                    if let Some(parent) = parent
+                        && let CategoryWalk::Found(larger) = category_class(ontology, parent, true)
+                    {
+                        add(&larger);
+                    }
+                }
+            }
+            CategoryWalk::SeveralParents(at) => notes.push(format!(
+                "the class statement files the page in no category for {id}: {at} lists several classes in subClassOf, and Module:Infobox follows only one"
+            )),
+            CategoryWalk::NotFound => notes.push(format!(
+                "the class statement files the page in no category for {id}: neither it nor a superclass has a category in Module:Ontology/display"
+            )),
         }
     }
-    out
+    (out, notes)
 }
 
 fn is_small(entry: &serde_json::Map<String, Value>) -> bool {
     entry.get("small").and_then(Value::as_bool) == Some(true)
 }
 
-fn superclass(ontology: &ProjectOntology, class: &str) -> Option<String> {
-    ontology
-        .vocabulary
-        .find(class)?
-        .ids("subClassOf")?
-        .first()
-        .map(|id| id.to_string())
+enum CategoryWalk {
+    Found(String),
+    /// The walk reached a class whose `subClassOf` is a list.
+    SeveralParents(String),
+    NotFound,
 }
 
-fn category_class(ontology: &ProjectOntology, id: &str, skip_small: bool) -> Option<String> {
+/// `Module:Infobox`'s `categoryClass`: the class, or the nearest superclass,
+/// that `Module:Ontology/display` gives a category; with `skip_small`, one
+/// whose category is not small. Superclasses are read with `Ontology.find`,
+/// from any section, shared before local.
+fn category_class(ontology: &ProjectOntology, id: &str, skip_small: bool) -> CategoryWalk {
     let mut current = id.to_string();
     for _ in 0..MAX_CATEGORY_HOPS {
         if let Some(entry) = ontology.vocabulary.display_class(&current)
             && !(skip_small && is_small(entry))
         {
-            return Some(current);
+            return CategoryWalk::Found(current);
         }
-        current = superclass(ontology, &current)?;
+        let parent = ontology
+            .vocabulary
+            .find(&current)
+            .and_then(|term| term.entry.get("subClassOf"));
+        match parent {
+            Some(Value::String(parent)) => current = parent.clone(),
+            Some(Value::Array(_)) => return CategoryWalk::SeveralParents(current),
+            _ => return CategoryWalk::NotFound,
+        }
     }
-    None
+    CategoryWalk::NotFound
 }
 
 /// Where a node sits when the command may not edit it: inside another node,
@@ -832,9 +948,10 @@ fn protected_name(kind: ProtectedKind) -> &'static str {
     }
 }
 
-/// The category a category link files the page in, or `None` for a link to
-/// the category page (`[[:Category:…]]`) or another kind of link.
-fn link_category(document: &Document<'_>, node: &Node) -> Option<(String, bool)> {
+/// The category a category link files the page in, whether it has a sort
+/// key, and whether the name holds markup; `None` for a link to the
+/// category page (`[[:Category:…]]`) or another kind of link.
+fn link_category(document: &Document<'_>, node: &Node) -> Option<(String, bool, bool)> {
     let NodeKind::InternalLink(link) = node.kind() else {
         return None;
     };
@@ -843,18 +960,33 @@ fn link_category(document: &Document<'_>, node: &Node) -> Option<(String, bool)>
     }
     let title = document.text(link.title);
     let (_, name) = title.split_once(':')?;
-    Some((normalize_title(name), !link.components.is_empty()))
+    let unreadable = name.contains(['{', '}', '<', '>', '[', ']']);
+    let name = if unreadable {
+        name.trim().to_string()
+    } else {
+        normalize_title(name)
+    };
+    Some((name, !link.components.is_empty(), unreadable))
 }
 
-/// Every category link on the page, with the links that comments and
-/// literal regions hold, which the parser leaves unread.
+/// Every category link on the page: the parsed link nodes, and the links in
+/// comments and literal regions, which the parser leaves unread and which
+/// are read here from the text, so nothing there can hide one.
 fn category_links(document: &Document<'_>) -> Vec<CategoryLink> {
+    let profile = wikitext_profile(document.source());
+    let mut prefixes: Vec<String> = profile
+        .category_namespace_aliases
+        .iter()
+        .map(|alias| alias.to_lowercase())
+        .collect();
+    prefixes.push("category".to_string());
     let mut out = Vec::new();
     for node in document.nodes() {
-        if let Some((name, sort_key)) = link_category(document, node) {
+        if let Some((name, sort_key, unreadable)) = link_category(document, node) {
             out.push(CategoryLink {
                 node: Some(node.id()),
                 name,
+                unreadable,
                 start: node.span().start(),
                 end: node.span().end(),
                 sort_key,
@@ -862,10 +994,11 @@ fn category_links(document: &Document<'_>) -> Vec<CategoryLink> {
             });
         }
         if let NodeKind::Protected(region) = node.kind() {
-            protected_links(
+            text_category_links(
                 document.text(region.inner),
                 region.inner.start(),
                 protected_name(region.kind),
+                &prefixes,
                 &mut out,
             );
         }
@@ -873,33 +1006,51 @@ fn category_links(document: &Document<'_>) -> Vec<CategoryLink> {
     out
 }
 
-fn protected_links(text: &str, offset: usize, context: &'static str, out: &mut Vec<CategoryLink>) {
-    let profile = wikitext_profile(text);
-    let Ok(document) = parse_profiled(ProfiledParseInput {
-        source: &profile,
-        wikitext: text,
-    }) else {
-        return;
-    };
-    for node in document.nodes() {
-        if let Some((name, sort_key)) = link_category(&document, node) {
-            out.push(CategoryLink {
-                node: None,
-                name,
-                start: offset + node.span().start(),
-                end: offset + node.span().end(),
-                sort_key,
-                context: Some(context),
-            });
+/// The category links in unparsed text, read lexically: `[[`, spaces, a
+/// category namespace name, `:`, and the name up to `|`, `]]` or the end of
+/// the line. A link to the category page (`[[:Category:…]]`) is not one.
+fn text_category_links(
+    text: &str,
+    offset: usize,
+    context: &'static str,
+    prefixes: &[String],
+    out: &mut Vec<CategoryLink>,
+) {
+    let mut search = 0;
+    while let Some(found) = text[search..].find("[[") {
+        let start = search + found;
+        search = start + 2;
+        let rest = &text[start + 2..];
+        let target_end = rest
+            .find(['|', '\n'])
+            .into_iter()
+            .chain(rest.find("]]"))
+            .min()
+            .unwrap_or(rest.len());
+        let target = rest[..target_end].trim_start();
+        let Some((namespace, name)) = target.split_once(':') else {
+            continue;
+        };
+        if !prefixes.contains(&namespace.trim().to_lowercase()) {
+            continue;
         }
-        if let NodeKind::Protected(region) = node.kind() {
-            protected_links(
-                document.text(region.inner),
-                offset + region.inner.start(),
-                context,
-                out,
-            );
-        }
+        let link_end = rest
+            .find("]]")
+            .map_or(start + 2 + target_end, |close| start + 2 + close + 2);
+        let unreadable = name.contains(['{', '}', '<', '>', '[']);
+        out.push(CategoryLink {
+            node: None,
+            name: if unreadable {
+                name.trim().to_string()
+            } else {
+                normalize_title(name)
+            },
+            unreadable,
+            start: offset + start,
+            end: offset + link_end.max(start + 2),
+            sort_key: rest[target_end..].starts_with('|'),
+            context: Some(context),
+        });
     }
 }
 
@@ -907,12 +1058,22 @@ fn protected_links(text: &str, offset: usize, context: &'static str, out: &mut V
 struct Editor<'d, 's> {
     document: &'d Document<'s>,
     source: &'s str,
+    /// The page's usual line break, for a line with none of its own.
     eol: &'static str,
+    /// Replacements and line removals.
     plan: RewritePlan,
+    /// Insertions, in the order they were planned, added to the plan last.
+    insertions: Vec<Insertion>,
     kinds: BTreeMap<NodeId, (&'static str, String)>,
-    insert_kinds: Vec<(&'static str, Option<String>)>,
     refusals: Vec<Refusal>,
     notes: Vec<String>,
+}
+
+struct Insertion {
+    offset: usize,
+    text: String,
+    kind: &'static str,
+    category: Option<String>,
 }
 
 impl Editor<'_, '_> {
@@ -923,8 +1084,12 @@ impl Editor<'_, '_> {
         kind: &'static str,
         category: Option<String>,
     ) {
-        self.plan.insert(offset, text);
-        self.insert_kinds.push((kind, category));
+        self.insertions.push(Insertion {
+            offset,
+            text,
+            kind,
+            category,
+        });
     }
 
     fn remove_link(&mut self, node: NodeId, kind: &'static str, category: &str) {
@@ -933,12 +1098,59 @@ impl Editor<'_, '_> {
         }
     }
 
-    /// Whether a byte offset falls strictly inside a node.
-    fn inside_node(&self, offset: usize) -> bool {
-        self.document
+    /// What a byte offset falls inside, when new text may not go there: a
+    /// node (strictly inside it), or a tag region (strictly inside it, or at
+    /// the end of one that never closes).
+    fn blocked_at(&self, offset: usize) -> Option<&'static str> {
+        if let Some(node) = self
+            .document
             .nodes()
             .iter()
-            .any(|node| node.span().start() < offset && offset < node.span().end())
+            .find(|node| node.span().start() < offset && offset < node.span().end())
+        {
+            return Some(match node.kind() {
+                NodeKind::Template(_) => "template",
+                NodeKind::Parameter(_) => "parameter",
+                NodeKind::InternalLink(_) => "link",
+                NodeKind::Protected(region) => protected_name(region.kind),
+            });
+        }
+        self.document
+            .tag_regions()
+            .iter()
+            .find(|region| {
+                region.span.start() < offset
+                    && (offset < region.span.end()
+                        || (!region.closed && offset == region.span.end()))
+            })
+            .map(|region| region.tag.name())
+    }
+
+    /// The first of `offsets` where new text may go, or a refusal naming
+    /// where the last one falls.
+    fn place(
+        &mut self,
+        offsets: &[usize],
+        code: &'static str,
+        what: &str,
+    ) -> Option<usize> {
+        let mut context = None;
+        for offset in offsets {
+            match self.blocked_at(*offset) {
+                None => return Some(*offset),
+                Some(found) => context = Some(found),
+            }
+        }
+        let context = context.unwrap_or("template");
+        let mut refusal = Refusal::new(
+            code,
+            format!("{what} would go inside a {context}, so the page is left as it is"),
+        );
+        refusal.context = Some(context);
+        refusal.start = offsets.last().copied();
+        refusal.end = offsets.last().copied();
+        self.refusals.push(refusal);
+        None
     }
 
     /// The offset of the line break that ends the line holding `offset`, or
@@ -963,6 +1175,26 @@ impl Editor<'_, '_> {
             .iter()
             .rposition(|byte| *byte == b'\n')
             .map_or(0, |index| index + 1)
+    }
+
+    /// The line break of the line holding `offset`; for the last line, which
+    /// has none, the one before it; else the page's usual one.
+    fn line_break_at(&self, offset: usize) -> &'static str {
+        let bytes = self.source.as_bytes();
+        let ending = |newline: usize| {
+            if newline > 0 && bytes[newline - 1] == b'\r' {
+                "\r\n"
+            } else {
+                "\n"
+            }
+        };
+        if let Some(index) = bytes[offset..].iter().position(|byte| *byte == b'\n') {
+            return ending(offset + index);
+        }
+        match bytes[..offset].iter().rposition(|byte| *byte == b'\n') {
+            Some(newline) => ending(newline),
+            None => self.eol,
+        }
     }
 
     /// Where a new class call goes: on its own line after the short
@@ -1003,18 +1235,20 @@ impl Editor<'_, '_> {
                 .is_some_and(|prefix| prefix.eq_ignore_ascii_case("SHORTDESC:"))
                 || template_key(name).as_deref() == Some("Template:Short description")
         });
+        let what = format!("the new {{{{{template_name}}}}} call");
         if let Some((node, _)) = short_description {
-            let mut offset = self.line_end(node.span().end());
-            if self.inside_node(offset) {
-                offset = node.span().end();
+            let end = node.span().end();
+            let eol = self.line_break_at(end);
+            let offsets = [self.line_end(end), end];
+            if let Some(offset) = self.place(&offsets, REFUSED_CLASS_STATEMENT_NOT_EDITABLE, &what)
+            {
+                self.insert(
+                    offset,
+                    format!("{eol}{text}"),
+                    "class_statement_insert",
+                    None,
+                );
             }
-            let eol = self.eol;
-            self.insert(
-                offset,
-                format!("{eol}{text}"),
-                "class_statement_insert",
-                None,
-            );
             return;
         }
         let infobox = templates.iter().find(|(_, name)| {
@@ -1022,30 +1256,30 @@ impl Editor<'_, '_> {
                 ontology.is_typed_infobox(&key) || key.starts_with("Template:Infobox")
             })
         });
-        let offset = match infobox {
+        let (offsets, eol) = match infobox {
             Some((node, _)) => {
-                let start = self.line_start(node.span().start());
-                if self.inside_node(start) {
-                    node.span().start()
-                } else {
-                    start
-                }
+                let start = node.span().start();
+                (vec![self.line_start(start), start], self.line_break_at(start))
             }
-            None => usize::from(self.source.starts_with('\u{feff}')) * '\u{feff}'.len_utf8(),
+            None => {
+                let top = usize::from(self.source.starts_with('\u{feff}')) * '\u{feff}'.len_utf8();
+                (vec![top], self.line_break_at(top))
+            }
         };
-        let eol = self.eol;
-        self.insert(
-            offset,
-            format!("{text}{eol}"),
-            "class_statement_insert",
-            None,
-        );
+        if let Some(offset) = self.place(&offsets, REFUSED_CLASS_STATEMENT_NOT_EDITABLE, &what) {
+            self.insert(
+                offset,
+                format!("{text}{eol}"),
+                "class_statement_insert",
+                None,
+            );
+        }
     }
 
     /// Restate an existing call: the planned classes in the positional
     /// slots, the planned named arguments in place, and every other argument
-    /// byte for byte. A slot whose value already reads as planned is kept as
-    /// written, so an equivalent call is left alone.
+    /// byte for byte. A slot whose value already reads as planned, `1=a` as
+    /// much as `a`, is kept as written, so an equivalent call is left alone.
     fn replace_class_call(&mut self, call: &Node, item: &RetypePlanItem) {
         let NodeKind::Template(template) = call.kind() else {
             return;
@@ -1091,7 +1325,9 @@ impl Editor<'_, '_> {
                 let trail = text(argument.value.end().max(lead_end), argument.span.end());
                 slot_style = (lead.to_string(), trail.to_string());
                 if let Some(class) = classes.next() {
-                    if name.is_none() && plain_text(value) == *class {
+                    // An explicit `1=` slot that already reads as planned is
+                    // kept as written too.
+                    if plain_text(value) == *class {
                         arguments.push(raw.to_string());
                     } else {
                         arguments.push(format!("{lead}{class}{trail}"));
@@ -1173,13 +1409,14 @@ impl Editor<'_, '_> {
 
     /// Add category links after the last kept category link, or at the end
     /// of the page after one blank line.
-    fn add_links(&mut self, anchor_end: Option<usize>, names: &[&String]) -> Result<(), String> {
-        let eol = self.eol;
+    fn add_links(&mut self, anchor_end: Option<usize>, names: &[&String]) {
+        let what = "a new category link";
         if let Some(anchor_end) = anchor_end {
-            let mut offset = self.line_end(anchor_end);
-            if self.inside_node(offset) {
-                offset = anchor_end;
-            }
+            let eol = self.line_break_at(anchor_end);
+            let offsets = [self.line_end(anchor_end), anchor_end];
+            let Some(offset) = self.place(&offsets, REFUSED_CATEGORY_NOT_EDITABLE, what) else {
+                return;
+            };
             for name in names {
                 self.insert(
                     offset,
@@ -1188,52 +1425,67 @@ impl Editor<'_, '_> {
                     Some((*name).clone()),
                 );
             }
-            return Ok(());
+            return;
         }
+        let end = self.source.len();
+        let Some(offset) = self.place(&[end], REFUSED_CATEGORY_NOT_EDITABLE, what) else {
+            return;
+        };
         // The page's end as the other edits leave it decides the spacing.
-        let interim = self
-            .document
-            .rewrite(&self.plan)
-            .map_err(|error| error.to_string())?;
+        let interim = match self.document.rewrite(&self.planned()) {
+            Ok(interim) => interim,
+            Err(error) => {
+                self.refusals.push(rewrite_refusal(&error.to_string()));
+                return;
+            }
+        };
+        let eol = self.line_break_at(end);
         let ends_with_break = interim.ends_with('\n');
         let blank_end = interim.ends_with("\n\n") || interim.ends_with("\n\r\n");
+        let blank = format!("{eol}{eol}");
         let prefix = if interim.trim().is_empty() || blank_end {
             ""
         } else if ends_with_break {
             eol
-        } else if eol == "\r\n" {
-            "\r\n\r\n"
         } else {
-            "\n\n"
+            blank.as_str()
         };
-        // The page keeps its own convention for a final line break.
-        let suffix = if self.source.ends_with('\n') { eol } else { "" };
-        let offset = self.source.len();
+        // The page keeps its own final line break, or its lack of one.
+        let suffix = if self.source.ends_with("\r\n") {
+            "\r\n"
+        } else if self.source.ends_with('\n') {
+            "\n"
+        } else {
+            ""
+        };
         let last = names.len() - 1;
         for (index, name) in names.iter().enumerate() {
             let lead = if index == 0 { prefix } else { eol };
             let trail = if index == last { suffix } else { "" };
-            self.insert(
-                offset,
-                format!("{lead}[[Category:{name}]]{trail}"),
-                "category_add",
-                Some((*name).clone()),
-            );
+            let text = format!("{lead}[[Category:{name}]]{trail}");
+            self.insert(offset, text, "category_add", Some((*name).clone()));
         }
-        Ok(())
     }
 
-    fn finish(self) -> Result<(String, Vec<RetypeEdit>), String> {
+    /// The plan with the insertions added, in the order they were planned.
+    fn planned(&self) -> RewritePlan {
+        let mut plan = self.plan.clone();
+        for insertion in &self.insertions {
+            plan.insert(insertion.offset, insertion.text.clone());
+        }
+        plan
+    }
+
+    /// The result and its edits. When the edits would end a page that has no
+    /// final line break with one, the line break goes too, so the page keeps
+    /// its final-line-break state.
+    fn finish(self, notes: &mut Vec<String>) -> Result<(String, Vec<RetypeEdit>), String> {
+        let plan = self.planned();
         let resolved = self
             .document
-            .resolve(&self.plan)
-            .map_err(|error| error.to_string())?;
-        let result = self
-            .document
-            .rewrite(&self.plan)
+            .resolve(&plan)
             .map_err(|error| error.to_string())?;
         let mut edits = Vec::with_capacity(resolved.len());
-        let mut delta: isize = 0;
         for edit in resolved {
             let span = edit.span();
             let (kind, categories) = match edit.origin() {
@@ -1256,25 +1508,103 @@ impl Editor<'_, '_> {
                     (kind, entries.iter().map(|(_, name)| name.clone()).collect())
                 }
                 EditOrigin::Insert(index) => {
-                    let (kind, category) = &self.insert_kinds[*index];
-                    (*kind, category.iter().cloned().collect())
+                    let insertion = &self.insertions[*index];
+                    (insertion.kind, insertion.category.iter().cloned().collect())
                 }
+                _ => return Err("the plan resolved to an edit of an unknown kind".to_string()),
             };
-            let result_start = (span.start() as isize + delta) as usize;
-            let result_end = result_start + edit.replacement().len();
-            delta += edit.replacement().len() as isize - span.len() as isize;
             edits.push(RetypeEdit {
                 kind,
                 categories,
                 start: span.start(),
                 end: span.end(),
-                result_start,
-                result_end,
+                result_start: 0,
+                result_end: 0,
                 old: self.source[span.start()..span.end()].to_string(),
                 new: edit.replacement().to_string(),
             });
         }
+        let source = self.source;
+        let mut result = apply_edits(source, &mut edits);
+        if !source.ends_with('\n') {
+            // Each pass drops one line break; a page cannot need more passes
+            // than it has lines.
+            for _ in 0..=source.matches('\n').count() {
+                if !result.ends_with('\n') || !drop_final_break(source, &result, &mut edits) {
+                    break;
+                }
+                result = apply_edits(source, &mut edits);
+            }
+        }
+        if !result.is_empty() && result.ends_with('\n') != source.ends_with('\n') {
+            notes.push(if source.ends_with('\n') {
+                "the result has no final line break, though the page has one".to_string()
+            } else {
+                "the result ends with a line break, though the page does not".to_string()
+            });
+        }
         Ok((result, edits))
+    }
+}
+
+/// The result of the edits, with each edit's place in it filled in.
+fn apply_edits(source: &str, edits: &mut [RetypeEdit]) -> String {
+    let mut out = String::with_capacity(source.len());
+    let mut cursor = 0;
+    for edit in edits.iter_mut() {
+        out.push_str(&source[cursor..edit.start]);
+        edit.result_start = out.len();
+        out.push_str(&edit.new);
+        edit.result_end = out.len();
+        cursor = edit.end;
+    }
+    out.push_str(&source[cursor..]);
+    out
+}
+
+/// Take the result's final line break away from it: trim it from the edit
+/// that wrote it, or extend the removal that follows it in the source over
+/// it. Whether it could.
+fn drop_final_break(source: &str, result: &str, edits: &mut [RetypeEdit]) -> bool {
+    let width = if result.ends_with("\r\n") { 2 } else { 1 };
+    let at = result.len() - width;
+    if let Some(edit) = edits
+        .iter_mut()
+        .find(|edit| edit.result_start <= at && at < edit.result_end)
+    {
+        if edit.result_end != result.len() || edit.new.len() < width {
+            return false;
+        }
+        let keep = edit.new.len() - width;
+        edit.new.truncate(keep);
+        return true;
+    }
+    // The break is page text: find where, then the edit right after it.
+    let mut source_cursor = 0;
+    let mut result_cursor = 0;
+    let mut break_start = None;
+    for edit in edits.iter() {
+        let gap = edit.start - source_cursor;
+        if (result_cursor..result_cursor + gap).contains(&at) {
+            break_start = Some(source_cursor + (at - result_cursor));
+            break;
+        }
+        source_cursor = edit.end;
+        result_cursor += gap + edit.new.len();
+    }
+    let Some(break_start) = break_start else {
+        return false;
+    };
+    match edits
+        .iter_mut()
+        .find(|edit| edit.start == break_start + width)
+    {
+        Some(edit) if edit.new.is_empty() => {
+            edit.start = break_start;
+            edit.old = source[edit.start..edit.end].to_string();
+            true
+        }
+        _ => false,
     }
 }
 

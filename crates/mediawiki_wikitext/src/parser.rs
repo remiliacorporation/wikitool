@@ -68,11 +68,13 @@ struct TagMarker {
     self_closing: bool,
 }
 
-/// Finds the transclusion-control and gallery regions. Tags are read lexically outside comments
-/// and literal regions, so a tag inside a template argument still counts. MediaWiki does not nest
-/// these tags: a region runs from an opening tag to the next closing tag of the same name, and an
-/// opening tag that never closes runs to the end of the source. A closing tag with no opening tag
-/// is literal text.
+/// Finds the regions of the [`MarkupTag`] tags. Tags are read lexically outside comments and
+/// literal regions, so a tag inside a template argument still counts. A region runs from an
+/// opening tag to the next closing tag of the same name, so a tag does not nest in itself, but a
+/// region of one tag can hold regions of other tags. An opening tag that never closes runs to the
+/// end of the source, which is where MediaWiki ends an unclosed transclusion control; it reads an
+/// unclosed extension tag as text, and treating it as a region is the cautious reading. A closing
+/// tag with no opening tag is literal text.
 fn scan_tag_regions(source: &str, nodes: &[Node]) -> Vec<TagRegion> {
     let bytes = source.as_bytes();
     let mut protected: Vec<Span> = nodes
@@ -167,6 +169,10 @@ fn scan_tag_regions(source: &str, nodes: &[Node]) -> Vec<TagRegion> {
     regions
 }
 
+/// Reads a tag as MediaWiki's preprocessor does. The name ends at a space, `/` or `>`. An
+/// opening tag ends at the first `>` after its name, whatever quotes its attributes hold, and is
+/// self-closing when `/` comes right before that `>`. A closing tag is `</name>`, with nothing but
+/// spaces before the `>`.
 fn read_tag_marker(bytes: &[u8], start: usize) -> Option<TagMarker> {
     let mut cursor = start + 1;
     let closing = bytes.get(cursor) == Some(&b'/');
@@ -178,40 +184,32 @@ fn read_tag_marker(bytes: &[u8], start: usize) -> Option<TagMarker> {
         cursor += 1;
     }
     let tag = markup_tag(std::str::from_utf8(&bytes[name_start..cursor]).ok()?)?;
+    if closing {
+        while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
+            cursor += 1;
+        }
+        return (bytes.get(cursor) == Some(&b'>')).then_some(TagMarker {
+            tag,
+            start,
+            end: cursor + 1,
+            closing: true,
+            self_closing: false,
+        });
+    }
     if !bytes
         .get(cursor)
         .is_some_and(|byte| byte.is_ascii_whitespace() || matches!(*byte, b'/' | b'>'))
     {
         return None;
     }
-    let mut quote = None;
-    while cursor < bytes.len() {
-        let byte = bytes[cursor];
-        match (quote, byte) {
-            (None, b'\'' | b'"') if !closing => quote = Some(byte),
-            (Some(open), close) if open == close => quote = None,
-            (None, b'>') => {
-                let end = cursor + 1;
-                let self_closing = !closing
-                    && bytes[name_start..cursor]
-                        .iter()
-                        .rev()
-                        .find(|byte| !byte.is_ascii_whitespace())
-                        == Some(&b'/');
-                return Some(TagMarker {
-                    tag,
-                    start,
-                    end,
-                    closing,
-                    self_closing,
-                });
-            }
-            (None, b'<') => return None,
-            _ => {}
-        }
-        cursor += 1;
-    }
-    None
+    let close = cursor + bytes[cursor..].iter().position(|byte| *byte == b'>')?;
+    Some(TagMarker {
+        tag,
+        start,
+        end: close + 1,
+        closing: false,
+        self_closing: bytes[close - 1] == b'/',
+    })
 }
 
 fn markup_tag(name: &str) -> Option<MarkupTag> {
@@ -220,6 +218,10 @@ fn markup_tag(name: &str) -> Option<MarkupTag> {
         ("noinclude", MarkupTag::NoInclude),
         ("onlyinclude", MarkupTag::OnlyInclude),
         ("gallery", MarkupTag::Gallery),
+        ("ref", MarkupTag::Ref),
+        ("math", MarkupTag::Math),
+        ("score", MarkupTag::Score),
+        ("templatedata", MarkupTag::TemplateData),
     ]
     .into_iter()
     .find_map(|(candidate, tag)| name.eq_ignore_ascii_case(candidate).then_some(tag))

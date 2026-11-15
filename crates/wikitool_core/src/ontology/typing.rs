@@ -954,7 +954,7 @@ fn module_finding(
     }
 }
 
-fn is_wikidata_item(value: &str) -> bool {
+pub(crate) fn is_wikidata_item(value: &str) -> bool {
     value
         .strip_prefix('Q')
         .is_some_and(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
