@@ -133,7 +133,7 @@ pub fn validate_project_path(paths: &ResolvedPaths, candidate: &Path) -> Result<
     )
 }
 
-fn resolve_existing_ancestor(path: &Path) -> Result<PathBuf> {
+pub(crate) fn resolve_existing_ancestor(path: &Path) -> Result<PathBuf> {
     let normalized = normalize_pathbuf(path);
     if normalized.exists() {
         return fs::canonicalize(&normalized)

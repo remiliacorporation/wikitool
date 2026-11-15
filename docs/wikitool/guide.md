@@ -87,6 +87,17 @@ useful membership. Do not infer approval from neighbors, category observations, 
 uncategorized-page counts. Category creation and hierarchy changes are a distinct
 taxonomy scope under the site's guidance.
 
+## Retype articles
+
+`article retype --plan FILE` applies a typing plan: per page it states the planned
+classes in the class-template call and removes or adds category links, and keeps
+every other byte. It is a dry run by default; `--apply draft` writes only
+`.wikitool/drafts/`. Refused pages (redirects, links inside templates, comments or
+transclusion tags, unknown or renamed classes, unparseable pages, missing removals)
+are reported and left alone. A retyped draft still needs a human's exact-content
+acceptance before promotion and push. [Retyping articles](article-retype.md) has the
+plan and report schemas.
+
 ## Publication and recovery
 
 Changed nonredirect Main pages require exact-content human acceptance before

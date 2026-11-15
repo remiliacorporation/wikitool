@@ -1,0 +1,5 @@
+{{SHORTDESC:Psi}}   
+{{Instance of|test:Other}}
+'''Psi''' has trailing spaces.  	
+  
+[[Category:Topics]]	

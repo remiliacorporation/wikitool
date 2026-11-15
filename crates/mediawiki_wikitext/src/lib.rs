@@ -333,6 +333,7 @@ pub struct Document<'a> {
     source: &'a str,
     nodes: Vec<Node>,
     redirect: Option<Redirect>,
+    tag_regions: Vec<TagRegion>,
 }
 
 impl<'a> Document<'a> {
@@ -356,36 +357,101 @@ impl<'a> Document<'a> {
         self.redirect.as_ref()
     }
 
-    /// Applies a set of exact node replacements. Ancestor/descendant replacements are rejected so
-    /// the caller must make the intended rewrite authority explicit.
-    pub fn rewrite(&self, plan: &RewritePlan) -> Result<String, RewriteError> {
-        let mut replacements = Vec::with_capacity(plan.replacements.len());
-        for (id, replacement) in &plan.replacements {
-            let Some(node) = self.node(*id) else {
-                return Err(RewriteError::UnknownNode(*id));
-            };
-            replacements.push((*id, node.span, replacement.as_str()));
-        }
-        replacements.sort_by_key(|(_, span, _)| (span.start, span.end));
+    /// The regions of the [`MarkupTag`] tags, in source order. They are not nodes: their
+    /// contents are parsed like the text around them. A region of one tag can hold regions of
+    /// other tags.
+    pub fn tag_regions(&self) -> &[TagRegion] {
+        &self.tag_regions
+    }
 
-        for pair in replacements.windows(2) {
-            let (left_id, left, _) = pair[0];
-            let (right_id, right, _) = pair[1];
-            if right.start < left.end {
-                return Err(RewriteError::OverlappingNodes {
-                    first: left_id,
-                    second: right_id,
+    /// The regions that contain a byte offset, outermost first.
+    pub fn tag_regions_at(&self, offset: usize) -> impl Iterator<Item = &TagRegion> {
+        self.tag_regions
+            .iter()
+            .filter(move |region| region.span.start <= offset && offset < region.span.end)
+    }
+
+    /// Resolves a plan into the exact source byte ranges it replaces, in source order. Every
+    /// other byte of the source is kept. Ancestor/descendant replacements, an insertion inside a
+    /// node or another edit, and any other overlap are rejected so the caller must make the
+    /// intended rewrite authority explicit.
+    pub fn resolve(&self, plan: &RewritePlan) -> Result<Vec<ResolvedEdit>, RewriteError> {
+        let mut edits: Vec<PendingEdit> = Vec::with_capacity(plan.len());
+        for (id, replacement) in &plan.replacements {
+            let node = self.node(*id).ok_or(RewriteError::UnknownNode(*id))?;
+            edits.push(PendingEdit {
+                start: node.span.start,
+                end: node.span.end,
+                sequence: 0,
+                replacement: replacement.clone(),
+                origin: EditOrigin::Replace(*id),
+                shrink_floor: None,
+            });
+        }
+        self.resolve_line_removals(plan, &mut edits)?;
+        for (sequence, (offset, text)) in plan.insertions.iter().enumerate() {
+            let offset = *offset;
+            if offset > self.source.len() || !self.source.is_char_boundary(offset) {
+                return Err(RewriteError::InvalidInsertion { offset });
+            }
+            if let Some(node) = self
+                .nodes
+                .iter()
+                .find(|node| node.span.start < offset && offset < node.span.end)
+            {
+                return Err(RewriteError::InsertionInsideNode {
+                    offset,
+                    node: node.id,
                 });
             }
+            edits.push(PendingEdit {
+                start: offset,
+                end: offset,
+                sequence: sequence + 1,
+                replacement: text.clone(),
+                origin: EditOrigin::Insert(sequence),
+                shrink_floor: None,
+            });
+        }
+        edits.sort_by_key(|edit| (edit.start, edit.end, edit.sequence));
+
+        for index in 1..edits.len() {
+            let previous_end = edits[index - 1].end;
+            let current = &mut edits[index];
+            if current.start >= previous_end {
+                continue;
+            }
+            if let Some(floor) = current.shrink_floor
+                && previous_end <= floor
+            {
+                // A removed last line gives back the line break it borrowed from the line
+                // before it when that line is removed too.
+                current.start = previous_end;
+                continue;
+            }
+            return Err(overlap_error(&edits[index - 1], &edits[index]));
         }
 
-        let replaced_bytes = replacements
+        Ok(edits
+            .into_iter()
+            .map(|edit| ResolvedEdit {
+                span: Span {
+                    start: edit.start,
+                    end: edit.end,
+                },
+                replacement: edit.replacement,
+                origin: edit.origin,
+            })
+            .collect())
+    }
+
+    /// Applies a plan: [`Document::resolve`], then each replacement in source order.
+    pub fn rewrite(&self, plan: &RewritePlan) -> Result<String, RewriteError> {
+        let edits = self.resolve(plan)?;
+        let replaced_bytes = edits.iter().map(|edit| edit.span.len()).sum::<usize>();
+        let replacement_bytes = edits
             .iter()
-            .map(|(_, span, _)| span.len())
-            .sum::<usize>();
-        let replacement_bytes = replacements
-            .iter()
-            .map(|(_, _, replacement)| replacement.len())
+            .map(|edit| edit.replacement.len())
             .sum::<usize>();
         let mut output = String::with_capacity(
             self.source
@@ -394,13 +460,202 @@ impl<'a> Document<'a> {
                 .saturating_add(replacement_bytes),
         );
         let mut cursor = 0;
-        for (_, span, replacement) in replacements {
-            output.push_str(&self.source[cursor..span.start]);
-            output.push_str(replacement);
-            cursor = span.end;
+        for edit in &edits {
+            output.push_str(&self.source[cursor..edit.span.start]);
+            output.push_str(&edit.replacement);
+            cursor = edit.span.end;
         }
         output.push_str(&self.source[cursor..]);
         Ok(output)
+    }
+
+    /// Line removals, grouped by the line their node starts on. When nothing but spaces, tabs
+    /// and other removed nodes is left on a line, the whole line goes with its line break (the
+    /// last line gives up the break before it instead). Otherwise each node goes alone, and one
+    /// run of the spaces around it goes too: the spaces after it when it starts the line, the
+    /// spaces before it when it ends the line's text (with any spaces after it), and the spaces
+    /// before it when there are spaces on both sides. A byte order mark that starts the source
+    /// is kept and belongs to no line's text.
+    fn resolve_line_removals(
+        &self,
+        plan: &RewritePlan,
+        edits: &mut Vec<PendingEdit>,
+    ) -> Result<(), RewriteError> {
+        let bytes = self.source.as_bytes();
+        let mut by_line: BTreeMap<usize, Vec<&Node>> = BTreeMap::new();
+        for id in &plan.line_removals {
+            let node = self.node(*id).ok_or(RewriteError::UnknownNode(*id))?;
+            let line_start = bytes[..node.span.start]
+                .iter()
+                .rposition(|byte| *byte == b'\n')
+                .map_or(0, |index| index + 1);
+            by_line.entry(line_start).or_default().push(node);
+        }
+        for (line_start, mut nodes) in by_line {
+            let content_start = if line_start == 0 && self.source.starts_with('\u{feff}') {
+                '\u{feff}'.len_utf8()
+            } else {
+                line_start
+            };
+            nodes.sort_by_key(|node| (node.span.start, node.span.end));
+            for pair in nodes.windows(2) {
+                if pair[1].span.start < pair[0].span.end {
+                    return Err(RewriteError::OverlappingNodes {
+                        first: pair[0].id,
+                        second: pair[1].id,
+                    });
+                }
+            }
+            let last_end = nodes.last().map_or(line_start, |node| node.span.end);
+            let line_end = bytes[last_end..]
+                .iter()
+                .position(|byte| *byte == b'\n')
+                .map_or(bytes.len(), |index| last_end + index);
+            let content_end =
+                if line_end > last_end && line_end < bytes.len() && bytes[line_end - 1] == b'\r' {
+                    line_end - 1
+                } else {
+                    line_end
+                };
+            let mut gaps_blank = true;
+            let mut cursor = content_start;
+            for node in &nodes {
+                gaps_blank &= is_horizontal_space(&bytes[cursor..node.span.start]);
+                cursor = node.span.end;
+            }
+            gaps_blank &= is_horizontal_space(&bytes[cursor..content_end]);
+            let ids = nodes.iter().map(|node| node.id).collect::<Vec<_>>();
+            if gaps_blank {
+                let (start, end, shrink_floor) = if line_end < bytes.len() {
+                    (content_start, line_end + 1, None)
+                } else if line_start > 0 {
+                    let break_start = if line_start >= 2 && bytes[line_start - 2] == b'\r' {
+                        line_start - 2
+                    } else {
+                        line_start - 1
+                    };
+                    (break_start, bytes.len(), Some(line_start))
+                } else {
+                    (content_start, bytes.len(), None)
+                };
+                edits.push(PendingEdit {
+                    start,
+                    end,
+                    sequence: 0,
+                    replacement: String::new(),
+                    origin: EditOrigin::RemoveLine(ids),
+                    shrink_floor,
+                });
+                continue;
+            }
+            let mut covered = content_start;
+            for node in nodes {
+                let mut start = node.span.start;
+                let mut end = node.span.end;
+                if start == covered {
+                    while end < content_end && matches!(bytes[end], b' ' | b'\t') {
+                        end += 1;
+                    }
+                } else {
+                    let mut lead = start;
+                    while lead > covered && matches!(bytes[lead - 1], b' ' | b'\t') {
+                        lead -= 1;
+                    }
+                    let mut trail = end;
+                    while trail < content_end && matches!(bytes[trail], b' ' | b'\t') {
+                        trail += 1;
+                    }
+                    if lead < start && trail == content_end {
+                        start = lead;
+                        end = content_end;
+                    } else if lead < start && trail > end {
+                        start = lead;
+                    }
+                }
+                edits.push(PendingEdit {
+                    start,
+                    end,
+                    sequence: 0,
+                    replacement: String::new(),
+                    origin: EditOrigin::RemoveLine(vec![node.id]),
+                    shrink_floor: None,
+                });
+                covered = end;
+            }
+        }
+        Ok(())
+    }
+}
+
+fn is_horizontal_space(bytes: &[u8]) -> bool {
+    bytes.iter().all(|byte| matches!(*byte, b' ' | b'\t'))
+}
+
+struct PendingEdit {
+    start: usize,
+    end: usize,
+    sequence: usize,
+    replacement: String,
+    origin: EditOrigin,
+    /// The start a last-line removal may move forward to, past the line break it borrowed.
+    shrink_floor: Option<usize>,
+}
+
+fn overlap_error(first: &PendingEdit, second: &PendingEdit) -> RewriteError {
+    match (first.origin.first_node(), second.origin.first_node()) {
+        (Some(first), Some(second)) => RewriteError::OverlappingNodes { first, second },
+        _ => RewriteError::InsertionInsideEdit {
+            offset: if matches!(first.origin, EditOrigin::Insert(_)) {
+                first.start
+            } else {
+                second.start
+            },
+        },
+    }
+}
+
+/// One resolved edit: the exact source bytes it replaces and what replaces them. An insertion
+/// has an empty span.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ResolvedEdit {
+    span: Span,
+    replacement: String,
+    origin: EditOrigin,
+}
+
+impl ResolvedEdit {
+    pub fn span(&self) -> Span {
+        self.span
+    }
+
+    pub fn replacement(&self) -> &str {
+        &self.replacement
+    }
+
+    pub fn origin(&self) -> &EditOrigin {
+        &self.origin
+    }
+}
+
+/// The plan entry an edit comes from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum EditOrigin {
+    Replace(NodeId),
+    /// The nodes whose line removal this edit is; one edit removes a whole line's nodes.
+    RemoveLine(Vec<NodeId>),
+    /// The index of the insertion, in the order the plan received them.
+    Insert(usize),
+}
+
+impl EditOrigin {
+    fn first_node(&self) -> Option<NodeId> {
+        match self {
+            Self::Replace(node) => Some(*node),
+            Self::RemoveLine(nodes) => nodes.first().copied(),
+            Self::Insert(_) => None,
+        }
     }
 }
 
@@ -490,8 +745,55 @@ pub enum LinkKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ProtectedRegion {
     pub kind: ProtectedKind,
+    /// The bytes between the opening and closing markers, which are never parsed. Empty for a
+    /// self-closing tag.
+    pub inner: Span,
+}
+
+/// A tag whose region the parser reports without making it a node: the transclusion controls,
+/// whose contents MediaWiki shows or hides depending on where the page is used, galleries, whose
+/// contents are one file per line, references, whose contents MediaWiki moves to the reference
+/// list, and the `math`, `score` and `templatedata` extension tags, whose contents are not
+/// wikitext.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum MarkupTag {
+    IncludeOnly,
+    NoInclude,
+    OnlyInclude,
+    Gallery,
+    Ref,
+    Math,
+    Score,
+    TemplateData,
+}
+
+impl MarkupTag {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::IncludeOnly => "includeonly",
+            Self::NoInclude => "noinclude",
+            Self::OnlyInclude => "onlyinclude",
+            Self::Gallery => "gallery",
+            Self::Ref => "ref",
+            Self::Math => "math",
+            Self::Score => "score",
+            Self::TemplateData => "templatedata",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct TagRegion {
+    pub tag: MarkupTag,
+    /// The opening tag through the closing tag, or to the end of the source when unclosed.
+    pub span: Span,
+    pub inner: Span,
+    pub closed: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -510,8 +812,11 @@ pub struct Redirect {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RewritePlan {
     replacements: BTreeMap<NodeId, String>,
+    line_removals: BTreeSet<NodeId>,
+    insertions: Vec<(usize, String)>,
 }
 
 impl RewritePlan {
@@ -524,9 +829,7 @@ impl RewritePlan {
         node: NodeId,
         replacement: impl Into<String>,
     ) -> Result<(), RewritePlanError> {
-        if self.replacements.contains_key(&node) {
-            return Err(RewritePlanError::DuplicateNode(node));
-        }
+        self.ensure_unplanned(node)?;
         self.replacements.insert(node, replacement.into());
         Ok(())
     }
@@ -535,12 +838,33 @@ impl RewritePlan {
         self.replace(node, String::new())
     }
 
+    /// Removes a node together with its line when nothing else but spaces, tabs and other
+    /// line-removed nodes is on it; see [`Document::resolve`].
+    pub fn remove_line(&mut self, node: NodeId) -> Result<(), RewritePlanError> {
+        self.ensure_unplanned(node)?;
+        self.line_removals.insert(node);
+        Ok(())
+    }
+
+    /// Inserts text at a byte offset that no node spans across. Several insertions at one
+    /// offset keep the order they were added in, and precede a replacement starting there.
+    pub fn insert(&mut self, offset: usize, text: impl Into<String>) {
+        self.insertions.push((offset, text.into()));
+    }
+
     pub fn is_empty(&self) -> bool {
-        self.replacements.is_empty()
+        self.len() == 0
     }
 
     pub fn len(&self) -> usize {
-        self.replacements.len()
+        self.replacements.len() + self.line_removals.len() + self.insertions.len()
+    }
+
+    fn ensure_unplanned(&self, node: NodeId) -> Result<(), RewritePlanError> {
+        if self.replacements.contains_key(&node) || self.line_removals.contains(&node) {
+            return Err(RewritePlanError::DuplicateNode(node));
+        }
+        Ok(())
     }
 }
 
@@ -562,9 +886,25 @@ impl Display for RewritePlanError {
 impl Error for RewritePlanError {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RewriteError {
     UnknownNode(NodeId),
-    OverlappingNodes { first: NodeId, second: NodeId },
+    OverlappingNodes {
+        first: NodeId,
+        second: NodeId,
+    },
+    /// The offset is past the end of the source or inside a UTF-8 character.
+    InvalidInsertion {
+        offset: usize,
+    },
+    InsertionInsideNode {
+        offset: usize,
+        node: NodeId,
+    },
+    /// The insertion falls inside the bytes another edit replaces.
+    InsertionInsideEdit {
+        offset: usize,
+    },
 }
 
 impl Display for RewriteError {
@@ -576,6 +916,19 @@ impl Display for RewriteError {
                 "replacement nodes {} and {} overlap",
                 first.index(),
                 second.index()
+            ),
+            Self::InvalidInsertion { offset } => write!(
+                formatter,
+                "insertion offset {offset} is not a character boundary of the source"
+            ),
+            Self::InsertionInsideNode { offset, node } => write!(
+                formatter,
+                "insertion offset {offset} is inside node {}",
+                node.index()
+            ),
+            Self::InsertionInsideEdit { offset } => write!(
+                formatter,
+                "insertion offset {offset} is inside the bytes another edit replaces"
             ),
         }
     }

@@ -213,6 +213,10 @@ that neither module defines.
 else the existing page, else the comparable pages, and for each the properties and relation
 types that apply with their value types and the fields that carry them.
 
+`article retype` states classes on articles and moves their category links from a typing
+plan, reading each class's category from the display module's `classes`; see
+[Retyping articles](article-retype.md).
+
 ## Supplemental guidance
 
 Keep target names, relationships, local source rules, category governance,

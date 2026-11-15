@@ -268,6 +268,12 @@ impl Vocabulary {
             .unwrap_or_default()
     }
 
+    /// A class's entry in the display module's `classes`: the category
+    /// `{{Instance of}}` files its articles in, and whether it is `small`.
+    pub(crate) fn display_class(&self, id: &str) -> Option<&Map<String, Value>> {
+        self.display.get("classes")?.get(id)?.as_object()
+    }
+
     pub(crate) fn display_type(&self, key: &str) -> Option<&Map<String, Value>> {
         self.display.get("types")?.get(key)?.as_object()
     }

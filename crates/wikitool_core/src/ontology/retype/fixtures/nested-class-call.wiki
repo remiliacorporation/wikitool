@@ -1,0 +1,3 @@
+{{SHORTDESC:Nested}}
+{{Box|{{Instance of|test:Kind}}}}
+'''Nested''' hides its call in a box.

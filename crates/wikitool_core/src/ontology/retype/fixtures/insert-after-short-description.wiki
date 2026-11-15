@@ -1,0 +1,9 @@
+{{SHORTDESC:A synthetic page}}
+{{Article quality|unverified}}
+'''Alpha''' is a synthetic page.
+
+== References ==
+{{Reflist}}
+
+[[Category:Memes]]
+[[Category:Topics|Alpha]]

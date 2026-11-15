@@ -1,0 +1,4 @@
+{{SHORTDESC:Eta}}
+{{Instance of|test:Kind
+'''Eta''' never closes its template.
+[[Category:Memes]]

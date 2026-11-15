@@ -1,0 +1,5 @@
+{{SHORTDESC:Small}}
+{{Instance of|test:Unlisted}}
+'''Small''' is a synthetic page.
+
+[[Category:Topics]]

@@ -1,0 +1,7 @@
+{{SHORTDESC:Epsilon}}
+{{Instance of
+|test:Old <!-- the old id -->
+|movement=Old movement
+|colour=red
+}}
+'''Epsilon''' is a synthetic page.

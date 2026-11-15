@@ -1,0 +1,4 @@
+{{Hatnote|Not the other one.}}
+{{Instance of|test:Kind|test:Other}}
+{{Infobox person|name=Beta}}
+'''Beta''' is a synthetic person.

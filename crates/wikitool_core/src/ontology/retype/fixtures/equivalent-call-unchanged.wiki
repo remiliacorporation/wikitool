@@ -1,0 +1,3 @@
+{{SHORTDESC:Zeta}}
+{{Instance of|test:Kind <!-- primary -->|movement=New Net Art}}
+'''Zeta''' is a synthetic page.

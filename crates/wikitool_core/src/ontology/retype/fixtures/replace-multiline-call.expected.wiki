@@ -1,0 +1,9 @@
+{{SHORTDESC:Epsilon}}
+{{Instance of
+|test:Kind
+|test:Other
+|movement=New Net Art
+|colour=red
+|wikidata=Q5
+}}
+'''Epsilon''' is a synthetic page.

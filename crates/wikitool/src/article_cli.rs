@@ -16,6 +16,7 @@ mod lint;
 mod live_existence;
 mod output;
 mod promote;
+mod retype;
 mod scout;
 mod scout_ontology;
 mod selection;
@@ -43,6 +44,62 @@ enum ArticleSubcommand {
     Fix(ArticleFixArgs),
     #[command(about = "Promote a draft with current transactional publication acceptance")]
     Promote(ArticlePromoteArgs),
+    #[command(
+        about = "Restate class statements and category links from a typing plan; dry-run by default",
+        long_about = "Restate class statements and category links from a typing plan; dry-run by default.\n\nFor each plan item, the page's draft under .wikitool/drafts/, or else its mirror page, gets the planned classes in its class-template call (replaced in place, or inserted after the short description and before any infobox), the named [[Category:...]] links removed with their line, and new links added after the last category link or at the end of the page. Every other byte is kept. A page that cannot be edited that way is refused with the reason: a redirect, a category link inside a template, includeonly, noinclude, onlyinclude, gallery, ref, comment, nowiki or other literal region, a class id the typing checks report unknown or renamed, wikitext that does not parse, a planned removal the page lacks, a title outside the article namespace, a title with several drafts, a result that adds a typing finding, a mirror page whose new draft path already holds a file, or a page that cannot be read or whose draft cannot be written.\n\nPATH retypes exactly the file it names: a draft in place, or a mirror page whose title has no draft. --apply none (the default) writes nothing. --apply draft writes each changed page to its draft under .wikitool/drafts/ and nothing else. The command never writes wiki_content/, contacts no wiki and records no acceptance. Every page is retyped before any draft is written. It exits 1 when a page is refused or the project cannot run the typing checks, after printing the full report."
+    )]
+    Retype(ArticleRetypeArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct ArticleRetypeArgs {
+    #[arg(
+        help = "Retype one page, named by its mirror file under wiki_content/ or its draft under .wikitool/drafts/; omit to run every plan item"
+    )]
+    path: Option<PathBuf>,
+    #[arg(
+        long,
+        value_name = "FILE",
+        help = "Typing plan JSON (schema wikitool.article-retype-plan.v1), one item per title"
+    )]
+    plan: PathBuf,
+    #[arg(
+        long,
+        value_name = "FILE",
+        help = "Retype only the titles listed one per line"
+    )]
+    titles_file: Option<PathBuf>,
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = ArticleRetypeApplyArg::None,
+        value_name = "MODE",
+        help = "Apply mode: none writes nothing; draft writes each changed page to .wikitool/drafts/"
+    )]
+    apply: ArticleRetypeApplyArg,
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = OutputFormat::Text,
+        value_name = "FORMAT",
+        help = "Output format: text|json"
+    )]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum ArticleRetypeApplyArg {
+    None,
+    Draft,
+}
+
+impl std::fmt::Display for ArticleRetypeApplyArg {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::None => "none",
+            Self::Draft => "draft",
+        })
+    }
 }
 
 #[derive(Debug, Args)]
@@ -366,5 +423,6 @@ pub(crate) fn run_article(runtime: &RuntimeOptions, args: ArticleArgs) -> Result
         ArticleSubcommand::Lint(args) => lint::run_article_lint(runtime, args),
         ArticleSubcommand::Fix(args) => fix::run_article_fix(runtime, args),
         ArticleSubcommand::Promote(args) => promote::run_article_promote(runtime, args),
+        ArticleSubcommand::Retype(args) => retype::run_article_retype(runtime, args),
     }
 }

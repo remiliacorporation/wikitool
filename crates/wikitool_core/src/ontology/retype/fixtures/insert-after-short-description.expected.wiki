@@ -1,0 +1,10 @@
+{{SHORTDESC:A synthetic page}}
+{{Instance of|test:Kind}}
+{{Article quality|unverified}}
+'''Alpha''' is a synthetic page.
+
+== References ==
+{{Reflist}}
+
+[[Category:Topics|Alpha]]
+[[Category:Added topics]]
