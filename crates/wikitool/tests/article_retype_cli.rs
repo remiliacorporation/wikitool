@@ -612,3 +612,54 @@ fn titles_outside_the_articles_are_refused_and_a_titles_file_may_start_with_a_bo
     .assert_json("/pages/0/status", "changed");
     assert_no_requests(&wiki);
 }
+
+/// Every page is read before any draft is written: a page that cannot be read, or whose draft
+/// cannot be written, is a refusal in the full report, and the other drafts are still reported.
+#[test]
+fn unreadable_and_unwritable_pages_are_refusals_in_the_full_report() {
+    let wiki = wiki();
+    let wt = project(&wiki, true);
+    // Pepe's draft is Latin-1, not UTF-8.
+    let path = wt.path().join(".wikitool/drafts/Pepe.wiki");
+    fs::create_dir_all(path.parent().expect("parent")).expect("drafts");
+    fs::write(&path, b"'''Pep\xe9''' is a synthetic page.\n").expect("latin-1 draft");
+    let output = wt.run(&[
+        "article", "retype", "--plan", PLAN, "--apply", "draft", "--format", "json",
+    ]);
+    output
+        .assert_code(1)
+        .assert_json("/page_count", 4)
+        .assert_json("/drafts_written", 1)
+        .assert_json("/pages/0/title", "Wojak")
+        .assert_json("/pages/0/draft_written", true)
+        .assert_json("/pages/1/title", "Pepe")
+        .assert_json("/pages/1/status", "refused")
+        .assert_json("/pages/1/refusals/0/code", "read_failed")
+        .assert_json("/pages/1/source_path", ".wikitool/drafts/Pepe.wiki");
+    assert_eq!(wt.read(".wikitool/drafts/Wojak.wiki"), WOJAK_RETYPED);
+
+    // A directory where Wojak's draft would go cannot be written.
+    let wiki = self::wiki();
+    let wt = project(&wiki, true);
+    fs::create_dir_all(wt.path().join(".wikitool/drafts/Wojak.wiki")).expect("blocking dir");
+    write(&wt, "plans/titles.txt", "Wojak\n");
+    wt.run(&[
+        "article",
+        "retype",
+        "--plan",
+        PLAN,
+        "--titles-file",
+        "plans/titles.txt",
+        "--apply",
+        "draft",
+        "--format",
+        "json",
+    ])
+    .assert_code(1)
+    .assert_json("/drafts_written", 0)
+    .assert_json("/refused_count", 1)
+    .assert_json("/pages/0/status", "refused")
+    .assert_json("/pages/0/refusals/0/code", "write_failed")
+    .assert_json("/pages/0/edits", json!([]));
+    assert_no_requests(&wiki);
+}

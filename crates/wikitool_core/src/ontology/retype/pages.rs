@@ -225,17 +225,13 @@ impl<'p> PageFiles<'p> {
     /// case, which a case-insensitive file system would write over.
     pub(super) fn case_twin(&self, relative: &str) -> Result<Option<String>> {
         let (directory, name) = split_file_name(relative);
-        Ok(self
-            .listing(directory)?
-            .into_iter()
-            .find(|other| other != name && other.to_lowercase() == name.to_lowercase())
-            .map(|other| {
-                if directory.is_empty() {
-                    other
-                } else {
-                    format!("{directory}/{other}")
-                }
-            }))
+        Ok(case_twin_in(&self.listing(directory)?, name).map(|other| {
+            if directory.is_empty() {
+                other.clone()
+            } else {
+                format!("{directory}/{other}")
+            }
+        }))
     }
 
     /// The absolute path of a draft, checked to resolve under
@@ -276,7 +272,7 @@ impl<'p> PageFiles<'p> {
     /// Whether a file with exactly this name, case included, exists.
     pub(super) fn exists_exactly(&self, relative: &str) -> Result<bool> {
         let (directory, name) = split_file_name(relative);
-        Ok(self.listing(directory)?.iter().any(|other| other == name))
+        Ok(exact_name_in(&self.listing(directory)?, name))
     }
 
     fn listing(&self, directory: &str) -> Result<Vec<String>> {
@@ -298,6 +294,22 @@ impl<'p> PageFiles<'p> {
         }
         Ok(out)
     }
+}
+
+/// Whether a directory listing holds exactly this file name, case included.
+/// A case-insensitive file system would open `Foo_bar.wiki` for
+/// `Foo_Bar.wiki`; the listing does not.
+pub(super) fn exact_name_in(listing: &[String], name: &str) -> bool {
+    listing.iter().any(|other| other == name)
+}
+
+/// Another name in a directory listing that differs from `name` only in
+/// case.
+pub(super) fn case_twin_in<'l>(listing: &'l [String], name: &str) -> Option<&'l String> {
+    let lower = name.to_lowercase();
+    listing
+        .iter()
+        .find(|other| *other != name && other.to_lowercase() == lower)
 }
 
 fn split_file_name(relative: &str) -> (&str, &str) {

@@ -29,14 +29,16 @@ It reads a page's draft when one exists, and the mirror page otherwise, so a sec
 `--apply draft` starts from the draft. A draft is any `.wiki` or `.wikitext` file under
 `.wikitool/drafts/`, at any depth, whose file name spells the title the way the mirror spells
 file names, with spaces or underscores (`Miya Notes.wiki`, `Miya_Notes.wiki`). A title with
-more than one draft is refused, and so is a title whose mirror page has a draft, since a
-result of the mirror page would lose the draft's edits.
+more than one draft is refused, and so is a title whose mirror page has a draft, or whose new
+draft path already holds a file (such as `Foo--Bar.wiki`, which reads back as the title
+`Foo:Bar`), since a result of the mirror page would lose that file's edits.
 
 PATH retypes exactly the file it names: a draft is read and written in place, and a mirror page
 is read and written to a new draft, or refused when its title has a draft. `--titles-file`
 selects plan items by title, one per line (a byte order mark at the start is ignored); with
-neither, every plan item runs, in plan order. The command exits 1 when a page is refused or the
-project cannot run the typing checks, after printing the full report.
+neither, every plan item runs, in plan order. Every page is read and retyped before any draft
+is written. The command exits 1 when a page is refused or the project cannot run the typing
+checks, after printing the full report.
 
 Titles are read as the mirror reads them. A title in a built-in or configured namespace, or in
 a namespace folder under `wiki_content/`, such as `Goldenlight:Foo`, is not an article. File
@@ -96,7 +98,10 @@ it, so no double or trailing space is left. A byte order mark that starts the pa
 or at the end of the page after one blank line. Sort keys are never rewritten: a kept link keeps
 its sort key, and `drop_generated` keeps a link with a sort key, because the generated link has
 none, and notes it. A link to the category page (`[[:Category:…]]`), interwiki links, and every
-other link are not category links and are never touched. New lines use the page's usual line
+other link are not category links and are never touched. A link whose name holds `#`, `%`, or
+`&` cannot be read from its text, since MediaWiki decodes those forms before it files the page
+(`[[Category:Foo%20bar]]` files it in `Foo bar`); a page with one is refused whenever the plan
+edits categories, and a plan may not name such a category. New lines use the page's usual line
 break, CRLF when most of its line breaks are and LF otherwise, and the page keeps its final line
 break, or its lack of one. New text never goes inside a node, a comment or literal region, or a
 tag region such as a `ref`; a page where it would is refused.
@@ -110,7 +115,9 @@ most fifteen classes; a `subClassOf` that lists several classes ends the walk. A
 marked `small` also files the page in the nearest superclass category that is not small. When
 a class files the page in no category, the report notes why. A page that gets no class
 statement because its typed infobox states the class has no generated categories, and
-`drop_generated` removes nothing there.
+`drop_generated` removes nothing there. Nor does a translation subpage, one whose last subpage
+is `es`, `ko`, `ja`, `zh`, `fr`, `de`, `pt`, or `ru` (`Wojak/ja`), since `Module:Infobox` files
+those in no category. The report notes when `drop_generated` has nothing to do.
 
 ## Refusals
 
@@ -123,6 +130,7 @@ A refused page is not changed and has no edits. Every refusal is reported:
 | `category_not_editable` | A link to a category the plan removes, adds, or drops sits inside a template, parameter, or link (`context` `template`, `parameter`, `link`), an `includeonly`, `noinclude`, `onlyinclude`, `gallery`, `ref`, `math`, `score`, or `templatedata` region, or a comment, `nowiki`, `pre`, `source`, or `syntaxhighlight` region; a link names its category with markup while the plan edits categories (`context` `unreadable`); or a new link would land in such a place. Links in comments and literal regions are found from their text, so a comment that does not parse cannot hide one. |
 | `class_statement_not_editable` | The class-template call sits in such a place, the page has more than one (`context` `multiple`), its numbered slots are out of order or mixed with unnumbered ones, or a new call would land in such a place. |
 | `ontology.unknown_class`, `ontology.renamed_term` | A planned class id is not a class, or was renamed, with the codes of `article lint`'s typing checks. It is checked on every page, with or without a class statement. The message names the current id of a renamed one. |
+| other `ontology.*` codes | The result has a typing finding the page does not have, such as `ontology.unknown_field` for a planned field that `Module:Ontology/display` does not define as a relation field, which on the wiki files the page in a tracking category. Findings the page already has do not block. |
 | `removal_missing` | The plan removes a category the page has no link to. |
 | `invalid_plan` | The item contradicts itself or holds markup: a category both removed and added, an added category that `drop_generated` would remove, fields or `wikidata` without classes on a page with no call, a `wikidata` value that is not an item id, or a class id, field value, or category name holding `|`, braces, brackets, `<`, `>`, `__`, `~~~`, a control character, or a line break. |
 | `page_missing` | The page has neither a draft nor a mirror file, or PATH names a file that is not the page's file. |
@@ -130,7 +138,9 @@ A refused page is not changed and has no edits. Every refusal is reported:
 | `not_an_article` | The title is in a namespace other than the article namespace. |
 | `invalid_title` | The title holds a character no article title can hold, such as `\` or `#`. |
 | `ambiguous_draft` | The title has more than one draft. |
-| `draft_exists` | PATH names a mirror page whose title has a draft. |
+| `draft_exists` | PATH names a mirror page whose title has a draft, or a file already exists at the draft path a mirror page would be written to. |
+| `read_failed` | The page's file cannot be read as UTF-8 text. |
+| `write_failed` | The draft cannot be written; the page's result is not reported as changed. |
 | `duplicate_target` | Two selected titles would write one draft, or another file differs from the draft's name only in case. |
 | `result_check_failed` | The result fails the check every result passes before it is reported: it parses, every node and tag region outside the edits is unchanged, each edit holds only one class call or one category link, and the category links change only as planned. It is a defect if it appears. |
 | `rewrite_failed` | The edits cannot be applied as node rewrites. It is a defect if it appears. |

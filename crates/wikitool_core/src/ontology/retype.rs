@@ -214,6 +214,8 @@ pub const REFUSED_INVALID_TITLE: &str = "invalid_title";
 pub const REFUSED_AMBIGUOUS_DRAFT: &str = "ambiguous_draft";
 pub const REFUSED_DUPLICATE_TARGET: &str = "duplicate_target";
 pub const REFUSED_DRAFT_EXISTS: &str = "draft_exists";
+pub const REFUSED_READ_FAILED: &str = "read_failed";
+pub const REFUSED_WRITE_FAILED: &str = "write_failed";
 
 /// A typing finding on the result, as `article lint` reports it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -472,12 +474,25 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
                 .collect()
         })
     });
-    let (planned_generated, generated_notes) = match &planned_classes {
-        Some(classes) => generated_categories(ontology, classes),
-        None => (Vec::new(), Vec::new()),
+    // Module:Infobox's instanceOf files a translation subpage in no
+    // category, so nothing there is generated.
+    let translation = translation_code(&normalize_title(&item.title));
+    let (planned_generated, generated_notes) = match (&planned_classes, translation) {
+        (Some(classes), None) => generated_categories(ontology, classes),
+        _ => (Vec::new(), Vec::new()),
     };
-    if item.drop_generated && stated.is_some() {
-        editor.notes.extend(generated_notes);
+    if item.drop_generated {
+        if let Some(code) = translation {
+            editor.notes.push(format!(
+                "drop_generated removed nothing: Module:Infobox files a translation subpage (/{code}) in no category"
+            ));
+        } else if stated.is_some() {
+            editor.notes.extend(generated_notes);
+        } else if item.classes.is_empty() {
+            editor.notes.push(
+                "drop_generated removed nothing: the page has no class statement and the plan adds none".to_string(),
+            );
+        }
     }
     let generated: Vec<String> = if stated.is_some() {
         planned_generated.clone()
@@ -639,6 +654,10 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
         );
     }
     let typing = typing_of(ontology, &result);
+    let added = added_findings(&typing_of(ontology, source), &typing);
+    if !added.is_empty() {
+        return PageRetype::refused(source, ontology, added);
+    }
     PageRetype {
         result,
         edits,
@@ -646,6 +665,59 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
         notes,
         typing,
     }
+}
+
+/// The typing findings the result has and the source does not, as
+/// refusals with the finding's code, such as `ontology.unknown_field` for a
+/// planned field `Module:Ontology/display` does not define, which on the
+/// wiki files the page in a tracking category. Findings are compared by
+/// code, check, term and evidence, not by offset.
+fn added_findings(source: &RetypeTyping, result: &RetypeTyping) -> Vec<Refusal> {
+    let key = |finding: &RetypeFinding| {
+        (
+            finding.code,
+            finding.via,
+            finding.term.clone(),
+            finding.evidence.clone(),
+        )
+    };
+    let mut before: BTreeMap<_, usize> = BTreeMap::new();
+    for finding in &source.findings {
+        *before.entry(key(finding)).or_default() += 1;
+    }
+    let mut out = Vec::new();
+    for finding in &result.findings {
+        match before.get_mut(&key(finding)) {
+            Some(count) if *count > 0 => *count -= 1,
+            _ => {
+                let mut refusal = Refusal::new(
+                    finding.code,
+                    format!(
+                        "the result would have a typing finding the page does not have: {}",
+                        finding.message
+                    ),
+                );
+                refusal.term = Some(finding.term.clone());
+                out.push(refusal);
+            }
+        }
+    }
+    out
+}
+
+/// The language codes of translation subpages, as `Module:Infobox`'s
+/// `TRANSLATION_CODES` lists them. Its `isArticle` is false on a page whose
+/// last subpage is one of them, so its `instanceOf` files no category there.
+const TRANSLATION_CODES: [&str; 8] = ["es", "ko", "ja", "zh", "fr", "de", "pt", "ru"];
+
+/// The language code of a translation subpage title, such as `ja` for
+/// `Wojak/ja`.
+fn translation_code(title: &str) -> Option<&'static str> {
+    let (_, subpage) = title.rsplit_once('/')?;
+    TRANSLATION_CODES
+        .iter()
+        .copied()
+        .find(|code| *code == subpage)
 }
 
 /// The planned class ids the typing checks would report, with the codes and
@@ -716,7 +788,7 @@ const ID_FORBIDDEN: &[char] = &['|', '{', '}', '[', ']', '<', '>', '=', '\n', '\
 /// tags and comments), the argument and value separators, and line breaks.
 /// `=` is allowed, since only the first `=` of a named argument splits it.
 const VALUE_FORBIDDEN: &[char] = &['|', '{', '}', '[', ']', '<', '>', ';', '\n', '\r'];
-const CATEGORY_FORBIDDEN: &[char] = &['[', ']', '{', '}', '|', '#', '<', '>', '\n', '\r'];
+const CATEGORY_FORBIDDEN: &[char] = &['[', ']', '{', '}', '|', '#', '%', '&', '<', '>', '\n', '\r'];
 
 /// Text that holds markup the command must not write: a forbidden
 /// character, a control character, a signature (`~~~`), which MediaWiki
@@ -1033,7 +1105,8 @@ fn link_category(document: &Document<'_>, node: &Node) -> Option<(String, bool, 
     }
     let title = document.text(link.title);
     let (_, name) = title.split_once(':')?;
-    let unreadable = name.contains(['{', '}', '<', '>', '[', ']']);
+    // The parser keeps a `#fragment` out of the title.
+    let unreadable = link.fragment.is_some() || name.contains(UNREADABLE_NAME);
     let name = if unreadable {
         name.trim().to_string()
     } else {
@@ -1041,6 +1114,12 @@ fn link_category(document: &Document<'_>, node: &Node) -> Option<(String, bool, 
     };
     Some((name, !link.components.is_empty(), unreadable))
 }
+
+/// Characters that make a category link's name unreadable from its text:
+/// markup, and the fragment (`#`), percent-encoding (`%`) and entity (`&`)
+/// forms, which MediaWiki decodes before it files the page, so
+/// `[[Category:Foo%20bar]]` files it in `Foo bar`.
+const UNREADABLE_NAME: [char; 9] = ['{', '}', '<', '>', '[', ']', '#', '%', '&'];
 
 /// Every category link on the page: the parsed link nodes, and the links in
 /// comments and literal regions, which the parser leaves unread and which
@@ -1110,7 +1189,7 @@ fn text_category_links(
         let link_end = rest
             .find("]]")
             .map_or(start + 2 + target_end, |close| start + 2 + close + 2);
-        let unreadable = name.contains(['{', '}', '<', '>', '[']);
+        let unreadable = name.contains(UNREADABLE_NAME);
         out.push(CategoryLink {
             node: None,
             name: if unreadable {
@@ -1896,16 +1975,25 @@ pub fn run_article_retype(
     };
     refuse_shared_targets(&mut selected);
 
+    // Every page is read and retyped before any draft is written, so a page
+    // that cannot be read is a refusal in a complete report, never an error
+    // after some drafts are written.
+    let mut retyped: Vec<(RetypePageReport, Option<String>)> = Vec::new();
     for (title, located) in selected {
-        let page = match (items.get(&title), located) {
-            (None, _) => RetypePageReport::refused(
-                title.clone(),
-                Refusal::new(
-                    REFUSED_NOT_IN_PLAN,
-                    format!("the plan has no item for {title:?}"),
+        retyped.push(match (items.get(&title), located) {
+            (None, _) => (
+                RetypePageReport::refused(
+                    title.clone(),
+                    Refusal::new(
+                        REFUSED_NOT_IN_PLAN,
+                        format!("the plan has no item for {title:?}"),
+                    ),
                 ),
+                None,
             ),
-            (Some(_), Located::Refused(refusal)) => RetypePageReport::refused(title, refusal),
+            (Some(_), Located::Refused(refusal)) => {
+                (RetypePageReport::refused(title, refusal), None)
+            }
             (
                 Some(item),
                 Located::Page {
@@ -1920,9 +2008,15 @@ pub fn run_article_retype(
                 item,
                 (source_path, source_kind),
                 draft_path,
-                apply,
             )?,
-        };
+        });
+    }
+    for (mut page, result) in retyped {
+        if apply == RetypeApplyMode::Draft
+            && let Some(result) = result
+        {
+            write_draft(&files, &mut page, &result);
+        }
         report.edit_count += page.edits.len();
         match page.status {
             "changed" => report.changed_count += 1,
@@ -2078,14 +2172,31 @@ fn locate_file(
     )
 }
 
-/// Refuse a draft path that resolves outside `.wikitool/drafts/`, or that
-/// another file in its directory differs from only in case, which a
+/// Refuse a draft path that resolves outside `.wikitool/drafts/`, a new
+/// draft path for a mirror page where a file already exists, or a draft path
+/// that another file in its directory differs from only in case, which a
 /// case-insensitive file system would write over.
 fn check_draft_target(files: &pages::PageFiles<'_>, located: Located) -> Result<Located> {
-    let Located::Page { draft_path, .. } = &located else {
+    let Located::Page {
+        draft_path,
+        source_kind,
+        ..
+    } = &located
+    else {
         return Ok(located);
     };
     files.checked_draft(draft_path)?;
+    // A file at the new draft's path is a draft the index did not file under
+    // this title, such as `Foo--Bar.wiki`, which reads back as `Foo:Bar`; a
+    // result of the mirror page must not replace it.
+    if *source_kind == "mirror" && files.exists_exactly(draft_path)? {
+        return Ok(Located::Refused(Refusal::new(
+            REFUSED_DRAFT_EXISTS,
+            format!(
+                "a file already exists at {draft_path}, the draft this title's mirror page would be written to; retype that draft, or move it, so the edits it holds are kept"
+            ),
+        )));
+    }
     if let Some(twin) = files.case_twin(draft_path)? {
         return Ok(Located::Refused(Refusal::new(
             REFUSED_DUPLICATE_TARGET,
@@ -2135,14 +2246,27 @@ fn retype_page(
     item: &RetypePlanItem,
     (source_path, source_kind): (String, &'static str),
     draft_path: String,
-    apply: RetypeApplyMode,
-) -> Result<RetypePageReport> {
+) -> Result<(RetypePageReport, Option<String>)> {
     let source_absolute = match source_kind {
         "draft" => files.checked_draft(&source_path)?,
         _ => files.checked_mirror(&source_path)?,
     };
-    let text = fs::read_to_string(&source_absolute)
-        .with_context(|| format!("failed to read {source_path}"))?;
+    let text = match fs::read_to_string(&source_absolute) {
+        Ok(text) => text,
+        Err(error) => {
+            let mut page = RetypePageReport::refused(
+                title.to_string(),
+                Refusal::new(
+                    REFUSED_READ_FAILED,
+                    format!("{source_path} cannot be read as UTF-8 text: {error}"),
+                ),
+            );
+            page.source_path = Some(source_path);
+            page.source_kind = Some(source_kind);
+            page.draft_path = Some(draft_path);
+            return Ok((page, None));
+        }
+    };
     let outcome = retype_text(ontology, item, &text);
     let changed = outcome.result != text;
     let status = if !outcome.refusals.is_empty() {
@@ -2161,13 +2285,8 @@ fn retype_page(
     } else {
         String::new()
     };
-    let mut draft_written = false;
-    if apply == RetypeApplyMode::Draft && changed {
-        let target = files.checked_draft(&draft_path)?;
-        atomic_write(&target, &outcome.result)?;
-        draft_written = true;
-    }
-    Ok(RetypePageReport {
+    let to_write = changed.then(|| outcome.result.clone());
+    let page = RetypePageReport {
         title: title.to_string(),
         status,
         source_path: Some(source_path),
@@ -2175,11 +2294,37 @@ fn retype_page(
         source_sha256: Some(compute_sha256(&text)),
         result_sha256: Some(compute_sha256(&outcome.result)),
         draft_path: Some(draft_path),
-        draft_written,
+        draft_written: false,
         edits: outcome.edits,
         diff,
         typing: Some(outcome.typing),
         refusals: outcome.refusals,
         notes: outcome.notes,
-    })
+    };
+    Ok((page, to_write))
+}
+
+/// Write a changed page's result to its draft. A write that fails makes
+/// the page a refusal with no edits, and the run goes on, so the report
+/// still says which drafts were written.
+fn write_draft(files: &pages::PageFiles<'_>, page: &mut RetypePageReport, result: &str) {
+    let Some(draft_path) = page.draft_path.clone() else {
+        return;
+    };
+    let written = files
+        .checked_draft(&draft_path)
+        .and_then(|target| atomic_write(&target, result));
+    match written {
+        Ok(()) => page.draft_written = true,
+        Err(error) => {
+            page.status = "refused";
+            page.edits.clear();
+            page.diff.clear();
+            page.result_sha256 = page.source_sha256.clone();
+            page.refusals.push(Refusal::new(
+                REFUSED_WRITE_FAILED,
+                format!("the draft {draft_path} could not be written: {error:#}"),
+            ));
+        }
+    }
 }
