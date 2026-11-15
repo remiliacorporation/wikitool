@@ -1170,3 +1170,171 @@ fn titles_are_located_with_the_configured_namespaces_and_exact_file_names() {
     assert!(matches!(at, Located::Refused(refusal) if refusal.code == REFUSED_NOT_AN_ARTICLE));
     assert!(locate_file(&paths, &files, Path::new("plans/x.wiki")).is_err());
 }
+
+// Review 2 regressions. Each test fails without the fix it names.
+
+fn titled(title: &str, plan: Value) -> RetypePlanItem {
+    let mut plan = plan;
+    plan["title"] = json!(title);
+    serde_json::from_value(plan).expect("plan item")
+}
+
+/// Finding 1: in title mode, a mirror page is never retyped over a file at
+/// its draft path, even one the draft index files under another title.
+#[test]
+fn a_mirror_page_is_not_retyped_over_a_file_at_its_draft_path() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let root = temp.path().canonicalize().expect("root");
+    let paths = project_paths(&root);
+    put(&root, "wiki_content/Main/Foo--Bar.wiki", "Mirror\n");
+    put(&root, ".wikitool/drafts/Foo--Bar.wiki", "Human edits\n");
+    put(&root, "wiki_content/Main/Foo____Bar.wiki", "Mirror\n");
+    put(&root, ".wikitool/drafts/Foo____Bar.wiki", "Human edits\n");
+    put(&root, "wiki_content/Main/Plain.wiki", "Mirror\n");
+    let files = pages::PageFiles::load(&paths).expect("files");
+    // `Foo--Bar.wiki` reads back as `Foo:Bar`, and `Foo____Bar.wiki` as
+    // `Foo/ Bar`, so the index files neither draft under its own title.
+    assert!(files.drafts_for("Foo--Bar").is_empty());
+    for title in ["Foo--Bar", "Foo /Bar"] {
+        assert_eq!(
+            located(&files, title).unwrap_err().0,
+            REFUSED_DRAFT_EXISTS,
+            "{title}"
+        );
+    }
+    assert!(located(&files, "Plain").is_ok());
+}
+
+/// Test gap of review 1: the exact-name and case-twin checks, on any file
+/// system.
+#[test]
+fn file_names_are_compared_exactly() {
+    let listing = vec!["Foo_bar.wiki".to_string(), "Other.wiki".to_string()];
+    assert!(pages::exact_name_in(&listing, "Foo_bar.wiki"));
+    assert!(!pages::exact_name_in(&listing, "Foo_Bar.wiki"));
+    assert!(!pages::exact_name_in(&listing, "foo_bar.wiki"));
+    assert_eq!(
+        pages::case_twin_in(&listing, "Foo_Bar.wiki").map(String::as_str),
+        Some("Foo_bar.wiki")
+    );
+    assert_eq!(pages::case_twin_in(&listing, "Foo_bar.wiki"), None);
+    assert_eq!(pages::case_twin_in(&listing, "Third.wiki"), None);
+}
+
+/// Finding 2: `Module:Infobox` files a translation subpage in no category,
+/// so drop_generated removes nothing there.
+#[test]
+fn drop_generated_removes_nothing_on_a_translation_subpage() {
+    let ontology = synthetic_ontology(&[]);
+    let source = "'''Page''' text.\n\n[[Category:Kinds]]\n";
+    let plan = json!({"classes": ["test:Kind"], "drop_generated": true});
+    let subpage =
+        run_and_check(&ontology, &titled("Wojak/ja", plan.clone()), source).expect("proof");
+    assert!(subpage.refusals.is_empty(), "{:#?}", subpage.refusals);
+    assert_eq!(
+        subpage.result,
+        format!("{{{{Instance of|test:Kind}}}}\n{source}")
+    );
+    assert!(
+        subpage
+            .notes
+            .iter()
+            .any(|text| text.contains("translation subpage (/ja)")),
+        "{:?}",
+        subpage.notes
+    );
+    // An article, and a subpage that is not a translation, still drop it.
+    for title in ["Wojak", "Wojak/Gallery"] {
+        let outcome =
+            run_and_check(&ontology, &titled(title, plan.clone()), source).expect("proof");
+        assert!(
+            !outcome.result.contains("[[Category:Kinds]]"),
+            "{title}: {:?}",
+            outcome.result
+        );
+    }
+}
+
+/// Finding 3: a planned field the display module does not define, which
+/// files the page in a tracking category, is refused; a finding the page
+/// already has does not block.
+#[test]
+fn a_result_with_a_new_typing_finding_is_refused() {
+    let ontology = synthetic_ontology(&[]);
+    for field in ["movment", "Movement"] {
+        let plan = json!({"classes": ["test:Kind"], "relations": {field: ["New Net Art"]}});
+        let outcome = run_and_check(&ontology, &item(plan), &fixture("plain")).expect("proof");
+        assert_eq!(
+            codes(&outcome),
+            vec![crate::ontology::typing::UNKNOWN_FIELD],
+            "{field}"
+        );
+        assert_eq!(outcome.refusals[0].term.as_deref(), Some(field));
+    }
+    let source = "{{Instance of|test:Kind|movment=x}}\nText\n";
+    let outcome =
+        run_and_check(&ontology, &item(json!({"classes": ["test:Other"]})), source).expect("proof");
+    assert!(outcome.refusals.is_empty(), "{:#?}", outcome.refusals);
+    assert_eq!(
+        outcome.result,
+        "{{Instance of|test:Other|movment=x}}\nText\n"
+    );
+}
+
+/// Finding 5: a category name MediaWiki decodes (`%`, `#`, `&`) cannot be
+/// read from the text, so a plan that edits categories on that page is
+/// refused, and a plan may not name one.
+#[test]
+fn category_names_that_mediawiki_decodes_are_unreadable() {
+    let ontology = synthetic_ontology(&[]);
+    for variant in [
+        "[[Category:Foo%20bar]]",
+        "[[Category:Foo bar#x]]",
+        "[[Category:Foo &amp; bar]]",
+    ] {
+        let source = format!("Text\n[[Category:Foo bar]]\n{variant}\n");
+        let outcome = run_and_check(
+            &ontology,
+            &item(json!({"remove_categories": ["Foo bar"]})),
+            &source,
+        )
+        .expect("proof");
+        assert_eq!(
+            codes(&outcome),
+            vec![REFUSED_CATEGORY_NOT_EDITABLE],
+            "{variant}"
+        );
+        assert_eq!(outcome.refusals[0].context, Some("unreadable"), "{variant}");
+    }
+    for name in ["Foo%20bar", "Tom & Jerry"] {
+        let outcome = run_and_check(
+            &ontology,
+            &item(json!({"add_categories": [name]})),
+            &fixture("plain"),
+        )
+        .expect("proof");
+        assert_eq!(codes(&outcome), vec![REFUSED_INVALID_PLAN], "{name}");
+    }
+}
+
+/// Nit: drop_generated with nothing to do says so.
+#[test]
+fn drop_generated_with_no_class_statement_notes_it() {
+    let ontology = synthetic_ontology(&[]);
+    let outcome = run_and_check(
+        &ontology,
+        &item(json!({"drop_generated": true})),
+        &fixture("plain"),
+    )
+    .expect("proof");
+    assert!(outcome.refusals.is_empty());
+    assert!(
+        outcome
+            .notes
+            .iter()
+            .any(|text| text
+                .contains("drop_generated removed nothing: the page has no class statement")),
+        "{:?}",
+        outcome.notes
+    );
+}
