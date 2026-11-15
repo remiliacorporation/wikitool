@@ -1338,3 +1338,42 @@ fn drop_generated_with_no_class_statement_notes_it() {
         outcome.notes
     );
 }
+
+/// `classes` is the full list the class statement states, primary first:
+/// the planned classes replace the positional slots, so slots beyond the
+/// planned list are removed with everything in them, comments included,
+/// and every named argument the plan does not set is kept byte for byte.
+#[test]
+fn class_slots_beyond_the_planned_list_are_removed() {
+    let ontology = synthetic_ontology(&[]);
+    for (source, plan, expected) in [
+        (
+            "{{Instance of|test:Kind|test:Other}}\nText\n",
+            json!({"classes": ["test:Other"]}),
+            "{{Instance of|test:Other}}\nText\n",
+        ),
+        (
+            "{{Instance of|test:Kind|test:Other <!-- old -->|test:Person|wikidata = Q1 <!-- keep -->}}\nText\n",
+            json!({"classes": ["test:Kind"]}),
+            "{{Instance of|test:Kind|wikidata = Q1 <!-- keep -->}}\nText\n",
+        ),
+        (
+            "{{Instance of|1=test:Kind|2=test:Other <!-- old -->|3=test:Person|wikidata = Q1 <!-- keep -->}}\nText\n",
+            json!({"classes": ["test:Kind"]}),
+            "{{Instance of|1=test:Kind|wikidata = Q1 <!-- keep -->}}\nText\n",
+        ),
+        (
+            "{{Instance of|1=test:Kind|2=test:Other|3=test:Person}}\nText\n",
+            json!({"classes": ["test:Other", "test:Kind"]}),
+            "{{Instance of|1=test:Other|2=test:Kind}}\nText\n",
+        ),
+    ] {
+        let outcome = run_and_check(&ontology, &item(plan.clone()), source).expect("proof");
+        assert!(
+            outcome.refusals.is_empty(),
+            "{source}: {:#?}",
+            outcome.refusals
+        );
+        assert_eq!(outcome.result, expected, "{source}");
+    }
+}

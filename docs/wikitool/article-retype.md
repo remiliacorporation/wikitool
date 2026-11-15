@@ -82,8 +82,10 @@ Unknown keys, another schema, or a title listed twice make the plan unusable. Ea
 ## What changes
 
 **The class statement.** A page with one class-template call keeps it in place: the planned
-classes fill its positional slots, the planned fields are set where they stand, every other
-argument is kept byte for byte, and new fields go at the end. A slot or field whose value
+classes replace its positional slots, in order, so slots beyond the planned list are removed
+with everything in them, comments included; the planned fields are set where they stand, every
+named argument the plan does not set is kept byte for byte, and new fields go at the end.
+`classes` is the full list the statement states, primary first. A slot or field whose value
 already reads as planned (comments and markup aside) is kept as written, so an equivalent call
 is not touched. Numbered slots (`1=`, `2=`) keep their numbers, and new slots after them are
 numbered too; a call that numbers its slots out of order, or mixes numbered and unnumbered
