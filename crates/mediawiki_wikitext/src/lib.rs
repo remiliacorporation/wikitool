@@ -357,8 +357,9 @@ impl<'a> Document<'a> {
         self.redirect.as_ref()
     }
 
-    /// The `includeonly`, `noinclude`, `onlyinclude` and `gallery` regions, in source order.
-    /// They are not nodes: their contents are parsed like the text around them.
+    /// The regions of the [`MarkupTag`] tags, in source order. They are not nodes: their
+    /// contents are parsed like the text around them. A region of one tag can hold regions of
+    /// other tags.
     pub fn tag_regions(&self) -> &[TagRegion] {
         &self.tag_regions
     }
@@ -470,8 +471,11 @@ impl<'a> Document<'a> {
 
     /// Line removals, grouped by the line their node starts on. When nothing but spaces, tabs
     /// and other removed nodes is left on a line, the whole line goes with its line break (the
-    /// last line gives up the break before it instead). Otherwise each node goes alone, with
-    /// the spaces after it when it starts the line, so the line does not begin with a space.
+    /// last line gives up the break before it instead). Otherwise each node goes alone, and one
+    /// run of the spaces around it goes too: the spaces after it when it starts the line, the
+    /// spaces before it when it ends the line's text (with any spaces after it), and the spaces
+    /// before it when there are spaces on both sides. A byte order mark that starts the source
+    /// is kept and belongs to no line's text.
     fn resolve_line_removals(
         &self,
         plan: &RewritePlan,
@@ -488,6 +492,11 @@ impl<'a> Document<'a> {
             by_line.entry(line_start).or_default().push(node);
         }
         for (line_start, mut nodes) in by_line {
+            let content_start = if line_start == 0 && self.source.starts_with('\u{feff}') {
+                '\u{feff}'.len_utf8()
+            } else {
+                line_start
+            };
             nodes.sort_by_key(|node| (node.span.start, node.span.end));
             for pair in nodes.windows(2) {
                 if pair[1].span.start < pair[0].span.end {
@@ -509,7 +518,7 @@ impl<'a> Document<'a> {
                     line_end
                 };
             let mut gaps_blank = true;
-            let mut cursor = line_start;
+            let mut cursor = content_start;
             for node in &nodes {
                 gaps_blank &= is_horizontal_space(&bytes[cursor..node.span.start]);
                 cursor = node.span.end;
@@ -518,7 +527,7 @@ impl<'a> Document<'a> {
             let ids = nodes.iter().map(|node| node.id).collect::<Vec<_>>();
             if gaps_blank {
                 let (start, end, shrink_floor) = if line_end < bytes.len() {
-                    (line_start, line_end + 1, None)
+                    (content_start, line_end + 1, None)
                 } else if line_start > 0 {
                     let break_start = if line_start >= 2 && bytes[line_start - 2] == b'\r' {
                         line_start - 2
@@ -527,7 +536,7 @@ impl<'a> Document<'a> {
                     };
                     (break_start, bytes.len(), Some(line_start))
                 } else {
-                    (0, bytes.len(), None)
+                    (content_start, bytes.len(), None)
                 };
                 edits.push(PendingEdit {
                     start,
@@ -539,16 +548,32 @@ impl<'a> Document<'a> {
                 });
                 continue;
             }
-            let mut covered = line_start;
+            let mut covered = content_start;
             for node in nodes {
+                let mut start = node.span.start;
                 let mut end = node.span.end;
-                if node.span.start == covered {
+                if start == covered {
                     while end < content_end && matches!(bytes[end], b' ' | b'\t') {
                         end += 1;
                     }
+                } else {
+                    let mut lead = start;
+                    while lead > covered && matches!(bytes[lead - 1], b' ' | b'\t') {
+                        lead -= 1;
+                    }
+                    let mut trail = end;
+                    while trail < content_end && matches!(bytes[trail], b' ' | b'\t') {
+                        trail += 1;
+                    }
+                    if lead < start && trail == content_end {
+                        start = lead;
+                        end = content_end;
+                    } else if lead < start && trail > end {
+                        start = lead;
+                    }
                 }
                 edits.push(PendingEdit {
-                    start: node.span.start,
+                    start,
                     end,
                     sequence: 0,
                     replacement: String::new(),
@@ -592,6 +617,7 @@ fn overlap_error(first: &PendingEdit, second: &PendingEdit) -> RewriteError {
 /// One resolved edit: the exact source bytes it replaces and what replaces them. An insertion
 /// has an empty span.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ResolvedEdit {
     span: Span,
     replacement: String,
@@ -614,6 +640,7 @@ impl ResolvedEdit {
 
 /// The plan entry an edit comes from.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum EditOrigin {
     Replace(NodeId),
     /// The nodes whose line removal this edit is; one edit removes a whole line's nodes.
@@ -718,6 +745,7 @@ pub enum LinkKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ProtectedRegion {
     pub kind: ProtectedKind,
     /// The bytes between the opening and closing markers, which are never parsed. Empty for a
@@ -726,14 +754,21 @@ pub struct ProtectedRegion {
 }
 
 /// A tag whose region the parser reports without making it a node: the transclusion controls,
-/// whose contents MediaWiki shows or hides depending on where the page is used, and galleries,
-/// whose contents are one file per line.
+/// whose contents MediaWiki shows or hides depending on where the page is used, galleries, whose
+/// contents are one file per line, references, whose contents MediaWiki moves to the reference
+/// list, and the `math`, `score` and `templatedata` extension tags, whose contents are not
+/// wikitext.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub enum MarkupTag {
     IncludeOnly,
     NoInclude,
     OnlyInclude,
     Gallery,
+    Ref,
+    Math,
+    Score,
+    TemplateData,
 }
 
 impl MarkupTag {
@@ -743,11 +778,16 @@ impl MarkupTag {
             Self::NoInclude => "noinclude",
             Self::OnlyInclude => "onlyinclude",
             Self::Gallery => "gallery",
+            Self::Ref => "ref",
+            Self::Math => "math",
+            Self::Score => "score",
+            Self::TemplateData => "templatedata",
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct TagRegion {
     pub tag: MarkupTag,
     /// The opening tag through the closing tag, or to the end of the source when unclosed.
@@ -772,6 +812,7 @@ pub struct Redirect {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RewritePlan {
     replacements: BTreeMap<NodeId, String>,
     line_removals: BTreeSet<NodeId>,
@@ -845,6 +886,7 @@ impl Display for RewritePlanError {
 impl Error for RewritePlanError {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RewriteError {
     UnknownNode(NodeId),
     OverlappingNodes {

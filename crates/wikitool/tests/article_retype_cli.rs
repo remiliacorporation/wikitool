@@ -482,3 +482,133 @@ fn a_wiki_without_ontology_gets_a_clear_refusal() {
         .assert_stderr_contains("wikitool.article-retype-plan.v1");
     assert_no_requests(&wiki);
 }
+
+/// A PATH is retyped exactly: a draft with a free name is read and written in place, and a
+/// mirror page whose title has a draft is refused rather than retyped over the draft's edits.
+#[test]
+fn a_path_names_exactly_the_file_retyped() {
+    let wiki = wiki();
+    let wt = project(&wiki, true);
+    let draft = ".wikitool/drafts/Miya Notes.wiki";
+    let human = "{{SHORTDESC:Notes}}\n'''Miya''' has human edits.\n\n[[Category:Memes]]\n";
+    write(&wt, draft, human);
+    write(
+        &wt,
+        "wiki_content/Main/Miya_Notes.wiki",
+        "{{SHORTDESC:Notes}}\n'''Miya''' as pulled.\n\n[[Category:Memes]]\n",
+    );
+    let mut with_miya = plan();
+    with_miya["items"]
+        .as_array_mut()
+        .expect("items")
+        .push(json!({"title": "Miya Notes", "classes": ["test:InternetMeme"]}));
+    write(
+        &wt,
+        "plans/miya.json",
+        &serde_json::to_string_pretty(&with_miya).expect("json"),
+    );
+    let before = snapshot(wt.path());
+    wt.run(&[
+        "article",
+        "retype",
+        draft,
+        "--plan",
+        "plans/miya.json",
+        "--apply",
+        "draft",
+        "--format",
+        "json",
+    ])
+    .assert_code(0)
+    .assert_json("/pages/0/title", "Miya Notes")
+    .assert_json("/pages/0/source_kind", "draft")
+    .assert_json("/pages/0/source_path", draft)
+    .assert_json("/pages/0/draft_path", draft)
+    .assert_json("/pages/0/source_sha256", sha256(human))
+    .assert_json("/pages/0/draft_written", true);
+    assert_eq!(
+        changed_files(&before, &snapshot(wt.path())),
+        vec![draft.to_string()]
+    );
+    assert_eq!(
+        wt.read(draft),
+        "{{SHORTDESC:Notes}}\n{{Instance of|test:InternetMeme}}\n'''Miya''' has human edits.\n\n[[Category:Memes]]\n"
+    );
+
+    let before = snapshot(wt.path());
+    wt.run(&[
+        "article",
+        "retype",
+        "wiki_content/Main/Miya_Notes.wiki",
+        "--plan",
+        "plans/miya.json",
+        "--apply",
+        "draft",
+        "--format",
+        "json",
+    ])
+    .assert_code(1)
+    .assert_json("/pages/0/status", "refused")
+    .assert_json("/pages/0/refusals/0/code", "draft_exists");
+    assert_eq!(
+        changed_files(&before, &snapshot(wt.path())),
+        Vec::<String>::new()
+    );
+    assert_no_requests(&wiki);
+}
+
+/// A page in a custom namespace, a title that spells a path, and a titles file that starts
+/// with a byte order mark.
+#[test]
+fn titles_outside_the_articles_are_refused_and_a_titles_file_may_start_with_a_bom() {
+    let wiki = wiki();
+    let wt = project(&wiki, true);
+    write(&wt, "wiki_content/Goldenlight/Wojak.wiki", WOJAK);
+    let odd = json!({
+        "schema": "wikitool.article-retype-plan.v1",
+        "items": [
+            { "title": "Goldenlight:Wojak", "classes": ["test:InternetMeme"] },
+            { "title": "..\\..\\wiki_content\\Main\\Wojak", "classes": ["test:InternetMeme"] }
+        ]
+    });
+    write(
+        &wt,
+        "plans/odd.json",
+        &serde_json::to_string_pretty(&odd).expect("json"),
+    );
+    let before = snapshot(wt.path());
+    wt.run(&[
+        "article",
+        "retype",
+        "--plan",
+        "plans/odd.json",
+        "--apply",
+        "draft",
+        "--format",
+        "json",
+    ])
+    .assert_code(1)
+    .assert_json("/refused_count", 2)
+    .assert_json("/pages/0/refusals/0/code", "not_an_article")
+    .assert_json("/pages/1/refusals/0/code", "invalid_title");
+    assert_eq!(
+        changed_files(&before, &snapshot(wt.path())),
+        Vec::<String>::new()
+    );
+
+    write(&wt, "plans/titles.txt", "\u{feff}Wojak\r\n");
+    wt.run(&[
+        "article",
+        "retype",
+        "--plan",
+        PLAN,
+        "--titles-file",
+        "plans/titles.txt",
+        "--format",
+        "json",
+    ])
+    .assert_code(0)
+    .assert_json("/pages/0/title", "Wojak")
+    .assert_json("/pages/0/status", "changed");
+    assert_no_requests(&wiki);
+}

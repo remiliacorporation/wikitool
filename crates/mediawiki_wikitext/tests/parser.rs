@@ -455,7 +455,8 @@ fn reports_protected_interiors_and_transclusion_and_gallery_regions() {
         vec![
             (MarkupTag::NoInclude, "[[A]]", true),
             (MarkupTag::IncludeOnly, "[[B]]", true),
-            (MarkupTag::Gallery, "\nFile:X.png|[[C]]\n", true),
+            // The opening tag ends at the first `>`, inside the quotes, as MediaWiki reads it.
+            (MarkupTag::Gallery, "y\">\nFile:X.png|[[C]]\n", true),
             (MarkupTag::IncludeOnly, "[[D]]", false),
         ]
     );
@@ -532,13 +533,31 @@ fn removes_a_node_with_its_line_only_when_the_line_holds_nothing_else() {
         remove_lines("A\n[[Category:X]] [[Category:Y]]\nB", &[0]),
         "A\n[[Category:Y]]\nB"
     );
+    // A node that ends the line's text takes the spaces before it; one with spaces on both
+    // sides takes the spaces before it and keeps the ones after.
     assert_eq!(
         remove_lines("A\n[[Category:X]] [[Category:Y]]\nB", &[1]),
-        "A\n[[Category:X]] \nB"
+        "A\n[[Category:X]]\nB"
     );
     assert_eq!(
         remove_lines("Text [[Category:X]] more.", &[0]),
-        "Text  more."
+        "Text more."
+    );
+    assert_eq!(remove_lines("Text [[Category:X]]", &[0]), "Text");
+    assert_eq!(remove_lines("Text [[Category:X]] \t\nB", &[0]), "Text\nB");
+    assert_eq!(
+        remove_lines("x [[Category:X]] [[Category:Y]] y", &[0, 1]),
+        "x y"
+    );
+    assert_eq!(remove_lines("Text[[Category:X]] more", &[0]), "Text more");
+    // A byte order mark that starts the source stays, and the first line still goes whole.
+    assert_eq!(
+        remove_lines("\u{feff}[[Category:X]]\nText", &[0]),
+        "\u{feff}Text"
+    );
+    assert_eq!(
+        remove_lines("\u{feff}[[Category:X]] Text", &[0]),
+        "\u{feff}Text"
     );
     assert_eq!(
         remove_lines("[[Category:X]] [[Category:Y]] text", &[0, 1]),
@@ -596,4 +615,62 @@ fn inserts_only_between_nodes_and_reports_every_resolved_span() {
     let mut duplicate = RewritePlan::new();
     duplicate.remove_line(category).unwrap();
     assert!(duplicate.replace(category, "x").is_err());
+}
+
+fn regions(source: &str) -> Vec<(MarkupTag, &str, bool)> {
+    let document = parse(source);
+    document
+        .tag_regions()
+        .iter()
+        .map(|region| {
+            (
+                region.tag,
+                &source[region.inner.start()..region.inner.end()],
+                region.closed,
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn opening_tags_end_at_the_first_angle_bracket_whatever_the_quotes() {
+    // An apostrophe in an unquoted attribute does not hide the region.
+    assert_eq!(
+        regions(
+            "<gallery caption=Bob's>\nFile:X.png|[[Category:Memes]]\n</gallery>\n[[Category:Memes]]"
+        ),
+        vec![(
+            MarkupTag::Gallery,
+            "\nFile:X.png|[[Category:Memes]]\n",
+            true
+        )]
+    );
+    // An open quote does not run the tag on over a later tag.
+    assert_eq!(
+        regions(
+            "<gallery caption=\"a>\nFile:X.png\n</gallery>\n<noinclude>[[Category:A]]</noinclude>"
+        ),
+        vec![
+            (MarkupTag::Gallery, "\nFile:X.png\n", true),
+            (MarkupTag::NoInclude, "[[Category:A]]", true),
+        ]
+    );
+    // `/` right before the `>` closes the tag; a closing tag allows only spaces after its name.
+    assert_eq!(
+        regions("<ref name=a/>[[Category:A]]<ref>[[Category:B]]</ref ><ref>c</ref x>"),
+        vec![
+            (MarkupTag::Ref, "", true),
+            (MarkupTag::Ref, "[[Category:B]]", true),
+            (MarkupTag::Ref, "c</ref x>", false),
+        ]
+    );
+    // `<references/>` is another tag; math, score and templatedata are regions.
+    assert_eq!(
+        regions("<references/><math>{{x}}</math><score>a</score><templatedata>{}</templatedata>"),
+        vec![
+            (MarkupTag::Math, "{{x}}", true),
+            (MarkupTag::Score, "a", true),
+            (MarkupTag::TemplateData, "{}", true),
+        ]
+    );
 }

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
-use super::proof::{run_and_check, synthetic_ontology};
+use super::proof::{run_and_check, synthetic_ontology, synthetic_ontology_edited};
 use super::*;
 
 fn fixtures() -> PathBuf {
@@ -660,4 +660,513 @@ fn page_categories(text: &str) -> Vec<String> {
         .map(|link| link.name)
         .filter(|name| seen.insert(name.clone()))
         .collect()
+}
+
+// Review 1 regressions. Each test fails without the fix it names.
+
+fn codes(outcome: &PageRetype) -> Vec<&'static str> {
+    outcome
+        .refusals
+        .iter()
+        .map(|refusal| refusal.code)
+        .collect()
+}
+
+/// Finding 3: a field value or Wikidata id that holds markup is refused, and
+/// the result check refuses a class statement that would add a category.
+#[test]
+fn values_that_hold_markup_are_refused() {
+    let ontology = synthetic_ontology(&[]);
+    let source = fixture("plain");
+    for plan in [
+        json!({"classes": ["test:Kind"], "relations": {"movement": ["x <!-- y"]}}),
+        json!({"classes": ["test:Kind"], "relations": {"movement": ["[[Category:Z]]"]}}),
+        json!({"classes": ["test:Kind"], "relations": {"movement": ["a __NOINDEX__"]}}),
+        json!({"classes": ["test:Kind"], "relations": {"movement": ["<ref>x</ref>"]}}),
+        json!({"classes": ["test:Kind"], "wikidata": "Q1 [[Category:Z]]"}),
+        json!({"classes": ["test:Kind"], "wikidata": "Q1<!--"}),
+        json!({"classes": ["test:Kind"], "wikidata": "wikidata"}),
+    ] {
+        let outcome = run_and_check(&ontology, &item(plan.clone()), &source)
+            .unwrap_or_else(|error| panic!("{plan}: {error}"));
+        assert_eq!(codes(&outcome), vec![REFUSED_INVALID_PLAN], "{plan}");
+        assert_eq!(outcome.result, source, "{plan}");
+    }
+}
+
+#[test]
+fn the_result_check_refuses_a_class_statement_that_adds_a_category() {
+    let source = "Text\n";
+    let new = "{{Instance of|test:Kind|movement=[[Category:Z]]}}\n";
+    let result = format!("{new}{source}");
+    let edits = vec![RetypeEdit {
+        kind: "class_statement_insert",
+        categories: Vec::new(),
+        start: 0,
+        end: 0,
+        result_start: 0,
+        result_end: new.len(),
+        old: String::new(),
+        new: new.to_string(),
+    }];
+    let error = guard::check_result(source, &result, &edits, "Template:Instance of")
+        .expect_err("an added category link");
+    assert!(error.contains("new link"), "{error}");
+    // A plain class statement passes.
+    let new = "{{Instance of|test:Kind}}\n";
+    let mut edits = edits;
+    edits[0].new = new.to_string();
+    edits[0].result_end = new.len();
+    guard::check_result(
+        source,
+        &format!("{new}{source}"),
+        &edits,
+        "Template:Instance of",
+    )
+    .expect("a plain class statement");
+}
+
+/// Finding 5: the generated categories are the ones `Module:Infobox`'s
+/// `instanceOf` files: its walk stops at a `subClassOf` list and reads
+/// superclasses only from classes, properties and relations.
+#[test]
+fn generated_categories_follow_the_module_walk() {
+    let ontology = synthetic_ontology_edited(&[], |shared, _| {
+        shared["classes"]["test:Multi"] =
+            json!({"label": "Multi", "subClassOf": ["test:Kind", "test:Other"]});
+        shared["classes"]["test:ViaFamily"] =
+            json!({"label": "Via family", "subClassOf": "test:Fam"});
+        shared["families"]["test:Fam"] = json!({"label": "Fam", "subClassOf": "test:Kind"});
+        shared["classes"]["test:ViaRename"] =
+            json!({"label": "Via rename", "subClassOf": "test:Old"});
+    });
+    let source = "'''Page''' text.\n\n[[Category:Kinds]]\n[[Category:Others]]\n";
+    for (class, note) in [
+        ("test:Multi", "lists several classes in subClassOf"),
+        (
+            "test:ViaFamily",
+            "neither it nor a superclass has a category",
+        ),
+        ("test:ViaRename", "which the ontology renamed to test:Kind"),
+    ] {
+        let plan = item(json!({"classes": [class], "drop_generated": true}));
+        let outcome = run_and_check(&ontology, &plan, source).expect("proof");
+        assert!(
+            outcome.refusals.is_empty(),
+            "{class}: {:#?}",
+            outcome.refusals
+        );
+        assert_eq!(
+            outcome.result,
+            format!("{{{{Instance of|{class}}}}}\n{source}"),
+            "{class}: the module files the page in no category, so no link is dropped"
+        );
+        assert!(
+            outcome.notes.iter().any(|text| text.contains(note)),
+            "{class}: {:?}",
+            outcome.notes
+        );
+    }
+    // A single superclass with a category is followed.
+    let plan = item(json!({"classes": ["test:Unlisted"], "drop_generated": true}));
+    let (generated, _) = generated_categories(&ontology, &["test:Unlisted".to_string()]);
+    assert_eq!(
+        generated,
+        vec!["Small kinds".to_string(), "Kinds".to_string()]
+    );
+    run_and_check(&ontology, &plan, source).expect("proof");
+}
+
+/// Finding 6: on a page whose typed infobox states the class, the planned
+/// classes are still checked, and a plan that adds a category drop_generated
+/// would remove is still refused.
+#[test]
+fn a_typed_infobox_page_still_checks_the_planned_classes() {
+    let ontology = synthetic_ontology_edited(&[], |shared, _| {
+        shared["renames"]["test:Human"] = json!("test:Person");
+    });
+    let source = fixture("typed-infobox-states-the-class");
+    let renamed = run_and_check(
+        &ontology,
+        &item(json!({"classes": ["test:Human"]})),
+        &source,
+    )
+    .expect("proof");
+    assert_eq!(codes(&renamed), vec![RENAMED_TERM]);
+    assert!(
+        renamed.refusals[0]
+            .message
+            .contains("renamed to test:Person")
+    );
+    let contradiction = run_and_check(
+        &ontology,
+        &item(json!({"classes": ["test:Person"], "add_categories": ["People"], "drop_generated": true})),
+        &source,
+    )
+    .expect("proof");
+    assert_eq!(codes(&contradiction), vec![REFUSED_INVALID_PLAN]);
+    // Without the contradiction the page is left as it is, with a note.
+    let kept = run_and_check(
+        &ontology,
+        &item(json!({"classes": ["test:Person"], "drop_generated": true})),
+        &source,
+    )
+    .expect("proof");
+    assert!(kept.refusals.is_empty());
+    assert_eq!(kept.result, source);
+    assert!(
+        kept.notes
+            .iter()
+            .any(|text| text.contains("drop_generated removed nothing"))
+    );
+}
+
+/// Finding 7: a gallery whose opening tag holds an apostrophe still counts.
+#[test]
+fn a_gallery_with_an_apostrophe_in_its_caption_is_not_edited() {
+    let ontology = synthetic_ontology(&[]);
+    let source =
+        "<gallery caption=Bob's>\nFile:X.png|[[Category:Memes]]\n</gallery>\n[[Category:Memes]]\n";
+    let outcome = run_and_check(
+        &ontology,
+        &item(json!({"remove_categories": ["Memes"]})),
+        source,
+    )
+    .expect("proof");
+    assert_eq!(codes(&outcome), vec![REFUSED_CATEGORY_NOT_EDITABLE]);
+    assert_eq!(outcome.refusals[0].context, Some("gallery"));
+}
+
+/// Finding 8: new text never lands inside a reference or an unclosed region.
+#[test]
+fn insertions_stay_out_of_references() {
+    let ontology = synthetic_ontology(&[]);
+    // The short description's line ends inside a reference, so the call goes
+    // right after the short description instead.
+    let source = "{{Short description|x}}<ref>a\nb</ref>\nText.\n";
+    let outcome =
+        run_and_check(&ontology, &item(json!({"classes": ["test:Kind"]})), source).expect("proof");
+    assert!(outcome.refusals.is_empty(), "{:#?}", outcome.refusals);
+    assert_eq!(
+        outcome.result,
+        "{{Short description|x}}\n{{Instance of|test:Kind}}<ref>a\nb</ref>\nText.\n"
+    );
+    // A page that ends inside an unclosed reference gets no new link there.
+    let source = "Text.<ref>Note\n";
+    let outcome = run_and_check(
+        &ontology,
+        &item(json!({"add_categories": ["Topics"]})),
+        source,
+    )
+    .expect("proof");
+    assert_eq!(codes(&outcome), vec![REFUSED_CATEGORY_NOT_EDITABLE]);
+    assert_eq!(outcome.refusals[0].context, Some("ref"));
+    // A link inside math is not edited.
+    let source = "<math>[[Category:Memes]]</math>\n[[Category:Memes]]\n";
+    let outcome = run_and_check(
+        &ontology,
+        &item(json!({"remove_categories": ["Memes"]})),
+        source,
+    )
+    .expect("proof");
+    assert_eq!(codes(&outcome), vec![REFUSED_CATEGORY_NOT_EDITABLE]);
+    assert_eq!(outcome.refusals[0].context, Some("math"));
+}
+
+/// Finding 9: a comment that does not parse as wikitext still shows its links.
+#[test]
+fn a_link_in_a_comment_that_does_not_parse_is_seen() {
+    let ontology = synthetic_ontology(&[]);
+    let source = "<!-- {{x [[Category:Memes]] -->\nText.\n[[Category:Memes]]\n";
+    let outcome = run_and_check(
+        &ontology,
+        &item(json!({"remove_categories": ["Memes"]})),
+        source,
+    )
+    .expect("proof");
+    assert_eq!(codes(&outcome), vec![REFUSED_CATEGORY_NOT_EDITABLE]);
+    assert_eq!(outcome.refusals[0].context, Some("comment"));
+}
+
+/// Nits: spacing after a mid-line removal, a byte order mark, numbered class
+/// slots, and the line break of new lines.
+#[test]
+fn small_edits_keep_the_page_tidy() {
+    let ontology = synthetic_ontology(&[]);
+    let remove = item(json!({"remove_categories": ["Memes"]}));
+    for (source, expected) in [
+        ("Text [[Category:Memes]] more.\n", "Text more.\n"),
+        ("Text [[Category:Memes]]\n", "Text\n"),
+        ("\u{feff}[[Category:Memes]]\nText\n", "\u{feff}Text\n"),
+    ] {
+        let outcome = run_and_check(&ontology, &remove, source).expect("proof");
+        assert_eq!(outcome.result, expected, "{source:?}");
+    }
+    for (source, plan, expected) in [
+        (
+            "{{Instance of|1=test:Other}}\nText\n",
+            json!({"classes": ["test:Kind"]}),
+            "{{Instance of|1=test:Kind}}\nText\n",
+        ),
+        (
+            "{{Instance of|1=test:Kind}}\nText\n",
+            json!({"classes": ["test:Kind", "test:Other"]}),
+            "{{Instance of|1=test:Kind|2=test:Other}}\nText\n",
+        ),
+        (
+            "{{Instance of|1=test:Kind}}\nText\n",
+            json!({"classes": ["test:Kind"]}),
+            "{{Instance of|1=test:Kind}}\nText\n",
+        ),
+    ] {
+        let outcome = run_and_check(&ontology, &item(plan.clone()), source).expect("proof");
+        assert!(
+            outcome.refusals.is_empty(),
+            "{plan}: {:#?}",
+            outcome.refusals
+        );
+        assert_eq!(outcome.result, expected, "{plan}");
+    }
+    for source in [
+        "{{Instance of|2=test:Other|1=test:Kind}}\n",
+        "{{Instance of|test:Other|1=test:Kind}}\n",
+    ] {
+        let outcome = run_and_check(&ontology, &item(json!({"classes": ["test:Kind"]})), source)
+            .expect("proof");
+        assert_eq!(
+            codes(&outcome),
+            vec![REFUSED_CLASS_STATEMENT_NOT_EDITABLE],
+            "{source}"
+        );
+    }
+    // One stray CRLF does not make the new lines CRLF.
+    let outcome = run_and_check(
+        &ontology,
+        &item(json!({"classes": ["test:Kind"], "add_categories": ["Topics"]})),
+        "A\r\nB\nC\n[[Category:Memes]]\n",
+    )
+    .expect("proof");
+    assert_eq!(
+        outcome.result,
+        "{{Instance of|test:Kind}}\nA\r\nB\nC\n[[Category:Memes]]\n[[Category:Topics]]\n"
+    );
+}
+
+/// Nit: whatever the plan does, a page keeps its final line break, or its
+/// lack of one.
+#[test]
+fn every_result_keeps_the_final_line_break_state() {
+    let ontology = synthetic_ontology(&[]);
+    let sources = [
+        "[[Category:Memes]]",
+        "Text\n[[Category:Memes]]",
+        "[[Category:Memes]]\nText",
+        "Text [[Category:Memes]]",
+        "{{SHORTDESC:x}}\nText\n[[Category:Memes]] [[Category:Topics]]",
+        "{{SHORTDESC:x}}",
+        "{{Infobox thing}}\nText [[Category:Memes]]",
+        "Text\n\n[[Category:Memes]]\n\n",
+        "Text",
+        "",
+    ];
+    let plans = [
+        json!({"remove_categories": ["Memes"]}),
+        json!({"add_categories": ["Added"]}),
+        json!({"classes": ["test:Kind"]}),
+        json!({"classes": ["test:Kind"], "remove_categories": ["Memes"], "add_categories": ["Added"]}),
+        json!({"classes": ["test:Kind"], "drop_generated": true}),
+        json!({"classes": ["test:Kind"], "remove_categories": ["Memes"]}),
+    ];
+    for base in sources {
+        for source in [
+            base.to_string(),
+            format!("{base}\n"),
+            crlf(base),
+            crlf(&format!("{base}\n")),
+        ] {
+            for plan in &plans {
+                let outcome = run_and_check(&ontology, &item(plan.clone()), &source)
+                    .unwrap_or_else(|error| panic!("{source:?} {plan}: {error}"));
+                if outcome.result.is_empty() || !outcome.refusals.is_empty() {
+                    continue;
+                }
+                assert_eq!(
+                    outcome.result.ends_with('\n'),
+                    source.ends_with('\n'),
+                    "{source:?} {plan}: {:?}",
+                    outcome.result
+                );
+            }
+        }
+    }
+}
+
+// Findings 1, 2 and 4: where pages are read and written.
+
+fn project_paths(root: &Path) -> crate::runtime::ResolvedPaths {
+    use crate::runtime::{ResolvedPaths, ValueSource};
+    ResolvedPaths {
+        wiki_content_dir: root.join("wiki_content"),
+        templates_dir: root.join("templates"),
+        state_dir: root.join(".wikitool"),
+        data_dir: root.join(".wikitool/data"),
+        db_path: root.join(".wikitool/data/wikitool.db"),
+        config_path: root.join(".wikitool/config.toml"),
+        parser_config_path: root.join(".wikitool/parser.toml"),
+        project_root: root.to_path_buf(),
+        root_source: ValueSource::Flag,
+        data_source: ValueSource::Default,
+        config_source: ValueSource::Default,
+    }
+}
+
+fn put(root: &Path, relative: &str, text: &str) {
+    let path = root.join(relative);
+    fs::create_dir_all(path.parent().expect("parent")).expect("dir");
+    fs::write(path, text).expect("write");
+}
+
+fn located(
+    files: &pages::PageFiles<'_>,
+    title: &str,
+) -> Result<(String, &'static str, String), (&'static str, String)> {
+    match locate_title(files, title).expect("locate") {
+        Located::Page {
+            source_path,
+            source_kind,
+            draft_path,
+        } => Ok((source_path, source_kind, draft_path)),
+        Located::Refused(refusal) => Err((refusal.code, refusal.message)),
+    }
+}
+
+#[test]
+fn titles_are_located_with_the_configured_namespaces_and_exact_file_names() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let root = temp.path().canonicalize().expect("root");
+    let paths = project_paths(&root);
+    put(&root, "wiki_content/Main/Foo.wiki", "Foo\n");
+    put(&root, "wiki_content/Goldenlight/Foo.wiki", "Golden\n");
+    put(&root, "wiki_content/Main/Foo_bar.wiki", "Foo bar\n");
+    put(&root, "wiki_content/Main/Miya_Notes.wiki", "Mirror\n");
+    put(&root, ".wikitool/drafts/Miya Notes.wiki", "Human edits\n");
+    put(&root, "wiki_content/Main/Twin_page.wiki", "Twin\n");
+    put(&root, ".wikitool/drafts/twin_Page.wiki", "Other title\n");
+    put(&root, "wiki_content/Main/Two.wiki", "Two\n");
+    put(&root, ".wikitool/drafts/Two.wiki", "a\n");
+    put(&root, ".wikitool/drafts/nested/Two.wiki", "b\n");
+    let files = pages::PageFiles::load(&paths).expect("files");
+
+    assert_eq!(
+        located(&files, "Foo"),
+        Ok((
+            "wiki_content/Main/Foo.wiki".to_string(),
+            "mirror",
+            ".wikitool/drafts/Foo.wiki".to_string()
+        ))
+    );
+    // A custom namespace is not the article namespace, and its page never
+    // reads or writes the draft of the article with the same name.
+    assert_eq!(
+        located(&files, "Goldenlight:Foo").unwrap_err().0,
+        REFUSED_NOT_AN_ARTICLE
+    );
+    assert_eq!(
+        located(&files, "Goldenlight talk:Foo").unwrap_err().0,
+        REFUSED_NOT_AN_ARTICLE
+    );
+    // A title never reads another title's file, even on a case-insensitive
+    // file system.
+    assert_eq!(
+        located(&files, "Foo Bar").unwrap_err().0,
+        REFUSED_PAGE_MISSING
+    );
+    // A draft with a free name is the page's source and target.
+    assert_eq!(
+        located(&files, "Miya Notes"),
+        Ok((
+            ".wikitool/drafts/Miya Notes.wiki".to_string(),
+            "draft",
+            ".wikitool/drafts/Miya Notes.wiki".to_string()
+        ))
+    );
+    // A new draft whose name another draft differs from only in case.
+    assert_eq!(
+        located(&files, "Twin page").unwrap_err().0,
+        REFUSED_DUPLICATE_TARGET
+    );
+    // Two drafts for one title.
+    assert_eq!(
+        located(&files, "Two").unwrap_err().0,
+        REFUSED_AMBIGUOUS_DRAFT
+    );
+    // A title that would name a path outside the drafts.
+    assert_eq!(
+        located(&files, r"..\..\wiki_content\Main\Foo")
+            .unwrap_err()
+            .0,
+        REFUSED_INVALID_TITLE
+    );
+    assert!(
+        files
+            .checked_draft(".wikitool/drafts/../../wiki_content/Main/Foo.wiki")
+            .is_err()
+    );
+    assert!(files.checked_draft("wiki_content/Main/Foo.wiki").is_err());
+
+    // Two titles that write one draft, compared without case, are both refused.
+    let mut selected = vec![
+        (
+            "Foo bar".to_string(),
+            Located::Page {
+                source_path: "wiki_content/Main/Foo_bar.wiki".to_string(),
+                source_kind: "mirror",
+                draft_path: ".wikitool/drafts/Foo_bar.wiki".to_string(),
+            },
+        ),
+        (
+            "Foo Bar".to_string(),
+            Located::Page {
+                source_path: "wiki_content/Main/Foo_Bar.wiki".to_string(),
+                source_kind: "mirror",
+                draft_path: ".wikitool/drafts/Foo_Bar.wiki".to_string(),
+            },
+        ),
+    ];
+    refuse_shared_targets(&mut selected);
+    for (title, located) in &selected {
+        assert!(
+            matches!(located, Located::Refused(refusal) if refusal.code == REFUSED_DUPLICATE_TARGET),
+            "{title}"
+        );
+    }
+
+    // A PATH is retyped exactly: a draft in place, and a mirror page only
+    // while its title has no draft.
+    let (title, at) = locate_file(
+        &paths,
+        &files,
+        Path::new(".wikitool/drafts/Miya Notes.wiki"),
+    )
+    .expect("draft path");
+    assert_eq!(title, "Miya Notes");
+    assert!(
+        matches!(at, Located::Page { draft_path, .. } if draft_path == ".wikitool/drafts/Miya Notes.wiki")
+    );
+    let (_, at) = locate_file(
+        &paths,
+        &files,
+        Path::new("wiki_content/Main/Miya_Notes.wiki"),
+    )
+    .expect("mirror path");
+    assert!(matches!(at, Located::Refused(refusal) if refusal.code == REFUSED_DRAFT_EXISTS));
+    let (title, at) = locate_file(
+        &paths,
+        &files,
+        Path::new("wiki_content/Goldenlight/Foo.wiki"),
+    )
+    .expect("custom namespace path");
+    assert_eq!(title, "Goldenlight:Foo");
+    assert!(matches!(at, Located::Refused(refusal) if refusal.code == REFUSED_NOT_AN_ARTICLE));
+    assert!(locate_file(&paths, &files, Path::new("plans/x.wiki")).is_err());
 }

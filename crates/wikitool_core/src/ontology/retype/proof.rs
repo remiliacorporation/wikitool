@@ -7,15 +7,12 @@
 //! 3. Re-parsing the result gives the same nodes and tag regions outside the
 //!    edited spans.
 
-use std::collections::BTreeSet;
-
-use mediawiki_wikitext::{Document, NodeKind, ProfiledParseInput, parse_profiled};
 use serde_json::{Value, json};
 
 use crate::ontology::typing::{ModuleStatus, ProjectOntology};
-use crate::ontology::values::wikitext_profile;
 use crate::site::adapter::model::OntologyRules;
 
+use super::guard::{outside_edits_match, parse};
 use super::{PageRetype, RetypePlanItem, retype_text};
 
 const RULES: &str = r#"
@@ -34,6 +31,15 @@ typed_infobox_template = "Template:Infobox"
 /// kind of page, and relation fields. `extra` adds classes, each filing its
 /// articles in the named category.
 pub(crate) fn synthetic_ontology(extra: &[(String, String)]) -> ProjectOntology {
+    synthetic_ontology_edited(extra, |_, _| {})
+}
+
+/// The synthetic ontology, with `edit` given the shared export and the
+/// display module to change before it is loaded.
+pub(crate) fn synthetic_ontology_edited(
+    extra: &[(String, String)],
+    edit: impl FnOnce(&mut Value, &mut Value),
+) -> ProjectOntology {
     let rules: OntologyRules = toml::from_str(RULES).expect("rules");
     let mut classes = json!({
         "test:Thing": { "label": "Thing" },
@@ -54,7 +60,7 @@ pub(crate) fn synthetic_ontology(extra: &[(String, String)]) -> ProjectOntology 
         classes[id] = json!({ "label": id, "subClassOf": "test:Thing" });
         display_classes[id] = json!({ "category": category });
     }
-    let shared = json!({
+    let mut shared = json!({
         "classes": classes,
         "families": {},
         "properties": {
@@ -69,7 +75,7 @@ pub(crate) fn synthetic_ontology(extra: &[(String, String)]) -> ProjectOntology 
         "external": {},
         "source": { "commit": "fixture-commit", "product": "test-wiki" }
     });
-    let display = json!({
+    let mut display = json!({
         "fields": {
             "movement": { "property": "wdt:P135", "label": "Movement", "category": "%s" },
             "member_of": { "property": "test:memberOf", "label": "Member of", "category": "%s" }
@@ -80,6 +86,7 @@ pub(crate) fn synthetic_ontology(extra: &[(String, String)]) -> ProjectOntology 
         "classes": display_classes,
         "existingCategories": {}
     });
+    edit(&mut shared, &mut display);
     let loaded = |title| ModuleStatus {
         title,
         relative_path: String::new(),
@@ -162,105 +169,5 @@ pub(crate) fn check_outcome(
     let before = parse(source).map_err(|error| format!("source does not parse: {error}"))?;
     let after =
         parse(&outcome.result).map_err(|error| format!("result does not parse: {error}"))?;
-    let source_spans: Vec<(usize, usize)> = outcome
-        .edits
-        .iter()
-        .map(|edit| (edit.start, edit.end))
-        .collect();
-    let result_spans: Vec<(usize, usize)> = outcome
-        .edits
-        .iter()
-        .map(|edit| (edit.result_start, edit.result_end))
-        .collect();
-    let shift = |offset: usize| -> usize {
-        let mut delta: isize = 0;
-        for edit in &outcome.edits {
-            // An insertion at a node's start goes before the node.
-            if edit.end <= offset {
-                delta += edit.new.len() as isize - (edit.end - edit.start) as isize;
-            }
-        }
-        (offset as isize + delta) as usize
-    };
-    let outside_source: BTreeSet<Shape> = shapes(&before, &source_spans)
-        .into_iter()
-        .map(|shape| Shape {
-            start: shift(shape.start),
-            end: shift(shape.start) + (shape.end - shape.start),
-            ..shape
-        })
-        .collect();
-    let outside_result: BTreeSet<Shape> = shapes(&after, &result_spans).into_iter().collect();
-    if outside_source != outside_result {
-        let missing: Vec<_> = outside_source.difference(&outside_result).take(3).collect();
-        let extra: Vec<_> = outside_result.difference(&outside_source).take(3).collect();
-        return Err(format!(
-            "nodes outside the edits differ: lost {missing:?}, gained {extra:?}"
-        ));
-    }
-    Ok(())
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct Shape {
-    start: usize,
-    end: usize,
-    depth: usize,
-    kind: &'static str,
-    text: String,
-}
-
-fn parse(text: &str) -> Result<Document<'_>, String> {
-    let profile = wikitext_profile(text);
-    parse_profiled(ProfiledParseInput {
-        source: &profile,
-        wikitext: text,
-    })
-    .map_err(|error| error.to_string())
-}
-
-/// The nodes and tag regions that no edit touches: none lies strictly inside
-/// them, and they lie inside none.
-fn shapes(document: &Document<'_>, edits: &[(usize, usize)]) -> Vec<Shape> {
-    let touched = |start: usize, end: usize| {
-        edits.iter().any(|(edit_start, edit_end)| {
-            if edit_start == edit_end {
-                start < *edit_start && *edit_start < end
-            } else {
-                *edit_start < end && start < *edit_end
-            }
-        })
-    };
-    let mut out = Vec::new();
-    for node in document.nodes() {
-        let span = node.span();
-        if touched(span.start(), span.end()) {
-            continue;
-        }
-        out.push(Shape {
-            start: span.start(),
-            end: span.end(),
-            depth: node.depth(),
-            kind: match node.kind() {
-                NodeKind::Template(_) => "template",
-                NodeKind::Parameter(_) => "parameter",
-                NodeKind::InternalLink(_) => "link",
-                NodeKind::Protected(_) => "protected",
-            },
-            text: document.text(span).to_string(),
-        });
-    }
-    for region in document.tag_regions() {
-        if touched(region.span.start(), region.span.end()) {
-            continue;
-        }
-        out.push(Shape {
-            start: region.span.start(),
-            end: region.span.end(),
-            depth: 0,
-            kind: region.tag.name(),
-            text: document.text(region.span).to_string(),
-        });
-    }
-    out
+    outside_edits_match(&before, &after, &outcome.edits)
 }
