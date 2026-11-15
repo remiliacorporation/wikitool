@@ -1,7 +1,7 @@
 use super::{
-    Document, InternalLink, LinkKind, Node, NodeId, NodeKind, Parameter, ParseError,
-    ParseErrorKind, ProtectedKind, ProtectedRegion, Redirect, SourceProfile, Span, Template,
-    TemplateArgument, normalize_mediawiki_word, trim_span,
+    Document, InternalLink, LinkKind, MarkupTag, Node, NodeId, NodeKind, Parameter, ParseError,
+    ParseErrorKind, ProtectedKind, ProtectedRegion, Redirect, SourceProfile, Span, TagRegion,
+    Template, TemplateArgument, normalize_mediawiki_word, trim_span,
 };
 
 struct DraftNode {
@@ -48,12 +48,181 @@ pub(super) fn parse<'a>(
                 kind,
             }
         })
-        .collect();
+        .collect::<Vec<Node>>();
+    let tag_regions = scan_tag_regions(source, &nodes);
     Ok(Document {
         source,
         nodes,
         redirect,
+        tag_regions,
     })
+}
+
+/// One `<tag>`, `</tag>` or `<tag/>` for a [`MarkupTag`] outside protected regions.
+#[derive(Clone, Copy)]
+struct TagMarker {
+    tag: MarkupTag,
+    start: usize,
+    end: usize,
+    closing: bool,
+    self_closing: bool,
+}
+
+/// Finds the transclusion-control and gallery regions. Tags are read lexically outside comments
+/// and literal regions, so a tag inside a template argument still counts. MediaWiki does not nest
+/// these tags: a region runs from an opening tag to the next closing tag of the same name, and an
+/// opening tag that never closes runs to the end of the source. A closing tag with no opening tag
+/// is literal text.
+fn scan_tag_regions(source: &str, nodes: &[Node]) -> Vec<TagRegion> {
+    let bytes = source.as_bytes();
+    let mut protected: Vec<Span> = nodes
+        .iter()
+        .filter(|node| matches!(node.kind, NodeKind::Protected(_)))
+        .map(|node| node.span)
+        .collect();
+    protected.sort_by_key(|span| span.start);
+    let mut markers = Vec::new();
+    let mut next_protected = 0;
+    let mut cursor = 0;
+    while cursor < bytes.len() {
+        while next_protected < protected.len() && protected[next_protected].end <= cursor {
+            next_protected += 1;
+        }
+        if let Some(span) = protected.get(next_protected)
+            && span.start <= cursor
+        {
+            cursor = span.end;
+            continue;
+        }
+        if bytes[cursor] == b'<'
+            && let Some(marker) = read_tag_marker(bytes, cursor)
+        {
+            cursor = marker.end;
+            markers.push(marker);
+            continue;
+        }
+        cursor += 1;
+    }
+
+    let mut regions = Vec::new();
+    let mut index = 0;
+    while index < markers.len() {
+        let marker = markers[index];
+        index += 1;
+        if marker.closing {
+            continue;
+        }
+        if marker.self_closing {
+            regions.push(TagRegion {
+                tag: marker.tag,
+                span: Span {
+                    start: marker.start,
+                    end: marker.end,
+                },
+                inner: Span {
+                    start: marker.end,
+                    end: marker.end,
+                },
+                closed: true,
+            });
+            continue;
+        }
+        let close = markers[index..]
+            .iter()
+            .position(|candidate| candidate.closing && candidate.tag == marker.tag)
+            .map(|offset| index + offset);
+        match close {
+            Some(close_index) => {
+                let close = markers[close_index];
+                regions.push(TagRegion {
+                    tag: marker.tag,
+                    span: Span {
+                        start: marker.start,
+                        end: close.end,
+                    },
+                    inner: Span {
+                        start: marker.end,
+                        end: close.start,
+                    },
+                    closed: true,
+                });
+                // Markers of other tags inside the region still open their own regions.
+                markers.remove(close_index);
+            }
+            None => regions.push(TagRegion {
+                tag: marker.tag,
+                span: Span {
+                    start: marker.start,
+                    end: source.len(),
+                },
+                inner: Span {
+                    start: marker.end,
+                    end: source.len(),
+                },
+                closed: false,
+            }),
+        }
+    }
+    regions.sort_by_key(|region| (region.span.start, region.span.end));
+    regions
+}
+
+fn read_tag_marker(bytes: &[u8], start: usize) -> Option<TagMarker> {
+    let mut cursor = start + 1;
+    let closing = bytes.get(cursor) == Some(&b'/');
+    if closing {
+        cursor += 1;
+    }
+    let name_start = cursor;
+    while bytes.get(cursor).is_some_and(u8::is_ascii_alphanumeric) {
+        cursor += 1;
+    }
+    let tag = markup_tag(std::str::from_utf8(&bytes[name_start..cursor]).ok()?)?;
+    if !bytes
+        .get(cursor)
+        .is_some_and(|byte| byte.is_ascii_whitespace() || matches!(*byte, b'/' | b'>'))
+    {
+        return None;
+    }
+    let mut quote = None;
+    while cursor < bytes.len() {
+        let byte = bytes[cursor];
+        match (quote, byte) {
+            (None, b'\'' | b'"') if !closing => quote = Some(byte),
+            (Some(open), close) if open == close => quote = None,
+            (None, b'>') => {
+                let end = cursor + 1;
+                let self_closing = !closing
+                    && bytes[name_start..cursor]
+                        .iter()
+                        .rev()
+                        .find(|byte| !byte.is_ascii_whitespace())
+                        == Some(&b'/');
+                return Some(TagMarker {
+                    tag,
+                    start,
+                    end,
+                    closing,
+                    self_closing,
+                });
+            }
+            (None, b'<') => return None,
+            _ => {}
+        }
+        cursor += 1;
+    }
+    None
+}
+
+fn markup_tag(name: &str) -> Option<MarkupTag> {
+    [
+        ("includeonly", MarkupTag::IncludeOnly),
+        ("noinclude", MarkupTag::NoInclude),
+        ("onlyinclude", MarkupTag::OnlyInclude),
+        ("gallery", MarkupTag::Gallery),
+    ]
+    .into_iter()
+    .find_map(|(candidate, tag)| name.eq_ignore_ascii_case(candidate).then_some(tag))
 }
 
 struct Parser<'source, 'profile> {
@@ -341,6 +510,10 @@ impl Parser<'_, '_> {
                 end,
                 NodeKind::Protected(ProtectedRegion {
                     kind: ProtectedKind::Comment,
+                    inner: Span {
+                        start: start + 4,
+                        end: end_start,
+                    },
                 }),
             );
             return Ok(Some(end));
@@ -380,7 +553,15 @@ impl Parser<'_, '_> {
         };
         let id = self.reserve_node(start, parent, depth);
         if self.source[start..open_end].trim_end().ends_with("/>") {
-            self.complete_node(id, open_end, NodeKind::Protected(ProtectedRegion { kind }));
+            let inner = Span {
+                start: open_end,
+                end: open_end,
+            };
+            self.complete_node(
+                id,
+                open_end,
+                NodeKind::Protected(ProtectedRegion { kind, inner }),
+            );
             return Ok(Some(open_end));
         }
 
@@ -403,10 +584,14 @@ impl Parser<'_, '_> {
                             cursor,
                         ));
                     };
+                    let inner = Span {
+                        start: open_end,
+                        end: cursor,
+                    };
                     self.complete_node(
                         id,
                         close_end,
-                        NodeKind::Protected(ProtectedRegion { kind }),
+                        NodeKind::Protected(ProtectedRegion { kind, inner }),
                     );
                     return Ok(Some(close_end));
                 }
@@ -447,7 +632,8 @@ impl Parser<'_, '_> {
                         Some((
                             _,
                             NodeKind::Protected(ProtectedRegion {
-                                kind: ProtectedKind::Comment
+                                kind: ProtectedKind::Comment,
+                                ..
                             })
                         ))
                     )

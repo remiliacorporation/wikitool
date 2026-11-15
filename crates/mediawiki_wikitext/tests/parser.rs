@@ -1,9 +1,9 @@
 use std::collections::BTreeSet;
 
 use mediawiki_wikitext::{
-    InternalLink, LinkKind, Node, NodeKind, ParseErrorKind, ProfiledParseInput, ProtectedKind,
-    RewriteError, RewritePlan, SOURCE_DOCUMENT_SCHEMA, SourceDocumentInput, SourceDocumentReceipt,
-    SourceProfile, parse_profiled, parse_source_document,
+    InternalLink, LinkKind, MarkupTag, Node, NodeKind, ParseErrorKind, ProfiledParseInput,
+    ProtectedKind, RewriteError, RewritePlan, SOURCE_DOCUMENT_SCHEMA, SourceDocumentInput,
+    SourceDocumentReceipt, SourceProfile, parse_profiled, parse_source_document,
 };
 use sha2::{Digest, Sha256};
 
@@ -424,4 +424,176 @@ fn source_profile_json_is_strict_and_versioned() {
     let mut value = serde_json::to_value(profile()).unwrap();
     value["unexpected"] = serde_json::json!(true);
     assert!(serde_json::from_value::<SourceProfile>(value).is_err());
+}
+
+#[test]
+fn reports_protected_interiors_and_transclusion_and_gallery_regions() {
+    let source = "<!--c-->\n<nowiki>[[N]]</nowiki><nowiki/>\n<noinclude>[[A]]</noinclude>\n{{T|<includeonly>[[B]]</includeonly>}}\n<GALLERY mode=\"x>y\">\nFile:X.png|[[C]]\n</gallery>\n<!-- <noinclude> -->\n</onlyinclude>\n<includeonly>[[D]]";
+    let document = parse_profiled(ProfiledParseInput {
+        source: &profile(),
+        wikitext: source,
+    })
+    .unwrap();
+
+    let interiors = document
+        .nodes()
+        .iter()
+        .filter_map(|node| match node.kind() {
+            NodeKind::Protected(region) => Some(document.text(region.inner)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(interiors, vec!["c", "[[N]]", "", " <noinclude> "]);
+
+    let regions = document
+        .tag_regions()
+        .iter()
+        .map(|region| (region.tag, document.text(region.inner), region.closed))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        regions,
+        vec![
+            (MarkupTag::NoInclude, "[[A]]", true),
+            (MarkupTag::IncludeOnly, "[[B]]", true),
+            (MarkupTag::Gallery, "\nFile:X.png|[[C]]\n", true),
+            (MarkupTag::IncludeOnly, "[[D]]", false),
+        ]
+    );
+    let link_regions = links(&document)
+        .into_iter()
+        .map(|(node, link)| {
+            (
+                document.text(link.target),
+                document
+                    .tag_regions_at(node.span().start())
+                    .map(|region| region.tag)
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        link_regions,
+        vec![
+            ("A", vec![MarkupTag::NoInclude]),
+            ("B", vec![MarkupTag::IncludeOnly]),
+            ("C", vec![MarkupTag::Gallery]),
+            ("D", vec![MarkupTag::IncludeOnly]),
+        ]
+    );
+}
+
+fn parse(source: &str) -> mediawiki_wikitext::Document<'_> {
+    parse_profiled(ProfiledParseInput {
+        source: &profile(),
+        wikitext: source,
+    })
+    .unwrap()
+}
+
+fn category_ids(document: &mediawiki_wikitext::Document<'_>) -> Vec<mediawiki_wikitext::NodeId> {
+    links(document)
+        .into_iter()
+        .filter(|(_, link)| link.kind == LinkKind::Category)
+        .map(|(node, _)| node.id())
+        .collect()
+}
+
+fn remove_lines(source: &str, which: &[usize]) -> String {
+    let document = parse(source);
+    let ids = category_ids(&document);
+    let mut plan = RewritePlan::new();
+    for index in which {
+        plan.remove_line(ids[*index]).unwrap();
+    }
+    document.rewrite(&plan).unwrap()
+}
+
+#[test]
+fn removes_a_node_with_its_line_only_when_the_line_holds_nothing_else() {
+    assert_eq!(remove_lines("A\n[[Category:X]]\nB", &[0]), "A\nB");
+    assert_eq!(remove_lines("A\r\n  [[Category:X]]\t\r\nB", &[0]), "A\r\nB");
+    // The last line gives up the break before it.
+    assert_eq!(remove_lines("A\n[[Category:X]]", &[0]), "A");
+    assert_eq!(remove_lines("A\r\n[[Category:X]]", &[0]), "A");
+    assert_eq!(remove_lines("[[Category:X]]", &[0]), "");
+    // Two removed lines in a row at the end do not claim the same line break.
+    assert_eq!(
+        remove_lines("A\n[[Category:X]]\n[[Category:Y]]", &[0, 1]),
+        "A\n"
+    );
+    // Several removed nodes on one line take the line together.
+    assert_eq!(
+        remove_lines("A\n[[Category:X]] [[Category:Y]]\nB", &[0, 1]),
+        "A\nB"
+    );
+    // A node that shares its line goes alone; at the start of a line it takes the spaces
+    // after it, so the line does not start with a space.
+    assert_eq!(
+        remove_lines("A\n[[Category:X]] [[Category:Y]]\nB", &[0]),
+        "A\n[[Category:Y]]\nB"
+    );
+    assert_eq!(
+        remove_lines("A\n[[Category:X]] [[Category:Y]]\nB", &[1]),
+        "A\n[[Category:X]] \nB"
+    );
+    assert_eq!(
+        remove_lines("Text [[Category:X]] more.", &[0]),
+        "Text  more."
+    );
+    assert_eq!(
+        remove_lines("[[Category:X]] [[Category:Y]] text", &[0, 1]),
+        "text"
+    );
+}
+
+#[test]
+fn inserts_only_between_nodes_and_reports_every_resolved_span() {
+    let source = "{{SHORTDESC:x}}\n[[Category:A]]";
+    let document = parse(source);
+    let category = category_ids(&document)[0];
+
+    let mut plan = RewritePlan::new();
+    plan.insert(source.len(), "\n[[Category:B]]");
+    plan.insert(source.len(), "\n[[Category:C]]");
+    plan.insert(15, "\n{{Instance of|x}}");
+    let edits = document.resolve(&plan).unwrap();
+    assert_eq!(
+        edits
+            .iter()
+            .map(|edit| (edit.span().start(), edit.span().end(), edit.replacement()))
+            .collect::<Vec<_>>(),
+        vec![
+            (15, 15, "\n{{Instance of|x}}"),
+            (30, 30, "\n[[Category:B]]"),
+            (30, 30, "\n[[Category:C]]"),
+        ]
+    );
+    assert_eq!(
+        document.rewrite(&plan).unwrap(),
+        "{{SHORTDESC:x}}\n{{Instance of|x}}\n[[Category:A]]\n[[Category:B]]\n[[Category:C]]"
+    );
+
+    let mut inside = RewritePlan::new();
+    inside.insert(3, "x");
+    assert!(matches!(
+        document.resolve(&inside),
+        Err(RewriteError::InsertionInsideNode { offset: 3, .. })
+    ));
+    let mut not_boundary = RewritePlan::new();
+    not_boundary.insert(source.len() + 1, "x");
+    assert!(matches!(
+        document.resolve(&not_boundary),
+        Err(RewriteError::InvalidInsertion { .. })
+    ));
+    // An insertion inside a removed line break conflicts with that removal.
+    let mut conflicting = RewritePlan::new();
+    conflicting.remove_line(category).unwrap();
+    conflicting.insert(16, "x");
+    assert!(matches!(
+        document.resolve(&conflicting),
+        Err(RewriteError::InsertionInsideEdit { offset: 16 })
+    ));
+    let mut duplicate = RewritePlan::new();
+    duplicate.remove_line(category).unwrap();
+    assert!(duplicate.replace(category, "x").is_err());
 }

@@ -27,7 +27,13 @@ than a link, while a syntactically possible `[[Title` remains an unclosed-link e
 Rewriting is deliberately explicit. A caller builds a `RewritePlan` from parsed `NodeId` values and
 provides the complete replacement for each selected node. The document rejects overlapping
 ancestor/descendant replacements rather than choosing an implicit winner. An empty plan is an exact
-round trip.
+round trip. A plan may also remove a node with its line, when nothing else but spaces, tabs, and
+other removed nodes is on that line, and insert text at an offset no node spans across.
+`Document::resolve` returns each edit's exact source span and replacement, in source order.
+
+Protected nodes report their unparsed interior. `Document::tag_regions` reports `includeonly`,
+`noinclude`, `onlyinclude`, and `gallery` regions, which are not nodes: their contents are
+parsed like the surrounding text.
 
 This is not a complete MediaWiki parser or template engine. It does not acquire pages, enumerate a
 corpus, decode a producer-specific manifest, expand templates or parser functions, apply site
