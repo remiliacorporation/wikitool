@@ -1,42 +1,33 @@
 use std::fs;
-use std::path::Path;
 
 use anyhow::{Context, Result, bail};
-use wikitool_core::filesystem::{
-    relative_path_to_title, title_to_relative_path, validate_scoped_path,
-};
 use wikitool_core::ontology::retype::{
-    RetypeApplyMode, RetypeReport, run_article_retype as run_retype,
+    RetypeApplyMode, RetypeReport, RetypeTargets, run_article_retype as run_retype,
 };
 
 use crate::RuntimeOptions;
-use crate::cli_support::{normalize_path, path_is_under_directory, resolve_runtime_paths};
+use crate::cli_support::{normalize_path, resolve_runtime_paths};
 
 use super::{ArticleRetypeApplyArg, ArticleRetypeArgs};
 
 pub(super) fn run_article_retype(runtime: &RuntimeOptions, args: ArticleRetypeArgs) -> Result<()> {
     let paths = resolve_runtime_paths(runtime)?;
-    let titles: Option<Vec<String>> = match (&args.path, &args.titles_file) {
+    let targets = match (args.path, &args.titles_file) {
         (Some(_), Some(_)) => bail!("article retype takes a PATH or --titles-file, not both"),
-        (Some(path), None) => Some(vec![title_for_path(&paths, path)?]),
+        // The exact file named, never another file of the same title.
+        (Some(path), None) => RetypeTargets::File(path),
         (None, Some(file)) => {
             let text = fs::read_to_string(file)
                 .with_context(|| format!("failed to read {}", normalize_path(file)))?;
-            Some(
-                text.lines()
-                    .map(str::trim)
-                    .filter(|line| !line.is_empty())
-                    .map(str::to_string)
-                    .collect(),
-            )
+            RetypeTargets::Titles(titles_from_file(&text))
         }
-        (None, None) => None,
+        (None, None) => RetypeTargets::Plan,
     };
     let apply = match args.apply {
         ArticleRetypeApplyArg::None => RetypeApplyMode::None,
         ArticleRetypeApplyArg::Draft => RetypeApplyMode::Draft,
     };
-    let report = run_retype(&paths, &args.plan, titles.as_deref(), apply)?;
+    let report = run_retype(&paths, &args.plan, &targets, apply)?;
 
     if args.format.is_json() {
         println!("{}", serde_json::to_string_pretty(&report)?);
@@ -62,44 +53,16 @@ pub(super) fn run_article_retype(runtime: &RuntimeOptions, args: ArticleRetypeAr
     Ok(())
 }
 
-/// The title a mirror page or draft file stands for. A draft is named like
-/// the mirror file of its title.
-fn title_for_path(paths: &wikitool_core::runtime::ResolvedPaths, path: &Path) -> Result<String> {
-    let absolute = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        paths.project_root.join(path)
-    };
-    validate_scoped_path(paths, &absolute)?;
-    let relative_to_root = |absolute: &Path| -> Result<String> {
-        Ok(normalize_path(
-            absolute
-                .strip_prefix(&paths.project_root)
-                .with_context(|| {
-                    format!(
-                        "{} is not inside the project {}",
-                        normalize_path(absolute),
-                        normalize_path(&paths.project_root)
-                    )
-                })?,
-        ))
-    };
-    if path_is_under_directory(&absolute, &paths.state_dir.join("drafts")) {
-        let file_name = absolute
-            .file_name()
-            .map(|name| name.to_string_lossy().to_string())
-            .context("the draft path has no file name")?;
-        let sample = title_to_relative_path(paths, "Retype", false)?;
-        let folder = sample.rsplit_once('/').map_or("", |(folder, _)| folder);
-        return relative_path_to_title(paths, &format!("{folder}/{file_name}"));
-    }
-    if path_is_under_directory(&absolute, &paths.wiki_content_dir) {
-        return relative_path_to_title(paths, &relative_to_root(&absolute)?);
-    }
-    bail!(
-        "article retype reads pages under wiki_content/ or .wikitool/drafts/: {}",
-        normalize_path(path)
-    )
+/// The titles of a titles file, one per line, without the byte order mark an
+/// editor may start the file with.
+fn titles_from_file(text: &str) -> Vec<String> {
+    text.strip_prefix('\u{feff}')
+        .unwrap_or(text)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect()
 }
 
 fn print_report(project_root: &str, report: &RetypeReport) {
@@ -166,5 +129,18 @@ fn print_report(project_root: &str, report: &RetypeReport) {
                 println!();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::titles_from_file;
+
+    #[test]
+    fn a_titles_file_may_start_with_a_byte_order_mark() {
+        assert_eq!(
+            titles_from_file("\u{feff}Wojak\r\n\r\n Pepe \n"),
+            vec!["Wojak".to_string(), "Pepe".to_string()]
+        );
     }
 }

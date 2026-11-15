@@ -39,10 +39,13 @@ so a caller can report and verify precisely which bytes changed.
 
 Each protected node also reports its unparsed interior, so a caller can inspect what a comment or
 literal region holds without the parser reading it as wikitext. `Document::tag_regions` reports
-`includeonly`, `noinclude`, `onlyinclude`, and `gallery` regions found outside protected
-regions. They are not nodes, and their contents are parsed like the surrounding text. As in
-MediaWiki these tags do not nest: a region runs to the next closing tag of the same name, or to
-the end of the source when unclosed.
+`includeonly`, `noinclude`, `onlyinclude`, `gallery`, `ref`, `math`, `score`, and
+`templatedata` regions found outside protected regions. They are not nodes, and their contents
+are parsed like the surrounding text. A region runs from an opening tag to the next closing tag
+of the same name, or to the end of the source when unclosed, so a tag does not nest in itself,
+but a region of one tag can hold regions of the other tags, such as a `ref` inside `noinclude`.
+As in MediaWiki's preprocessor, an opening tag ends at the first `>` after its name, whatever
+quotes its attributes hold, and a closing tag allows only spaces between its name and `>`.
 
 Corpus producers remain adapters. They enumerate and refresh pages, store bytes and media, and
 produce their own manifests. A caller translates one verified page record into the neutral public

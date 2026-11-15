@@ -32,8 +32,9 @@ other removed nodes is on that line, and insert text at an offset no node spans 
 `Document::resolve` returns each edit's exact source span and replacement, in source order.
 
 Protected nodes report their unparsed interior. `Document::tag_regions` reports `includeonly`,
-`noinclude`, `onlyinclude`, and `gallery` regions, which are not nodes: their contents are
-parsed like the surrounding text.
+`noinclude`, `onlyinclude`, `gallery`, `ref`, `math`, `score`, and `templatedata` regions, which
+are not nodes: their contents are parsed like the surrounding text. A region of one tag can hold
+regions of the other tags.
 
 This is not a complete MediaWiki parser or template engine. It does not acquire pages, enumerate a
 corpus, decode a producer-specific manifest, expand templates or parser functions, apply site

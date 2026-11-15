@@ -143,7 +143,10 @@ fn class_call_parts(text: &str, class_key: &str) -> Result<Vec<(&'static str, St
         .filter(|node| node.parent().is_none())
         .collect();
     let [call] = top.as_slice() else {
-        return Err(format!("it holds {} top-level nodes, not one call", top.len()));
+        return Err(format!(
+            "it holds {} top-level nodes, not one call",
+            top.len()
+        ));
     };
     let is_class_call = match call.kind() {
         NodeKind::Template(template) => {
@@ -158,7 +161,12 @@ fn class_call_parts(text: &str, class_key: &str) -> Result<Vec<(&'static str, St
         .nodes()
         .iter()
         .filter(|node| node.id() != call.id())
-        .map(|node| (node_kind(node.kind()), document.text(node.span()).to_string()))
+        .map(|node| {
+            (
+                node_kind(node.kind()),
+                document.text(node.span()).to_string(),
+            )
+        })
         .collect();
     out.extend(
         document

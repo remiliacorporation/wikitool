@@ -622,7 +622,13 @@ fn regions(source: &str) -> Vec<(MarkupTag, &str, bool)> {
     document
         .tag_regions()
         .iter()
-        .map(|region| (region.tag, &source[region.inner.start()..region.inner.end()], region.closed))
+        .map(|region| {
+            (
+                region.tag,
+                &source[region.inner.start()..region.inner.end()],
+                region.closed,
+            )
+        })
         .collect()
 }
 
@@ -630,7 +636,9 @@ fn regions(source: &str) -> Vec<(MarkupTag, &str, bool)> {
 fn opening_tags_end_at_the_first_angle_bracket_whatever_the_quotes() {
     // An apostrophe in an unquoted attribute does not hide the region.
     assert_eq!(
-        regions("<gallery caption=Bob's>\nFile:X.png|[[Category:Memes]]\n</gallery>\n[[Category:Memes]]"),
+        regions(
+            "<gallery caption=Bob's>\nFile:X.png|[[Category:Memes]]\n</gallery>\n[[Category:Memes]]"
+        ),
         vec![(
             MarkupTag::Gallery,
             "\nFile:X.png|[[Category:Memes]]\n",
@@ -639,7 +647,9 @@ fn opening_tags_end_at_the_first_angle_bracket_whatever_the_quotes() {
     );
     // An open quote does not run the tag on over a later tag.
     assert_eq!(
-        regions("<gallery caption=\"a>\nFile:X.png\n</gallery>\n<noinclude>[[Category:A]]</noinclude>"),
+        regions(
+            "<gallery caption=\"a>\nFile:X.png\n</gallery>\n<noinclude>[[Category:A]]</noinclude>"
+        ),
         vec![
             (MarkupTag::Gallery, "\nFile:X.png\n", true),
             (MarkupTag::NoInclude, "[[Category:A]]", true),

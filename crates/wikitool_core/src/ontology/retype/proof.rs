@@ -31,6 +31,15 @@ typed_infobox_template = "Template:Infobox"
 /// kind of page, and relation fields. `extra` adds classes, each filing its
 /// articles in the named category.
 pub(crate) fn synthetic_ontology(extra: &[(String, String)]) -> ProjectOntology {
+    synthetic_ontology_edited(extra, |_, _| {})
+}
+
+/// The synthetic ontology, with `edit` given the shared export and the
+/// display module to change before it is loaded.
+pub(crate) fn synthetic_ontology_edited(
+    extra: &[(String, String)],
+    edit: impl FnOnce(&mut Value, &mut Value),
+) -> ProjectOntology {
     let rules: OntologyRules = toml::from_str(RULES).expect("rules");
     let mut classes = json!({
         "test:Thing": { "label": "Thing" },
@@ -51,7 +60,7 @@ pub(crate) fn synthetic_ontology(extra: &[(String, String)]) -> ProjectOntology 
         classes[id] = json!({ "label": id, "subClassOf": "test:Thing" });
         display_classes[id] = json!({ "category": category });
     }
-    let shared = json!({
+    let mut shared = json!({
         "classes": classes,
         "families": {},
         "properties": {
@@ -66,7 +75,7 @@ pub(crate) fn synthetic_ontology(extra: &[(String, String)]) -> ProjectOntology 
         "external": {},
         "source": { "commit": "fixture-commit", "product": "test-wiki" }
     });
-    let display = json!({
+    let mut display = json!({
         "fields": {
             "movement": { "property": "wdt:P135", "label": "Movement", "category": "%s" },
             "member_of": { "property": "test:memberOf", "label": "Member of", "category": "%s" }
@@ -77,6 +86,7 @@ pub(crate) fn synthetic_ontology(extra: &[(String, String)]) -> ProjectOntology 
         "classes": display_classes,
         "existingCategories": {}
     });
+    edit(&mut shared, &mut display);
     let loaded = |title| ModuleStatus {
         title,
         relative_path: String::new(),

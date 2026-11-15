@@ -61,6 +61,7 @@ pub(super) struct PageFiles<'p> {
     mapper: NamespaceMapper,
     /// Lower-case namespace names that make a title not an article.
     namespaces: BTreeSet<String>,
+    content_relative: String,
     content_main: String,
     drafts_relative: String,
     /// Drafts by normalized title.
@@ -95,6 +96,7 @@ impl<'p> PageFiles<'p> {
             mapper,
             namespaces,
             content_main: format!("{content}/Main/"),
+            content_relative: content.clone(),
             drafts_relative: relative_to_root(paths, &drafts_dir),
             drafts: BTreeMap::new(),
         };
@@ -140,6 +142,21 @@ impl<'p> PageFiles<'p> {
         normalize_title(&self.mapper.relative_path_to_title(self.paths, relative))
     }
 
+    /// The title a mirror page's path stands for.
+    pub(super) fn mirror_title(&self, relative: &str) -> String {
+        normalize_title(&self.mapper.relative_path_to_title(self.paths, relative))
+    }
+
+    /// Whether a project-relative path is under `.wikitool/drafts/`.
+    pub(super) fn is_draft_path(&self, relative: &str) -> bool {
+        relative.starts_with(&format!("{}/", self.drafts_relative))
+    }
+
+    /// Whether a project-relative path is under `wiki_content/`.
+    pub(super) fn is_mirror_path(&self, relative: &str) -> bool {
+        relative.starts_with(&format!("{}/", self.content_relative))
+    }
+
     /// Why a title is not an article the command may retype, if it is not.
     pub(super) fn article_refusal(&self, title: &str) -> Option<Refusal> {
         if title.contains(TITLE_FORBIDDEN) || title.chars().any(char::is_control) {
@@ -174,7 +191,10 @@ impl<'p> PageFiles<'p> {
 
     /// The drafts whose file name spells the title.
     pub(super) fn drafts_for(&self, title: &str) -> &[String] {
-        self.drafts.get(title).map(Vec::as_slice).unwrap_or_default()
+        self.drafts
+            .get(title)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
     }
 
     /// The mirror file the sync layer stores a title in, when it exists: its
@@ -253,7 +273,8 @@ impl<'p> PageFiles<'p> {
         Ok(absolute)
     }
 
-    fn exists_exactly(&self, relative: &str) -> Result<bool> {
+    /// Whether a file with exactly this name, case included, exists.
+    pub(super) fn exists_exactly(&self, relative: &str) -> Result<bool> {
         let (directory, name) = split_file_name(relative);
         Ok(self.listing(directory)?.iter().any(|other| other == name))
     }

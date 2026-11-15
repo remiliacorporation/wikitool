@@ -13,7 +13,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -54,6 +53,7 @@ const MAX_CATEGORY_HOPS: usize = 15;
 /// A typing plan: what to state on each page.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+#[non_exhaustive]
 pub struct RetypePlan {
     pub schema: String,
     pub items: Vec<RetypePlanItem>,
@@ -62,6 +62,7 @@ pub struct RetypePlan {
 /// What to state on one page.
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+#[non_exhaustive]
 pub struct RetypePlanItem {
     pub title: String,
     /// The classes the class statement states, primary first. Empty keeps the
@@ -144,6 +145,7 @@ fn normalize_category(raw: &str) -> String {
 /// replace them in the result. Swapping each `new` back for its `old`, at
 /// `result_start..result_end`, gives the source again.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct RetypeEdit {
     /// `class_statement_replace`, `class_statement_insert`,
     /// `category_remove`, `category_drop_generated` or `category_add`.
@@ -161,6 +163,7 @@ pub struct RetypeEdit {
 
 /// Why a page was not changed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct Refusal {
     pub code: &'static str,
     pub message: String,
@@ -210,9 +213,11 @@ pub const REFUSED_RESULT_CHECK_FAILED: &str = "result_check_failed";
 pub const REFUSED_INVALID_TITLE: &str = "invalid_title";
 pub const REFUSED_AMBIGUOUS_DRAFT: &str = "ambiguous_draft";
 pub const REFUSED_DUPLICATE_TARGET: &str = "duplicate_target";
+pub const REFUSED_DRAFT_EXISTS: &str = "draft_exists";
 
 /// A typing finding on the result, as `article lint` reports it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct RetypeFinding {
     pub code: &'static str,
     pub message: String,
@@ -227,6 +232,7 @@ pub struct RetypeFinding {
 
 /// The typing checks on the result.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct RetypeTyping {
     pub checks_run: Vec<&'static str>,
     pub skipped: Vec<SkippedCheck>,
@@ -236,6 +242,7 @@ pub struct RetypeTyping {
 /// One page's outcome: the result text, and the edits, refusals and notes
 /// that explain it. A refused page's result is its source.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct PageRetype {
     pub result: String,
     pub edits: Vec<RetypeEdit>,
@@ -311,11 +318,8 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
             )],
         );
     };
-    let class_refusals = planned_class_refusals(
-        ontology,
-        item,
-        class_key.trim_start_matches("Template:"),
-    );
+    let class_refusals =
+        planned_class_refusals(ontology, item, class_key.trim_start_matches("Template:"));
     if !class_refusals.is_empty() {
         return PageRetype::refused(source, ontology, class_refusals);
     }
@@ -456,16 +460,29 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
         }
     }
 
-    // Category links.
-    let generated: Vec<String> = match &stated {
-        Some(classes) => {
-            let (generated, notes) = generated_categories(ontology, classes);
-            if item.drop_generated {
-                editor.notes.extend(notes);
-            }
-            generated
-        }
-        None => Vec::new(),
+    // Category links. The planned classes' categories are worked out even
+    // when the page gets no class statement, so a plan that adds a category
+    // drop_generated would remove is refused on every page alike; only a
+    // class statement on the page makes them links to drop.
+    let planned_classes: Option<Vec<String>> = stated.clone().or_else(|| {
+        (!item.classes.is_empty()).then(|| {
+            item.classes
+                .iter()
+                .map(|id| id.trim().to_string())
+                .collect()
+        })
+    });
+    let (planned_generated, generated_notes) = match &planned_classes {
+        Some(classes) => generated_categories(ontology, classes),
+        None => (Vec::new(), Vec::new()),
+    };
+    if item.drop_generated && stated.is_some() {
+        editor.notes.extend(generated_notes);
+    }
+    let generated: Vec<String> = if stated.is_some() {
+        planned_generated.clone()
+    } else {
+        Vec::new()
     };
     let remove: Vec<String> = dedupe(
         item.remove_categories
@@ -478,7 +495,7 @@ pub fn retype_text(ontology: &ProjectOntology, item: &RetypePlanItem, source: &s
             .map(|name| normalize_category(name)),
     );
     if item.drop_generated
-        && let Some(name) = add.iter().find(|name| generated.contains(name))
+        && let Some(name) = add.iter().find(|name| planned_generated.contains(name))
     {
         editor.refusals.push(Refusal::new(
             REFUSED_INVALID_PLAN,
@@ -679,6 +696,14 @@ fn majority_line_break(source: &str) -> &'static str {
     if crlf * 2 > breaks { "\r\n" } else { "\n" }
 }
 
+/// The slot a numbered argument name fills: `1`, `2`, and so on, written
+/// without leading zeros or signs.
+fn slot_number(name: &str) -> Option<usize> {
+    name.parse::<usize>()
+        .ok()
+        .filter(|index| *index >= 1 && name == index.to_string())
+}
+
 fn dedupe(names: impl Iterator<Item = String>) -> Vec<String> {
     let mut seen = BTreeSet::new();
     names.filter(|name| seen.insert(name.clone())).collect()
@@ -694,10 +719,14 @@ const VALUE_FORBIDDEN: &[char] = &['|', '{', '}', '[', ']', '<', '>', ';', '\n',
 const CATEGORY_FORBIDDEN: &[char] = &['[', ']', '{', '}', '|', '#', '<', '>', '\n', '\r'];
 
 /// Text that holds markup the command must not write: a forbidden
-/// character, a control character, or a signature (`~~~`), which MediaWiki
-/// replaces when the page is saved.
+/// character, a control character, a signature (`~~~`), which MediaWiki
+/// replaces when the page is saved, or `__`, which starts a behavior switch
+/// such as `__NOINDEX__`.
 fn holds_markup(text: &str, forbidden: &[char]) -> bool {
-    text.contains(forbidden) || text.chars().any(char::is_control) || text.contains("~~~")
+    text.contains(forbidden)
+        || text.chars().any(char::is_control)
+        || text.contains("~~~")
+        || text.contains("__")
 }
 
 fn validate_item(item: &RetypePlanItem) -> Vec<Refusal> {
@@ -872,6 +901,9 @@ fn generated_categories(
                     }
                 }
             }
+            CategoryWalk::Renamed { at, parent, current } => notes.push(format!(
+                "the class statement files the page in no category for {id}: {at} names {parent} in subClassOf, which the ontology renamed to {current}, and Module:Infobox follows no renames"
+            )),
             CategoryWalk::SeveralParents(at) => notes.push(format!(
                 "the class statement files the page in no category for {id}: {at} lists several classes in subClassOf, and Module:Infobox follows only one"
             )),
@@ -891,27 +923,68 @@ enum CategoryWalk {
     Found(String),
     /// The walk reached a class whose `subClassOf` is a list.
     SeveralParents(String),
+    /// The walk reached a `subClassOf` that names a renamed id.
+    Renamed {
+        at: String,
+        parent: String,
+        current: String,
+    },
     NotFound,
+}
+
+/// The sections `Module:Ontology`'s `find` looks in, in its order. The
+/// vocabulary's own `find` also looks in `families` and `schemes`, which
+/// the module does not.
+const MODULE_FIND_SECTIONS: [&str; 3] = ["classes", "properties", "relations"];
+
+/// `Module:Ontology`'s `find`: the entry for an id in the first of its
+/// sections that has it, shared before local, with no renames followed.
+fn module_find<'v>(
+    vocabulary: &'v super::vocabulary::Vocabulary,
+    id: &str,
+) -> Option<super::vocabulary::Term<'v>> {
+    MODULE_FIND_SECTIONS
+        .iter()
+        .find_map(|section| vocabulary.term(section, id))
 }
 
 /// `Module:Infobox`'s `categoryClass`: the class, or the nearest superclass,
 /// that `Module:Ontology/display` gives a category; with `skip_small`, one
-/// whose category is not small. Superclasses are read with `Ontology.find`,
-/// from any section, shared before local.
+/// whose category is not small. Superclasses are read as `Ontology.find`
+/// reads them (see [`module_find`]). The walk is the module's, not
+/// [`Vocabulary::ancestors`](super::vocabulary::Vocabulary::ancestors),
+/// which follows renames and every superclass: a category the module does
+/// not generate must never count as generated, or `drop_generated` would
+/// take a page out of it.
 fn category_class(ontology: &ProjectOntology, id: &str, skip_small: bool) -> CategoryWalk {
+    let vocabulary = &ontology.vocabulary;
     let mut current = id.to_string();
+    let listed = |id: &str| {
+        vocabulary
+            .display_class(id)
+            .is_some_and(|entry| !(skip_small && is_small(entry)))
+    };
     for _ in 0..MAX_CATEGORY_HOPS {
-        if let Some(entry) = ontology.vocabulary.display_class(&current)
-            && !(skip_small && is_small(entry))
-        {
+        if listed(&current) {
             return CategoryWalk::Found(current);
         }
-        let parent = ontology
-            .vocabulary
-            .find(&current)
-            .and_then(|term| term.entry.get("subClassOf"));
-        match parent {
-            Some(Value::String(parent)) => current = parent.clone(),
+        let Some(term) = module_find(vocabulary, &current) else {
+            return CategoryWalk::NotFound;
+        };
+        match term.entry.get("subClassOf") {
+            Some(Value::String(parent)) => {
+                if !listed(parent)
+                    && module_find(vocabulary, parent).is_none()
+                    && let Some(renamed) = vocabulary.renamed_to(parent)
+                {
+                    return CategoryWalk::Renamed {
+                        at: current,
+                        parent: parent.clone(),
+                        current: renamed,
+                    };
+                }
+                current = parent.clone();
+            }
             Some(Value::Array(_)) => return CategoryWalk::SeveralParents(current),
             _ => return CategoryWalk::NotFound,
         }
@@ -1058,7 +1131,8 @@ fn text_category_links(
 struct Editor<'d, 's> {
     document: &'d Document<'s>,
     source: &'s str,
-    /// The page's usual line break, for a line with none of its own.
+    /// The page's usual line break, for every new line: `\r\n` when most of
+    /// its line breaks are, else `\n`, so one stray break does not decide.
     eol: &'static str,
     /// Replacements and line removals.
     plan: RewritePlan,
@@ -1128,12 +1202,7 @@ impl Editor<'_, '_> {
 
     /// The first of `offsets` where new text may go, or a refusal naming
     /// where the last one falls.
-    fn place(
-        &mut self,
-        offsets: &[usize],
-        code: &'static str,
-        what: &str,
-    ) -> Option<usize> {
+    fn place(&mut self, offsets: &[usize], code: &'static str, what: &str) -> Option<usize> {
         let mut context = None;
         for offset in offsets {
             match self.blocked_at(*offset) {
@@ -1177,26 +1246,6 @@ impl Editor<'_, '_> {
             .map_or(0, |index| index + 1)
     }
 
-    /// The line break of the line holding `offset`; for the last line, which
-    /// has none, the one before it; else the page's usual one.
-    fn line_break_at(&self, offset: usize) -> &'static str {
-        let bytes = self.source.as_bytes();
-        let ending = |newline: usize| {
-            if newline > 0 && bytes[newline - 1] == b'\r' {
-                "\r\n"
-            } else {
-                "\n"
-            }
-        };
-        if let Some(index) = bytes[offset..].iter().position(|byte| *byte == b'\n') {
-            return ending(offset + index);
-        }
-        match bytes[..offset].iter().rposition(|byte| *byte == b'\n') {
-            Some(newline) => ending(newline),
-            None => self.eol,
-        }
-    }
-
     /// Where a new class call goes: on its own line after the short
     /// description, else before the first infobox, else at the top.
     fn insert_class_call(
@@ -1238,7 +1287,7 @@ impl Editor<'_, '_> {
         let what = format!("the new {{{{{template_name}}}}} call");
         if let Some((node, _)) = short_description {
             let end = node.span().end();
-            let eol = self.line_break_at(end);
+            let eol = self.eol;
             let offsets = [self.line_end(end), end];
             if let Some(offset) = self.place(&offsets, REFUSED_CLASS_STATEMENT_NOT_EDITABLE, &what)
             {
@@ -1259,11 +1308,11 @@ impl Editor<'_, '_> {
         let (offsets, eol) = match infobox {
             Some((node, _)) => {
                 let start = node.span().start();
-                (vec![self.line_start(start), start], self.line_break_at(start))
+                (vec![self.line_start(start), start], self.eol)
             }
             None => {
                 let top = usize::from(self.source.starts_with('\u{feff}')) * '\u{feff}'.len_utf8();
-                (vec![top], self.line_break_at(top))
+                (vec![top], self.eol)
             }
         };
         if let Some(offset) = self.place(&offsets, REFUSED_CLASS_STATEMENT_NOT_EDITABLE, &what) {
@@ -1295,7 +1344,37 @@ impl Editor<'_, '_> {
 
         let planned: Option<Vec<&str>> =
             (!item.classes.is_empty()).then(|| item.classes.iter().map(|id| id.trim()).collect());
+        // The class slots: unnumbered (`|a|b`), or all numbered `1=`, `2=`,
+        // and so on in order. A call that mixes them, or numbers them out of
+        // order, is refused, since which slot holds which class depends on
+        // MediaWiki's rules for repeated and mixed numbering.
+        let numbers: Vec<Option<usize>> = template
+            .arguments
+            .iter()
+            .filter_map(|argument| match argument.name {
+                None => Some(None),
+                Some(name) => slot_number(text(name.start(), name.end()).trim()).map(Some),
+            })
+            .collect();
+        let numbered = numbers.iter().any(Option::is_some);
+        if planned.is_some()
+            && numbered
+            && !numbers
+                .iter()
+                .enumerate()
+                .all(|(index, number)| *number == Some(index + 1))
+        {
+            let mut refusal = Refusal::new(
+                REFUSED_CLASS_STATEMENT_NOT_EDITABLE,
+                "the class-template call numbers its class slots out of order or mixes numbered and unnumbered slots, so which slot a class fills is unclear",
+            );
+            refusal.start = Some(span.start());
+            refusal.end = Some(span.end());
+            self.refusals.push(refusal);
+            return;
+        }
         let mut classes = planned.as_deref().unwrap_or_default().iter();
+        let mut slots_written = 0usize;
         let named = named_plan(item);
         let mut named_done: BTreeSet<&str> = BTreeSet::new();
         let mut arguments: Vec<String> = Vec::new();
@@ -1309,9 +1388,7 @@ impl Editor<'_, '_> {
                 .map(|name| text(name.start(), name.end()).trim());
             let positional = match name {
                 None => true,
-                Some(name) => name
-                    .parse::<usize>()
-                    .is_ok_and(|index| index >= 1 && name == index.to_string()),
+                Some(name) => slot_number(name).is_some(),
             };
             if positional {
                 if planned.is_none() {
@@ -1325,10 +1402,16 @@ impl Editor<'_, '_> {
                 let trail = text(argument.value.end().max(lead_end), argument.span.end());
                 slot_style = (lead.to_string(), trail.to_string());
                 if let Some(class) = classes.next() {
-                    // An explicit `1=` slot that already reads as planned is
-                    // kept as written too.
+                    slots_written += 1;
+                    // A slot that already reads as planned is kept as
+                    // written; a numbered one keeps its `1=` when its value
+                    // changes.
                     if plain_text(value) == *class {
                         arguments.push(raw.to_string());
+                    } else if argument.name.is_some() {
+                        let prefix = text(argument.span.start(), argument.value.start());
+                        let suffix = text(argument.value.end(), argument.span.end());
+                        arguments.push(format!("{prefix}{class}{suffix}"));
                     } else {
                         arguments.push(format!("{lead}{class}{trail}"));
                     }
@@ -1370,7 +1453,14 @@ impl Editor<'_, '_> {
             })
             .unwrap_or_default();
         let leftover: Vec<String> = classes
-            .map(|class| {
+            .enumerate()
+            .map(|(offset, class)| {
+                // After numbered slots an unnumbered one would be slot 1.
+                let class = if numbered {
+                    format!("{}={class}", slots_written + offset + 1)
+                } else {
+                    (*class).to_string()
+                };
                 if slot_style.0.is_empty() && slot_style.1.is_empty() {
                     format!("{class}{tail}")
                 } else {
@@ -1412,7 +1502,7 @@ impl Editor<'_, '_> {
     fn add_links(&mut self, anchor_end: Option<usize>, names: &[&String]) {
         let what = "a new category link";
         if let Some(anchor_end) = anchor_end {
-            let eol = self.line_break_at(anchor_end);
+            let eol = self.eol;
             let offsets = [self.line_end(anchor_end), anchor_end];
             let Some(offset) = self.place(&offsets, REFUSED_CATEGORY_NOT_EDITABLE, what) else {
                 return;
@@ -1439,7 +1529,7 @@ impl Editor<'_, '_> {
                 return;
             }
         };
-        let eol = self.line_break_at(end);
+        let eol = self.eol;
         let ends_with_break = interim.ends_with('\n');
         let blank_end = interim.ends_with("\n\n") || interim.ends_with("\n\r\n");
         let blank = format!("{eol}{eol}");
@@ -1617,6 +1707,7 @@ fn rewrite_refusal(error: &str) -> Refusal {
 
 /// How `run_article_retype` writes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RetypeApplyMode {
     /// Write nothing; report the result.
     None,
@@ -1635,6 +1726,7 @@ impl RetypeApplyMode {
 
 /// The command's report.
 #[derive(Debug, Clone, Serialize)]
+#[non_exhaustive]
 pub struct RetypeReport {
     pub schema: &'static str,
     /// `complete`, or `not_ready` when the project cannot run the typing
@@ -1658,6 +1750,7 @@ pub struct RetypeReport {
 
 /// One page in the report.
 #[derive(Debug, Clone, Serialize)]
+#[non_exhaustive]
 pub struct RetypePageReport {
     pub title: String,
     /// `changed`, `unchanged` or `refused`.
@@ -1698,12 +1791,34 @@ impl RetypePageReport {
     }
 }
 
-/// Run a plan over the project's pages: `titles` selects plan items, in
-/// order, or every item when `None`.
+/// Which pages a run retypes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RetypeTargets {
+    /// Every plan item, in plan order.
+    Plan,
+    /// The plan items for these titles, in this order.
+    Titles(Vec<String>),
+    /// Exactly this file, a draft under `.wikitool/drafts/` or a mirror page
+    /// under `wiki_content/`, relative to the project root or absolute.
+    File(PathBuf),
+}
+
+/// Where one selected title is read and written, or why it is not.
+enum Located {
+    Page {
+        source_path: String,
+        source_kind: &'static str,
+        draft_path: String,
+    },
+    Refused(Refusal),
+}
+
+/// Run a plan over the project's pages.
 pub fn run_article_retype(
     paths: &ResolvedPaths,
     plan_path: &Path,
-    titles: Option<&[String]>,
+    targets: &RetypeTargets,
     apply: RetypeApplyMode,
 ) -> Result<RetypeReport> {
     let plan_text = fs::read_to_string(plan_path)
@@ -1754,29 +1869,59 @@ pub fn run_article_retype(
     }
     report.status = "complete";
 
+    let files = pages::PageFiles::load(paths)?;
     let items: BTreeMap<String, &RetypePlanItem> = plan
         .items
         .iter()
         .map(|item| (normalize_title(&item.title), item))
         .collect();
-    let selected: Vec<String> = match titles {
-        Some(titles) => dedupe(titles.iter().map(|title| normalize_title(title))),
-        None => plan
+    let mut selected: Vec<(String, Located)> = match targets {
+        RetypeTargets::Plan => plan
             .items
             .iter()
-            .map(|item| normalize_title(&item.title))
-            .collect(),
+            .map(|item| {
+                let title = normalize_title(&item.title);
+                let located = locate_title(&files, &title)?;
+                Ok((title, located))
+            })
+            .collect::<Result<_>>()?,
+        RetypeTargets::Titles(titles) => dedupe(titles.iter().map(|title| normalize_title(title)))
+            .into_iter()
+            .map(|title| {
+                let located = locate_title(&files, &title)?;
+                Ok((title, located))
+            })
+            .collect::<Result<_>>()?,
+        RetypeTargets::File(path) => vec![locate_file(paths, &files, path)?],
     };
-    for title in selected {
-        let page = match items.get(&title) {
-            None => RetypePageReport::refused(
+    refuse_shared_targets(&mut selected);
+
+    for (title, located) in selected {
+        let page = match (items.get(&title), located) {
+            (None, _) => RetypePageReport::refused(
                 title.clone(),
                 Refusal::new(
                     REFUSED_NOT_IN_PLAN,
                     format!("the plan has no item for {title:?}"),
                 ),
             ),
-            Some(item) => retype_page(paths, &ontology, &title, item, apply)?,
+            (Some(_), Located::Refused(refusal)) => RetypePageReport::refused(title, refusal),
+            (
+                Some(item),
+                Located::Page {
+                    source_path,
+                    source_kind,
+                    draft_path,
+                },
+            ) => retype_page(
+                &files,
+                &ontology,
+                &title,
+                item,
+                (source_path, source_kind),
+                draft_path,
+                apply,
+            )?,
         };
         report.edit_count += page.edits.len();
         match page.status {
@@ -1791,67 +1936,213 @@ pub fn run_article_retype(
     Ok(report)
 }
 
-/// The draft path for a title: the mirror's file name under
-/// `.wikitool/drafts/`.
-pub fn draft_relative_path(paths: &ResolvedPaths, title: &str) -> Result<String> {
-    let mirror = title_to_relative_path(paths, title, false)?;
-    let file_name = mirror.rsplit('/').next().unwrap_or(&mirror).to_string();
-    let drafts = paths.state_dir.join("drafts").join(file_name);
-    let relative = drafts
+/// Where a title is read and written: its one draft, else its mirror page,
+/// whose result goes to a new draft named like the mirror file. A title
+/// with several drafts, a draft path that another file differs from only in
+/// case, a redirect, or no page at all is refused.
+fn locate_title(files: &pages::PageFiles<'_>, title: &str) -> Result<Located> {
+    if let Some(refusal) = files.article_refusal(title) {
+        return Ok(Located::Refused(refusal));
+    }
+    let located = match files.drafts_for(title) {
+        [draft] => Located::Page {
+            source_path: draft.clone(),
+            source_kind: "draft",
+            draft_path: draft.clone(),
+        },
+        [] => {
+            let (mirror, exists) = files.mirror_file(title, false)?;
+            if exists {
+                Located::Page {
+                    draft_path: files.default_draft(&mirror),
+                    source_path: mirror,
+                    source_kind: "mirror",
+                }
+            } else {
+                let (redirect, redirect_exists) = files.mirror_file(title, true)?;
+                return Ok(Located::Refused(if redirect_exists {
+                    Refusal::new(
+                        REFUSED_REDIRECT,
+                        format!("{title:?} is a redirect in the mirror at {redirect}"),
+                    )
+                } else {
+                    Refusal::new(
+                        REFUSED_PAGE_MISSING,
+                        format!(
+                            "{title:?} has no draft under .wikitool/drafts/ and no mirror page at {mirror}"
+                        ),
+                    )
+                }));
+            }
+        }
+        several => {
+            return Ok(Located::Refused(Refusal::new(
+                REFUSED_AMBIGUOUS_DRAFT,
+                format!(
+                    "{title:?} has {} drafts ({}), so which one to retype is unclear",
+                    several.len(),
+                    several.join(", ")
+                ),
+            )));
+        }
+    };
+    check_draft_target(files, located)
+}
+
+/// Where exactly one file is read and written. A draft is retyped in place.
+/// A mirror page is retyped into a new draft, and refused when its title has
+/// a draft already, whose edits a result of the mirror page would lose.
+fn locate_file(
+    paths: &ResolvedPaths,
+    files: &pages::PageFiles<'_>,
+    path: &Path,
+) -> Result<(String, Located)> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        paths.project_root.join(path)
+    };
+    let relative = absolute
         .strip_prefix(&paths.project_root)
         .map(normalize_path)
-        .unwrap_or_else(|_| normalize_path(&drafts));
-    Ok(relative)
+        .with_context(|| {
+            format!(
+                "{} is not inside the project {}",
+                normalize_path(&absolute),
+                normalize_path(&paths.project_root)
+            )
+        })?;
+    if files.is_draft_path(&relative) {
+        files.checked_draft(&relative)?;
+        let title = files.draft_title(&relative);
+        if !files.exists_exactly(&relative)? {
+            let refusal = Refusal::new(
+                REFUSED_PAGE_MISSING,
+                format!("there is no draft named exactly {relative}"),
+            );
+            return Ok((title, Located::Refused(refusal)));
+        }
+        if let Some(refusal) = files.article_refusal(&title) {
+            return Ok((title, Located::Refused(refusal)));
+        }
+        let located = Located::Page {
+            source_path: relative.clone(),
+            source_kind: "draft",
+            draft_path: relative,
+        };
+        return Ok((title, check_draft_target(files, located)?));
+    }
+    if files.is_mirror_path(&relative) {
+        files.checked_mirror(&relative)?;
+        let title = files.mirror_title(&relative);
+        if let Some(refusal) = files.article_refusal(&title) {
+            return Ok((title, Located::Refused(refusal)));
+        }
+        let (redirect, redirect_exists) = files.mirror_file(&title, true)?;
+        if redirect_exists && redirect == relative {
+            let refusal = Refusal::new(
+                REFUSED_REDIRECT,
+                format!("{title:?} is a redirect in the mirror at {redirect}"),
+            );
+            return Ok((title, Located::Refused(refusal)));
+        }
+        let (mirror, exists) = files.mirror_file(&title, false)?;
+        if !exists || mirror != relative {
+            let refusal = Refusal::new(
+                REFUSED_PAGE_MISSING,
+                format!(
+                    "{relative} is not the mirror page of {title:?}, which the mirror stores at {mirror}"
+                ),
+            );
+            return Ok((title, Located::Refused(refusal)));
+        }
+        if let Some(draft) = files.drafts_for(&title).first() {
+            let refusal = Refusal::new(
+                REFUSED_DRAFT_EXISTS,
+                format!(
+                    "{title:?} has a draft at {draft}; retype the draft, so the edits it holds are kept"
+                ),
+            );
+            return Ok((title, Located::Refused(refusal)));
+        }
+        let located = Located::Page {
+            draft_path: files.default_draft(&mirror),
+            source_path: mirror,
+            source_kind: "mirror",
+        };
+        return Ok((title, check_draft_target(files, located)?));
+    }
+    bail!(
+        "article retype reads pages under wiki_content/ or .wikitool/drafts/: {}",
+        normalize_path(path)
+    )
+}
+
+/// Refuse a draft path that resolves outside `.wikitool/drafts/`, or that
+/// another file in its directory differs from only in case, which a
+/// case-insensitive file system would write over.
+fn check_draft_target(files: &pages::PageFiles<'_>, located: Located) -> Result<Located> {
+    let Located::Page { draft_path, .. } = &located else {
+        return Ok(located);
+    };
+    files.checked_draft(draft_path)?;
+    if let Some(twin) = files.case_twin(draft_path)? {
+        return Ok(Located::Refused(Refusal::new(
+            REFUSED_DUPLICATE_TARGET,
+            format!(
+                "the draft {draft_path} and the file {twin} differ only in case, so writing one could replace the other"
+            ),
+        )));
+    }
+    Ok(located)
+}
+
+/// Refuse every selected title whose draft path another selected title
+/// shares, compared without case, so no run writes one file twice.
+fn refuse_shared_targets(selected: &mut [(String, Located)]) {
+    let mut owners: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (title, located) in selected.iter() {
+        if let Located::Page { draft_path, .. } = located {
+            owners
+                .entry(draft_path.to_lowercase())
+                .or_default()
+                .push(title.clone());
+        }
+    }
+    for (_, located) in selected.iter_mut() {
+        let Located::Page { draft_path, .. } = located else {
+            continue;
+        };
+        let sharing = &owners[&draft_path.to_lowercase()];
+        if sharing.len() > 1 {
+            let message = format!(
+                "the titles {} all write the draft {draft_path} (compared without case), so none is retyped",
+                sharing
+                    .iter()
+                    .map(|other| format!("{other:?}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            *located = Located::Refused(Refusal::new(REFUSED_DUPLICATE_TARGET, message));
+        }
+    }
 }
 
 fn retype_page(
-    paths: &ResolvedPaths,
+    files: &pages::PageFiles<'_>,
     ontology: &ProjectOntology,
     title: &str,
     item: &RetypePlanItem,
+    (source_path, source_kind): (String, &'static str),
+    draft_path: String,
     apply: RetypeApplyMode,
 ) -> Result<RetypePageReport> {
-    if namespace_from_title(title) != Namespace::Main {
-        return Ok(RetypePageReport::refused(
-            title.to_string(),
-            Refusal::new(
-                REFUSED_NOT_AN_ARTICLE,
-                format!("{title:?} is not in the article namespace"),
-            ),
-        ));
-    }
-    let draft_path = draft_relative_path(paths, title)?;
-    let mirror_path = title_to_relative_path(paths, title, false)?;
-    let redirect_path = title_to_relative_path(paths, title, true)?;
-    let mut source = None;
-    for (relative, kind) in [(&draft_path, "draft"), (&mirror_path, "mirror")] {
-        match fs::read_to_string(paths.project_root.join(relative)) {
-            Ok(text) => {
-                source = Some((relative.clone(), kind, text));
-                break;
-            }
-            Err(error) if error.kind() == ErrorKind::NotFound => {}
-            Err(error) => {
-                return Err(error).with_context(|| format!("failed to read {relative}"));
-            }
-        }
-    }
-    let Some((source_path, source_kind, text)) = source else {
-        let refusal = if paths.project_root.join(&redirect_path).exists() {
-            Refusal::new(
-                REFUSED_REDIRECT,
-                format!("{title:?} is a redirect in the mirror at {redirect_path}"),
-            )
-        } else {
-            Refusal::new(
-                REFUSED_PAGE_MISSING,
-                format!(
-                    "{title:?} has no draft at {draft_path} and no mirror page at {mirror_path}"
-                ),
-            )
-        };
-        return Ok(RetypePageReport::refused(title.to_string(), refusal));
+    let source_absolute = match source_kind {
+        "draft" => files.checked_draft(&source_path)?,
+        _ => files.checked_mirror(&source_path)?,
     };
+    let text = fs::read_to_string(&source_absolute)
+        .with_context(|| format!("failed to read {source_path}"))?;
     let outcome = retype_text(ontology, item, &text);
     let changed = outcome.result != text;
     let status = if !outcome.refusals.is_empty() {
@@ -1872,7 +2163,8 @@ fn retype_page(
     };
     let mut draft_written = false;
     if apply == RetypeApplyMode::Draft && changed {
-        atomic_write(&paths.project_root.join(&draft_path), &outcome.result)?;
+        let target = files.checked_draft(&draft_path)?;
+        atomic_write(&target, &outcome.result)?;
         draft_written = true;
     }
     Ok(RetypePageReport {
