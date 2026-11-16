@@ -254,10 +254,23 @@ pub(crate) fn normalize_title_and_namespace(value: &str) -> Option<(String, &'st
         if body.is_empty() {
             return None;
         }
-        return Some((format!("{namespace}:{body}"), namespace));
+        return Some((
+            format!("{namespace}:{}", capitalize_first(&body)),
+            namespace,
+        ));
     }
 
-    Some((trimmed.to_string(), Namespace::Main.as_str()))
+    Some((capitalize_first(trimmed), Namespace::Main.as_str()))
+}
+
+/// MediaWiki stores every title with its first letter in upper case ($wgCapitalLinks, on by
+/// default and on for this wiki), so `[[accelerationism]]` links to the page `Accelerationism`.
+fn capitalize_first(value: &str) -> String {
+    let mut chars = value.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
 }
 
 pub(crate) fn canonical_namespace(prefix: &str) -> Option<&'static str> {
@@ -284,4 +297,32 @@ pub(crate) fn canonical_namespace(prefix: &str) -> Option<&'static str> {
         return Some(Namespace::MediaWiki.as_str());
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn titles_take_mediawiki_first_letter_capital() {
+        assert_eq!(
+            normalize_title_and_namespace("accelerationism"),
+            Some(("Accelerationism".to_string(), "Main"))
+        );
+        assert_eq!(
+            normalize_title_and_namespace("category:internet memes"),
+            Some(("Category:Internet memes".to_string(), "Category"))
+        );
+        assert_eq!(
+            normalize_title_and_namespace("élan"),
+            Some(("Élan".to_string(), "Main"))
+        );
+        // Only the first letter changes.
+        assert_eq!(
+            normalize_title_and_namespace("iPhone meme"),
+            Some(("IPhone meme".to_string(), "Main"))
+        );
+        let link = parse_wikilink("accelerationism|accelerationist").expect("link");
+        assert_eq!(link.target_title, "Accelerationism");
+    }
 }

@@ -2442,7 +2442,8 @@ fn validation_checks_report_expected_issues() {
 
     write_file(
         &paths.wiki_content_dir.join("Main").join("Alpha.wiki"),
-        "[[Beta]] [[MissingTarget]] [[Category:People]]",
+        // [[beta]] is the page Beta: MediaWiki capitalizes a title's first letter.
+        "[[Beta]] [[beta]] [[MissingTarget]] [[Category:People]]",
     );
     write_file(
         &paths.wiki_content_dir.join("Main").join("Beta.wiki"),
